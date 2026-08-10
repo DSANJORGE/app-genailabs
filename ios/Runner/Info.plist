@@ -12,10 +12,10 @@
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLName</key>
-			<string>com.entermedia.emeworld</string>
+			<string>world.eme.genailabs</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>emeworld</string>
+				<string>genailabs</string>
 			</array>
 		</dict>
 	</array>
