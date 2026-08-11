@@ -7,14 +7,9 @@ void main() async {
   await WorkspaceService.init(
     customWorkspaces: [
       const Workspace(
-        id: 'development',
-        name: 'Development',
-        mediaDBRoot: 'http://localhost.com:8080/site/mediadb',
-      ),
-      const Workspace(
         id: 'minsur',
         name: 'Minsur',
-        mediaDBRoot: 'https://minsur.genailabs.tech/site/mediadb',
+        mediaDBRoot: 'https://minsur-app.genailabs.tech/site/mediadb',
       ),
     ],
   );
