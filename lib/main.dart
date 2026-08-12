@@ -9,7 +9,8 @@ void main() async {
       const Workspace(
         id: 'minsur',
         name: 'Minsur',
-        mediaDBRoot: 'https://minsur-app.genailabs.tech/site/mediadb',
+        mediaDBRoot: 'http://localhost.com:8080/site/mediadb',
+        // mediaDBRoot: 'https://portal.genailabs.tech/site/mediadb',
       ),
     ],
   );
