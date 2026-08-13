@@ -5,15 +5,19 @@ import 'package:flutter_eme_base/flutter_eme_base.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await WorkspaceService.init(
-    customWorkspaces: [
-      const Workspace(
-        id: 'minsur',
-        name: 'Minsur',
-        mediaDBRoot: 'http://localhost.com:8080/site/mediadb',
-        // mediaDBRoot: 'https://portal.genailabs.tech/site/mediadb',
-      ),
-    ],
+    initialWorkspace: const Workspace(
+      id: 'development',
+      name: 'Development',
+      mediaDBRoot: 'http://localhost.com:8080/site/mediadb',
+    ),
   );
+  // await WorkspaceService.init(
+  //   initialWorkspace: const Workspace(
+  //     id: 'minsur',
+  //     name: 'Minsur',
+  //     mediaDBRoot: 'https://portal.genailabs.tech/site/mediadb',
+  //   ),
+  // );
   await AuthService.init();
   runApp(
     ProviderScope(
