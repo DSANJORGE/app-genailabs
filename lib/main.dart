@@ -7,9 +7,9 @@ void main() async {
   await BaseApp.initialize(
     appSettingsPath: 'config/appsettings.json',
     initialWorkspace: const Workspace(
-      id: 'development',
-      name: 'Development',
-      mediaDBRoot: 'http://localhost.com:8080/site/mediadb',
+      id: 'portal',
+      name: 'GenAI Labs',
+      mediaDBRoot: 'https://portal.genailabs.tech/site/mediadb',
     ),
   );
   runApp(
