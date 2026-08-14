@@ -1,24 +1,14 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_eme_base/flutter_eme_base.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  String json = await rootBundle.loadString('config/appsettings.json');
-  final Map<String, dynamic> settings = jsonDecode(json);
-
-  final name = settings["name"] as String;
-  final mode = settings["mode"] as String;
-
   await BaseApp.initialize(
-    appSettings: settings,
     initialWorkspace: Workspace(
       id: 'primary',
-      name: name,
-      mediaDBRoot: settings[mode]['mediadb'],
+      name: 'GenAILabs',
+      mediaDBRoot: 'https://app.genailabs.tech/site/mediadb',
     ),
   );
   runApp(
