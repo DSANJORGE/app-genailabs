@@ -8,6 +8,7 @@ void main() async {
     initialWorkspace: Workspace(
       id: 'primary',
       name: 'GenAILabs',
+      // mediaDBRoot: 'http://localhost.com:8080/site/mediadb',
       mediaDBRoot: 'https://app.genailabs.tech/site/mediadb',
     ),
   );
