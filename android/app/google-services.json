@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "330649053865",
+    "project_id": "genai-labs-testu",
+    "storage_bucket": "genai-labs-testu.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:330649053865:android:94bbaee221d5d6ab2017b8",
+        "android_client_info": {
+          "package_name": "world.eme.genailabs"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB2eMIA-xk_uBSsfDEavkMBRsgLDOsLkXk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
