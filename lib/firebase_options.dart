@@ -57,7 +57,6 @@ class DefaultFirebaseOptions {
     projectId: 'genai-labs-testu',
     storageBucket: 'genai-labs-testu.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyDtCNTzGOqyLAZN2mx0B7aP1hT_6VFcD-o',
     appId: '1:330649053865:ios:109d3560ada92a4a2017b8',
@@ -66,14 +65,13 @@ class DefaultFirebaseOptions {
     storageBucket: 'genai-labs-testu.firebasestorage.app',
     iosBundleId: 'world.eme.genailabs',
   );
-
   static const FirebaseOptions macos = FirebaseOptions(
     apiKey: 'AIzaSyDtCNTzGOqyLAZN2mx0B7aP1hT_6VFcD-o',
-    appId: '1:330649053865:ios:3ee398f9b236539d2017b8',
+    appId: '1:330649053865:ios:109d3560ada92a4a2017b8',
     messagingSenderId: '330649053865',
     projectId: 'genai-labs-testu',
     storageBucket: 'genai-labs-testu.firebasestorage.app',
-    iosBundleId: 'world.eme.app',
+    iosBundleId: 'world.eme.genailabs',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(

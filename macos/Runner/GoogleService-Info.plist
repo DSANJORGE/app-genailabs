@@ -9,7 +9,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>world.eme.app</string>
+	<string>world.eme.genailabs</string>
 	<key>PROJECT_ID</key>
 	<string>genai-labs-testu</string>
 	<key>STORAGE_BUCKET</key>
@@ -25,6 +25,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:330649053865:ios:3ee398f9b236539d2017b8</string>
+	<string>1:330649053865:ios:109d3560ada92a4a2017b8</string>
 </dict>
 </plist>
