@@ -1,4 +1,4 @@
-import 'package:eme_world/firebase_options.dart';
+import 'package:genai_labs/firebase_options.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_eme_base/flutter_eme_base.dart';
 import 'package:flutter_eme_base/utils/error_handler.dart';

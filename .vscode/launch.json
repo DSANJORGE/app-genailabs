@@ -5,19 +5,19 @@
 	"version": "0.2.0",
 	"configurations": [
 		{
-			"name": "eme_world",
+			"name": "genai_labs",
 			"request": "launch",
 			"type": "dart",
 			"deviceId": "chrome"
 		},
 		{
-			"name": "eme_world (profile mode)",
+			"name": "genai_labs (profile mode)",
 			"request": "launch",
 			"type": "dart",
 			"flutterMode": "profile"
 		},
 		{
-			"name": "eme_world (release mode)",
+			"name": "genai_labs (release mode)",
 			"request": "launch",
 			"type": "dart",
 			"flutterMode": "release"
