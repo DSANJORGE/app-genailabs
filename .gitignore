@@ -10,6 +10,7 @@
 .history
 .svn/
 .swiftpm/
+.firebase/
 migrate_working_dir/
 
 # IntelliJ related
@@ -44,3 +45,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+android/app/crashlytics-build.properties
+android/app/build/outputs/mapping/
+
+firebase.json
