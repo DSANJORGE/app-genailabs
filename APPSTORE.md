@@ -102,9 +102,9 @@ Whether you're preparing for professional certifications, sharpening technical s
 
 ## 7. App Store URLs
 
-- **Support URL:** `https://app.genailabs.tech/support` _(or https://eme.world)_
-- **Marketing URL:** `https://app.genailabs.tech`
-- **Privacy Policy URL:** `https://app.genailabs.tech/privacy`
+- **Support URL:** `https://genailabs.tech/support` _(or https://eme.world)_
+- **Marketing URL:** `https://genailabs.tech`
+- **Privacy Policy URL:** `https://genailabs.tech/privacy`
 
 ---
 

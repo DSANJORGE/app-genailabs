@@ -11,7 +11,7 @@ void main() async {
       id: 'primary',
       name: 'GenAILabs',
       // mediaDBRoot: 'http://localhost.com:8080/site/mediadb',
-      mediaDBRoot: 'https://app.genailabs.tech/site/mediadb',
+      mediaDBRoot: 'https://portal.genailabs.tech/site/mediadb',
     ),
   );
   runApp(
