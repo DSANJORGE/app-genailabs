@@ -48,18 +48,18 @@ flutter_launcher_icons:
     image_path: "assets/icon/logo.png"
 
 flutter_native_splash:
-  color: "#FFFFFF"
-  image: "assets/icon/logo.png"
+  color: "#121212"
+  image: "assets/icon/splash.png"
 
   # Dark Mode Configuration
   color_dark: "#121212"
-  image_dark: "assets/icon/logo.png"
+  image_dark: "assets/icon/splash.png"
 
   # Android 12+ Specifics
   android_12:
-    image: "assets/icon/logo.png"
-    image_dark: "assets/icon/logo.png"
-    icon_background_color: "#FFFFFF"
+    image: "assets/icon/splash.png"
+    image_dark: "assets/icon/splash.png"
+    icon_background_color: "#121212"
     icon_background_color_dark: "#121212"
 
   # Platform targets
