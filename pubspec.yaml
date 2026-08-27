@@ -12,8 +12,8 @@ dependencies:
   flutter:
     sdk: flutter
 
-  flutter_eme_base:
-    path: ../flutter_eme_base
+  eme_app_package:
+    path: ../eme_app_package
   flutter_riverpod: ^2.6.1
   http: ^1.2.0
 

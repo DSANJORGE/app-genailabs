@@ -1,7 +1,7 @@
 import 'package:genai_labs/firebase_options.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_eme_base/flutter_eme_base.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:eme_app_package/eme_app_package.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -10,8 +10,8 @@ void main() async {
     initialWorkspace: Workspace(
       id: 'primary',
       name: 'GenAILabs',
-      // mediaDBRoot: 'http://localhost.com:8080/site/mediadb',
-      mediaDBRoot: 'https://portal.genailabs.tech/site/mediadb',
+      mediaDBRoot: 'http://localhost.com:8080/site/mediadb',
+      // mediaDBRoot: 'https://minsur.genailabs.tech/site/mediadb',
     ),
   );
   runApp(
