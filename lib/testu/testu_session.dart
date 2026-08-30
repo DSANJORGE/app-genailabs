@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'testu_i18n.dart';
 import 'testu_pdf.dart';
+import 'testu_session_engine.dart';
 import 'testu_shell.dart';
 import 'testu_theme.dart';
 import 'testu_widgets.dart';
@@ -15,9 +17,10 @@ void showTestuSession(BuildContext context) {
       MaterialPageRoute(builder: (_) => const TestuSessionScreen()));
 }
 
-// Once per app run: the first confidence tap explains that tapping submits.
-// ponytail: in-memory instead of persisted — a demo restart re-teaching the
-// rule is fine.
+// Show-once-ever: the first confidence tap explains that tapping submits.
+// In-memory cache of the SharedPreferences flag so the controller can be
+// seeded synchronously; the prefs read in initState catches up on cold start.
+const _confAckKey = 'testu.confAcked';
 bool _confAcked = false;
 
 List<String> get _conf => [
@@ -251,27 +254,55 @@ class TestuSessionScreen extends StatefulWidget {
 
 class _TestuSessionScreenState extends State<TestuSessionScreen> {
   final _scroll = ScrollController();
-  final List<Widget> _chat = [];
-  int _qi = 0;
-  double _progress = 0.05;
+  late final SessionController _controller;
+  int _grownTo = 0; // transcript length already auto-scrolled for
 
   @override
   void initState() {
     super.initState();
-    Timer(const Duration(milliseconds: 300), () {
-      if (mounted) _nextStep();
+    _controller = SessionController(
+      questions: () =>
+          [for (final q in _questions) SessionQuestion(okIdx: q.okIdx, video: q.video)],
+      scheduler: TimerScheduler(),
+      confAcked: _confAcked,
+    );
+    _controller.addListener(_onEngine);
+    SharedPreferences.getInstance().then((p) {
+      if (p.getBool(_confAckKey) ?? false) {
+        _confAcked = true;
+        _controller.acknowledgeConf();
+      }
     });
+    // Rebuild on language switch: entries are semantic, spans are built in
+    // build(), so the whole transcript flips — past bubbles included.
+    testuLang.addListener(_onLang);
+    _controller.start();
   }
 
   @override
   void dispose() {
+    testuLang.removeListener(_onLang);
+    _controller.removeListener(_onEngine);
+    _controller.dispose();
     _scroll.dispose();
     super.dispose();
   }
 
-  void _add(Widget w) {
-    setState(() => _chat.add(w));
-    _scrollDown();
+  void _onLang() => setState(() {});
+
+  void _onEngine() {
+    if (!mounted) return;
+    final outcome = _controller.outcome;
+    if (outcome != null) {
+      Navigator.of(context).pushReplacement(MaterialPageRoute(
+          builder: (_) => TestuDebriefScreen(outcome: outcome)));
+      return;
+    }
+    setState(() {});
+    if (_controller.transcript.length > _grownTo) {
+      _grownTo = _controller.transcript.length;
+      _scrollDown();
+    }
   }
 
   void _scrollDown() {
@@ -285,35 +316,50 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
     });
   }
 
-  void _nextStep() {
-    final q = _questions[_qi];
-    setState(() => _progress = 0.08 + (_qi / _questions.length) * 0.90);
-    if (q.video) {
-      _add(_SullyBubble(
-        spans: _framingSpans(q),
-        delay: 900,
-        onGrew: _scrollDown,
-        extra: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 12),
-            const _FakePlayer(),
-            const SizedBox(height: 12),
-            _ChoiceChips(
-              chips: [
-                (L('I watched it — continue', 'Lo he visto — continuar'),
-                    true, _showQuestion)
-              ],
-            ),
-          ],
+  /// Semantic transcript → chat widgets, rebuilt every build. Entries are
+  /// append-only, so positional Element matching keeps per-bubble state
+  /// (typing reveal, chip vanish, card selection) across rebuilds.
+  Widget _entryWidget(SessionEntry e) {
+    final qs = _questions;
+    return switch (e) {
+      Framing f => _framingBubble(qs[f.qi], video: f.video),
+      Prompt p => _questionCard(qs[p.qi]),
+      HintNote h => _hintBubble(qs[h.qi]),
+      Verdict v => _verdictBubble(qs[v.attempt.qi], v.attempt),
+      ContinueOffer o => _ContinueWrap(
+          last: o.last,
+          onContinue: _controller.continueSession,
+          onStop: _controller.requestStop,
         ),
-      ));
-    } else {
-      _add(_SullyBubble(spans: _framingSpans(q), delay: 900, onGrew: _scrollDown));
-      Timer(const Duration(milliseconds: 1450), () {
-        if (mounted) _showQuestion();
-      });
+      StopChallenge s => _stopChallengeBubble(s.remaining),
+      StopFarewell _ => _farewellBubble(),
+    };
+  }
+
+  Widget _framingBubble(_Q q, {required bool video}) {
+    if (!video) {
+      return _SullyBubble(
+          spans: _framingSpans(q), delay: 900, onGrew: _scrollDown);
     }
+    return _SullyBubble(
+      spans: _framingSpans(q),
+      delay: 900,
+      onGrew: _scrollDown,
+      extra: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 12),
+          const _FakePlayer(),
+          const SizedBox(height: 12),
+          _ChoiceChips(
+            chips: [
+              (L('I watched it — continue', 'Lo he visto — continuar'),
+                  true, _controller.watchedVideo)
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   List<InlineSpan> _framingSpans(_Q q) => [
@@ -330,12 +376,34 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
           ),
       ];
 
-  void _showQuestion() {
-    final q = _questions[_qi];
-    _add(_QuestionCard(
-      q: q,
-      onGrew: _scrollDown,
-      onHint: () => _add(_SullyBubble(
+  Widget _questionCard(_Q q) => _QuestionCard(
+        q: q,
+        onGrew: _scrollDown,
+        onHint: _controller.markHintUsed,
+        needsConfAck: () => _controller.needsConfAck,
+        onConfGate: _confGate,
+        onSubmit: (chosen, conf) {
+          switch (_controller.submit(chosen: chosen, confidence: conf)) {
+            case HapticIntent.medium:
+              HapticFeedback.mediumImpact();
+            case HapticIntent.heavy:
+              HapticFeedback.heavyImpact();
+            case null:
+              break; // engine refused (raced phase change) — nothing to render
+          }
+        },
+      );
+
+  void _confGate() {
+    HapticFeedback.heavyImpact();
+    _showConfAck(context, onAck: () {
+      _confAcked = true;
+      SharedPreferences.getInstance().then((p) => p.setBool(_confAckKey, true));
+      _controller.acknowledgeConf();
+    });
+  }
+
+  Widget _hintBubble(_Q q) => _SullyBubble(
         delay: 800,
         onGrew: _scrollDown,
         spans: [
@@ -345,15 +413,11 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
                   'Puedo darte una pista. Esto marcará el intento como asistido, así que contará menos para tu dominio.\n\n')),
           TextSpan(text: q.hint, style: _ital),
         ],
-      )),
-      onSubmit: (chosen, conf) => _submit(q, chosen, conf),
-    ));
-  }
+      );
 
-  void _submit(_Q q, int chosen, int conf) {
-    final good = chosen == q.okIdx;
-    good ? HapticFeedback.mediumImpact() : HapticFeedback.heavyImpact();
-
+  Widget _verdictBubble(_Q q, Attempt a) {
+    final good = a.correct;
+    final conf = a.confidence;
     final List<InlineSpan> spans;
     if (good) {
       spans = [
@@ -390,39 +454,19 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
       ];
     }
 
-    _add(_SullyBubble(
+    return _SullyBubble(
       spans: spans,
       delay: 950,
       onGrew: _scrollDown,
       extra: _VerdictExtras(q: q),
-    ));
-
-    Timer(const Duration(milliseconds: 2100), () {
-      if (!mounted) return;
-      _add(_ContinueWrap(
-        last: _qi >= _questions.length - 1,
-        onContinue: _advance,
-        onStop: _confirmStop,
-      ));
-    });
+    );
   }
 
-  void _advance() {
-    _qi++;
-    if (_qi >= _questions.length) {
-      setState(() => _progress = 1.0);
-      Timer(const Duration(milliseconds: 350), _toDebrief);
-    } else {
-      _nextStep();
-    }
-  }
-
-  void _confirmStop() {
-    final remaining = _questions.length - 1 - _qi;
+  Widget _stopChallengeBubble(int remaining) {
     final qword = remaining == 1
         ? L('one more question', 'una pregunta más')
         : L('$remaining more questions', '$remaining preguntas más');
-    _add(_SullyBubble(
+    return _SullyBubble(
       delay: 900,
       onGrew: _scrollDown,
       spans: [
@@ -443,32 +487,24 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
         children: [
           const SizedBox(height: 12),
           _ChoiceChips(chips: [
-            (L('Keep going', 'Seguir'), true, _advance),
-            (L('Stop anyway', 'Parar igualmente'), false, _stopAnyway),
+            (L('Keep going', 'Seguir'), true, _controller.continueSession),
+            (L('Stop anyway', 'Parar igualmente'), false,
+                _controller.confirmStop),
           ]),
         ],
       ),
-    ));
+    );
   }
 
-  void _stopAnyway() {
-    _add(_SullyBubble(
-      delay: 800,
-      spans: [
-        TextSpan(
-            text: L(
-                'Understood — I’ve recorded today’s attempts. We’ll pick this up exactly where you left it.',
-                'Entendido — he registrado los intentos de hoy. Lo retomaremos exactamente donde lo dejaste.')),
-      ],
-    ));
-    Timer(const Duration(milliseconds: 1900), _toDebrief);
-  }
-
-  void _toDebrief() {
-    if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const TestuDebriefScreen()));
-  }
+  Widget _farewellBubble() => _SullyBubble(
+        delay: 800,
+        spans: [
+          TextSpan(
+              text: L(
+                  'Understood — I’ve recorded today’s attempts. We’ll pick this up exactly where you left it.',
+                  'Entendido — he registrado los intentos de hoy. Lo retomaremos exactamente donde lo dejaste.')),
+        ],
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -514,7 +550,7 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
                   Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: TweenAnimationBuilder<double>(
-                      tween: Tween(end: _progress),
+                      tween: Tween(end: _controller.progress),
                       duration: const Duration(milliseconds: 600),
                       curve: TestuTokens.curve,
                       builder: (_, v, child) => TestuHairline(v,
@@ -531,9 +567,9 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
                 ListView(
                   controller: _scroll,
                   padding: const EdgeInsets.fromLTRB(18, 14, 18, 130),
-                  // Fresh list each build: the delegate skips rebuilding when
-                  // handed the same (mutated-in-place) instance.
-                  children: List.of(_chat),
+                  children: [
+                    for (final e in _controller.transcript) _entryWidget(e),
+                  ],
                 ),
                 Positioned(
                   left: 0,
@@ -863,12 +899,16 @@ class _QuestionCard extends StatefulWidget {
     required this.q,
     required this.onGrew,
     required this.onHint,
+    required this.needsConfAck,
+    required this.onConfGate,
     required this.onSubmit,
   });
 
   final _Q q;
   final VoidCallback onGrew;
   final VoidCallback onHint;
+  final bool Function() needsConfAck;
+  final VoidCallback onConfGate;
   final void Function(int chosen, int conf) onSubmit;
 
   @override
@@ -887,11 +927,10 @@ class _QuestionCardState extends State<_QuestionCard> {
     if (grew) widget.onGrew();
   }
 
-  Future<void> _pickConf(int c) async {
+  void _pickConf(int c) {
     if (_locked || _sel == null) return;
-    if (!_confAcked) {
-      HapticFeedback.heavyImpact();
-      await _showConfAck(context);
+    if (widget.needsConfAck()) {
+      widget.onConfGate();
       return; // like the prototype: re-tap a level after acknowledging
     }
     setState(() => _confSel = c);
@@ -1398,8 +1437,10 @@ class _ContinueWrapState extends State<_ContinueWrap> {
   }
 }
 
-/// First confidence tap: the tap-submits rule, from Sully, once.
-Future<void> _showConfAck(BuildContext context) {
+/// First confidence tap: the tap-submits rule, from Sully, once ever.
+/// Barrier-dismiss does NOT acknowledge — only the button calls [onAck].
+Future<void> _showConfAck(BuildContext context,
+    {required VoidCallback onAck}) {
   final t = TestuTokens.of(context);
   return showDialog(
     context: context,
@@ -1473,7 +1514,7 @@ Future<void> _showConfAck(BuildContext context) {
                   'Entendido — no volver a mostrar'),
               variant: TestuButtonVariant.primary,
               onTap: () {
-                _confAcked = true;
+                onAck();
                 Navigator.of(context).pop();
               },
             ),
@@ -1484,9 +1525,12 @@ Future<void> _showConfAck(BuildContext context) {
   );
 }
 
-/// Debrief — "end with meaning, not a score".
+/// Debrief — "end with meaning, not a score". Stats and findings are
+/// computed from the session's real [SessionOutcome].
 class TestuDebriefScreen extends StatelessWidget {
-  const TestuDebriefScreen({super.key});
+  const TestuDebriefScreen({super.key, required this.outcome});
+
+  final SessionOutcome outcome;
 
   void _leave(BuildContext context, int tab) {
     Navigator.of(context).popUntil((r) => r.isFirst);
@@ -1496,6 +1540,18 @@ class TestuDebriefScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TestuTokens.of(context);
+    final attempts = outcome.attempts;
+    final total = attempts.length;
+    final correct = attempts.where((a) => a.correct).length;
+    final certainRight =
+        attempts.where((a) => a.correct && a.confidence >= 2).length;
+    final misconceptions =
+        attempts.where((a) => !a.correct && a.confidence == 3).length;
+    // ponytail: calibration = confidence matched correctness (conf>=2 iff
+    // correct); the backend's real calibration model replaces this.
+    final calibrated =
+        attempts.where((a) => (a.confidence >= 2) == a.correct).length;
+    final calPct = total == 0 ? '—' : '${(100 * calibrated / total).round()}%';
     return Scaffold(
       backgroundColor: t.bg,
       body: SafeArea(
@@ -1505,8 +1561,11 @@ class TestuDebriefScreen extends StatelessWidget {
               18, 24, 18, MediaQuery.paddingOf(context).bottom + 40),
           children: [
             TestuEyebrow(
-                L('SESSION COMPLETE · LEARN MODE',
-                    'SESIÓN COMPLETADA · MODO APRENDER'),
+                outcome.completed
+                    ? L('SESSION COMPLETE · LEARN MODE',
+                        'SESIÓN COMPLETADA · MODO APRENDER')
+                    : L('SESSION PAUSED · LEARN MODE',
+                        'SESIÓN PAUSADA · MODO APRENDER'),
                 color: t.orange),
             const SizedBox(height: 10),
             Text(
@@ -1526,25 +1585,40 @@ class TestuDebriefScreen extends StatelessWidget {
               delay: 0,
               spans: [
                 TextSpan(
-                    text: L(
-                        'Solid work. Your arrival & chocking knowledge is consolidating — you were right ',
-                        'Buen trabajo. Tu conocimiento de llegada y calzado se está consolidando — acertaste ')),
+                    text: outcome.completed
+                        ? L('Solid work. You were right ',
+                            'Buen trabajo. Acertaste ')
+                        : L(
+                            'We stopped partway — every attempt still counts. You were right ',
+                            'Paramos a mitad — cada intento cuenta igualmente. Acertaste ')),
                 TextSpan(text: L('and', 'y'), style: _ital),
                 TextSpan(
-                    text: L(
-                        ' certain on 5 of 6. One misconception surfaced, and that’s the most valuable find of the day.',
-                        ' con seguridad en 5 de 6. Apareció un concepto erróneo, y ese es el hallazgo más valioso del día.')),
+                    text: L(' certain on $certainRight of $total. ',
+                        ' con seguridad en $certainRight de $total. ')),
+                TextSpan(
+                    text: switch (misconceptions) {
+                  0 => L('No misconceptions surfaced today.',
+                      'Hoy no aparecieron conceptos erróneos.'),
+                  1 => L(
+                      'One misconception surfaced, and that’s the most valuable find of the day.',
+                      'Apareció un concepto erróneo, y ese es el hallazgo más valioso del día.'),
+                  _ => L(
+                      '$misconceptions misconceptions surfaced — the most valuable finds of the day.',
+                      'Aparecieron $misconceptions conceptos erróneos — los hallazgos más valiosos del día.'),
+                }),
               ],
             ),
             const SizedBox(height: 2),
             Row(
               children: [
                 _Stat(L('CORRECT', 'CORRECTAS'),
-                    child: _statMono('8 / 10', t.ink)),
+                    child: _statMono('$correct / $total', t.ink)),
                 const SizedBox(width: 9),
                 _Stat(L('CALIBRATION', 'CALIBRACIÓN'),
-                    child: _statMono('82%', t.ink)),
+                    child: _statMono(calPct, t.ink)),
                 const SizedBox(width: 9),
+                // ponytail: mastery band is illustrative — a real band needs
+                // the backend's mastery model, not 3 questions of evidence.
                 _Stat(L('MASTERY', 'DOMINIO'),
                     child: const Text(
                       'Competent · Strong ↑',
@@ -1562,35 +1636,14 @@ class TestuDebriefScreen extends StatelessWidget {
               padding: EdgeInsets.zero,
               child: Column(
                 children: [
-                  _DebriefRow(
-                    color: const Color(0xFF4CA97A),
-                    title: L('Reinforced · Aircraft arrival & chocking',
-                        'Reforzado · Llegada y calzado'),
-                    body: L(
-                        'Certain and correct across the sequence — consolidated.',
-                        'Segura y correcta en toda la secuencia — consolidado.'),
-                  ),
-                  _DebriefRow(
-                    color: const Color(0xFFC25555),
-                    title: L('Misconception · Chock timing',
-                        'Concepto erróneo · Momento de calzar'),
-                    body: L(
-                        'Incorrect while certain. Sully scheduled this for tomorrow’s Daily Challenge.',
-                        'Incorrecta estando segura. Sully lo ha programado para el Reto Diario de mañana.'),
-                  ),
-                  _DebriefRow(
-                    color: const Color(0xFFE8703A),
-                    title: L('Fragile · FOD reporting chain',
-                        'Frágil · Cadena de notificación FOD'),
-                    body: L(
-                        'Correct, but you marked it "Unsure". This knowledge may not be fully consolidated yet.',
-                        'Correcta, pero la marcaste como «Insegura». Puede que este conocimiento aún no esté consolidado.'),
-                    last: true,
-                  ),
+                  for (final (i, a) in attempts.indexed)
+                    _findingRow(a, last: i == total - 1),
                 ],
               ),
             ),
             const SizedBox(height: 18),
+            // ponytail: mastery curve is illustrative — real trajectory data
+            // arrives with the backend's mastery model.
             TestuCard(
               padding: const EdgeInsets.fromLTRB(15, 15, 15, 10),
               child: Column(
@@ -1626,6 +1679,49 @@ class TestuDebriefScreen extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  /// One finding per attempt, in the vocabulary the session copy uses:
+  /// certain+correct = reinforced, certain+wrong = misconception,
+  /// unsure+correct = fragile, otherwise a plain gap to review.
+  Widget _findingRow(Attempt a, {required bool last}) {
+    final q = _questions[a.qi];
+    final hint = a.assisted
+        ? L(' Answered with a hint — counts less toward mastery.',
+            ' Respondida con pista — cuenta menos para tu dominio.')
+        : '';
+    final (color, title, body) = switch ((a.correct, a.confidence)) {
+      (true, >= 2) => (
+          const Color(0xFF4CA97A),
+          L('Reinforced', 'Reforzado'),
+          L('Certain and correct — consolidating.',
+              'Segura y correcta — consolidándose.'),
+        ),
+      (true, _) => (
+          const Color(0xFFE8703A),
+          L('Fragile', 'Frágil'),
+          L('Correct, but you marked it "${_conf[a.confidence]}". This knowledge may not be fully consolidated yet.',
+              'Correcta, pero la marcaste como «${_conf[a.confidence]}». Puede que este conocimiento aún no esté consolidado.'),
+        ),
+      (false, 3) => (
+          const Color(0xFFC25555),
+          L('Misconception', 'Concepto erróneo'),
+          L('Incorrect while certain — marked priority to revisit.',
+              'Incorrecta estando segura — marcada como prioridad para repasar.'),
+        ),
+      (false, _) => (
+          const Color(0xFFC25555),
+          L('To review', 'Para repasar'),
+          L('Incorrect. You marked it "${_conf[a.confidence]}".',
+              'Incorrecta. La marcaste como «${_conf[a.confidence]}».'),
+        ),
+    };
+    return _DebriefRow(
+      color: color,
+      title: '$title · ${q.skill}',
+      body: '$body$hint',
+      last: last,
     );
   }
 

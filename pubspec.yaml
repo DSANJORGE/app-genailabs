@@ -16,6 +16,7 @@ dependencies:
     path: ../eme_app_package
   flutter_riverpod: ^2.6.1
   http: ^1.2.0
+  shared_preferences: ^2.5.5
   video_player: ^2.14.0
 
 dev_dependencies:
