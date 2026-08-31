@@ -1,9 +1,11 @@
 import 'dart:ui';
 
+import 'package:eme_app_package/models/topic.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'testu_i18n.dart';
+import 'testu_live.dart';
 import 'testu_resources.dart';
 import 'testu_session.dart';
 import 'testu_theme.dart';
@@ -82,7 +84,79 @@ class TestuTopicsScreen extends StatelessWidget {
   ];
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      testuLive ? const _LiveTopics() : _topicsBody(context, _topics);
+}
+
+/// Live variant: one fetch, hardcoded rows as the error/empty state.
+class _LiveTopics extends StatefulWidget {
+  const _LiveTopics();
+
+  @override
+  State<_LiveTopics> createState() => _LiveTopicsState();
+}
+
+class _LiveTopicsState extends State<_LiveTopics> {
+  // Built once — inline in build() would refetch on every rebuild.
+  final Future<List<Topic>> _future = loadLiveTopics();
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<List<Topic>>(
+        future: _future,
+        builder: (context, snap) {
+          if (snap.connectionState != ConnectionState.done) {
+            return _topicsBody(context, const []);
+          }
+          final live = snap.data ?? const <Topic>[];
+          if (snap.hasError || live.isEmpty) {
+            debugPrint('TestU: live topics unavailable (${snap.error})');
+            return _topicsBody(context, TestuTopicsScreen._topics);
+          }
+          return _topicsBody(context, [
+            for (var i = 0; i < live.length; i++) _mapTopic(live[i], i),
+          ]);
+        },
+      );
+}
+
+/// `Topic` → the row record `_TopicRow` already renders. Thumbnails stay
+/// bundled: the server's are not wired to an asset pipeline.
+const _imgs = ['ramp.jpg', 'chocks.jpg', 'radio.jpg', 'marshal.jpg',
+    'cargo.jpg', 'winter.jpg', 'fire.jpg'];
+
+_Topic _mapTopic(Topic t, int i) {
+  final (pill, color, border) = switch (t.progress.getEfficiency()) {
+    Efficiency.beginner => (
+        L('Beginner', 'Principiante'),
+        const Color(0xFFD08B8B),
+        const Color(0xFF6E3535)
+      ),
+    Efficiency.competent => (
+        L('Competent', 'Competente'),
+        const Color(0xFFCDB96A),
+        const Color(0xFF8A7A3A)
+      ),
+    Efficiency.expert => (
+        L('Expert', 'Experto'),
+        const Color(0xFF7DBB9C),
+        const Color(0xFF2F6A4C)
+      ),
+  };
+  return (
+    img: _imgs[i % _imgs.length],
+    title: t.title,
+    sub: L(
+        '${t.totalTutorials} tutorials · ${t.completedSections} of ${t.totalSections} sections',
+        '${t.totalTutorials} tutoriales · ${t.completedSections} de ${t.totalSections} secciones'),
+    pill: pill,
+    pillColor: color,
+    pillBorder: border,
+    // Matches today's behaviour: only the first row has a Topic Home.
+    opens: i == 0,
+  );
+}
+
+Widget _topicsBody(BuildContext context, List<_Topic> topics) {
     final t = TestuTokens.of(context);
     // Pinned header; only the topic list scrolls (user-requested cutoff at
     // the header's bottom edge).
@@ -118,7 +192,7 @@ class TestuTopicsScreen extends StatelessWidget {
             child: ListView(
               padding: const EdgeInsets.only(top: 10, bottom: 110),
               children: [
-                for (final topic in _topics)
+                for (final topic in topics)
                   _TopicRow(
                     topic: topic,
                     // ponytail: only Ramp Safety has a Topic Home; the rest
@@ -135,7 +209,6 @@ class TestuTopicsScreen extends StatelessWidget {
         ],
       ),
     );
-  }
 }
 
 void _nothing() {}

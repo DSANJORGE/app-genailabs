@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'testu_i18n.dart';
+import 'testu_live.dart';
 import 'testu_pdf.dart';
 import 'testu_question_source.dart';
 import 'testu_session_engine.dart';
@@ -61,9 +62,12 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
   late final SessionController _controller;
   int _grownTo = 0; // transcript length already auto-scrolled for
 
-  /// Adapter №1 today; a live EnterMedia source slots in here later.
-  final TestuQuestionSource _source = LocalQuestionSource();
+  /// Adapter picked by the compile-time flag; falls back to local if the
+  /// live load fails, so it is not final.
+  TestuQuestionSource _source =
+      testuLive ? EmeQuestionSource() : LocalQuestionSource();
   List<TestuQ> _qs = const [];
+  bool _loading = true;
 
   @override
   void initState() {
@@ -86,11 +90,30 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
     testuLang.addListener(_onLang);
     // Questions must be loaded before the engine starts — it reads them to
     // size the session. Local load resolves on the next microtask.
-    _source.load().then((qs) {
-      if (!mounted) return;
-      setState(() => _qs = qs);
-      _controller.start();
+    _boot();
+  }
+
+  /// Load the batch, then start the engine. A live source that throws or
+  /// comes back empty falls back to the offline demo — that is the error
+  /// state.
+  Future<void> _boot() async {
+    var qs = const <TestuQ>[];
+    try {
+      qs = await _source.load();
+    } catch (e) {
+      debugPrint('TestU: question load failed ($e)');
+    }
+    if (qs.isEmpty && _source is! LocalQuestionSource) {
+      debugPrint('TestU: live questions unavailable — falling back to local');
+      _source = LocalQuestionSource();
+      qs = await _source.load();
+    }
+    if (!mounted) return;
+    setState(() {
+      _qs = qs;
+      _loading = false;
     });
+    _controller.start();
   }
 
   @override
@@ -105,6 +128,9 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
   /// Question copy resolves `L()` at load time, so a language flip reloads
   /// it; the transcript's own spans are rebuilt in build().
   void _onLang() {
+    // Only the local copy resolves L() at load time; refetching the live
+    // batch on a language toggle would be a pointless round trip.
+    if (_source is! LocalQuestionSource) return;
     _source.load().then((qs) {
       if (!mounted) return;
       setState(() => _qs = qs);
@@ -264,7 +290,9 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
                 color: Color(0xFF7DBB9C))),
         TextSpan(
             text: conf >= 2
-                ? q.good
+                ? q.good ??
+                    L('Correct — and you were certain. That knowledge is consolidating.',
+                        'Correcto — y estabas segura. Ese conocimiento se está consolidando.')
                 : L('Correct. You marked it "${_conf[conf]}" — this knowledge may not be fully consolidated yet, so I’ll bring it back soon.',
                     'Correcto. Lo marcaste como «${_conf[conf]}» — puede que este conocimiento aún no esté consolidado, así que lo traeré de vuelta pronto.')),
       ];
@@ -409,6 +437,11 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
                   controller: _scroll,
                   padding: const EdgeInsets.fromLTRB(18, 14, 18, 130),
                   children: [
+                    // ponytail: the loading state is Sully typing — a delay
+                    // longer than any fetch, so the dots never resolve; the
+                    // bubble is replaced by the transcript when _boot lands.
+                    if (_loading)
+                      const _SullyBubble(spans: [], delay: 600000),
                     for (final e in _controller.transcript) _entryWidget(e),
                   ],
                 ),
@@ -770,7 +803,8 @@ class _QuestionCardState extends State<_QuestionCard> {
                       onTap: () => _pickOption(i),
                     ),
                   ),
-                if (!_locked)
+                // No hint authored (live questions carry none) — don't offer one.
+                if (!_locked && q.hint != null)
                   TestuPressable(
                     onTap: widget.onHint,
                     child: Padding(
@@ -1023,33 +1057,39 @@ class _VerdictExtras extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 9),
-        Container(
-          padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 10),
-          decoration: BoxDecoration(
-            color: const Color(0xFF101013),
-            border: Border.all(color: t.line),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Text.rich(
-            TextSpan(children: [
-              TextSpan(
-                  text: L('Evidence recorded · Skill: ',
-                      'Evidencia registrada · Habilidad: ')),
-              TextSpan(text: q.skill, style: _evBold(t)),
-              TextSpan(text: L(' · Competency: ', ' · Competencia: ')),
-              TextSpan(text: q.comp, style: _evBold(t)),
-              TextSpan(text: L('\nBehavior: ', '\nConducta: ')),
-              TextSpan(text: '“${q.ob}”', style: _evBold(t)),
-            ]),
-            style: TextStyle(
-              fontFamily: 'Geist',
-              fontSize: 10,
-              height: 1.55,
-              color: t.faint,
+        // Backend questions carry no competency framework, so the whole
+        // block is omitted rather than rendered with empty labels.
+        if (q.skill != null || q.comp != null || q.ob != null) ...[
+          const SizedBox(height: 9),
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF101013),
+              border: Border.all(color: t.line),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text.rich(
+              TextSpan(children: [
+                TextSpan(
+                    text: L('Evidence recorded · Skill: ',
+                        'Evidencia registrada · Habilidad: ')),
+                TextSpan(text: q.skill ?? '—', style: _evBold(t)),
+                TextSpan(text: L(' · Competency: ', ' · Competencia: ')),
+                TextSpan(text: q.comp ?? '—', style: _evBold(t)),
+                if (q.ob != null) ...[
+                  TextSpan(text: L('\nBehavior: ', '\nConducta: ')),
+                  TextSpan(text: '“${q.ob}”', style: _evBold(t)),
+                ],
+              ]),
+              style: TextStyle(
+                fontFamily: 'Geist',
+                fontSize: 10,
+                height: 1.55,
+                color: t.faint,
+              ),
             ),
           ),
-        ),
+        ],
         const SizedBox(height: 6),
         Row(
           children: [
@@ -1455,7 +1495,7 @@ class TestuDebriefScreen extends StatelessWidget {
     };
     return _DebriefRow(
       color: color,
-      title: '$title · ${q.skill}',
+      title: q.skill == null ? title : '$title · ${q.skill}',
       body: '$body$hint',
       last: last,
     );
