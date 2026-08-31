@@ -158,6 +158,7 @@ class SessionController extends ChangeNotifier {
   bool _confAcked;
   bool _disposed = false;
   _Phase _phase = _Phase.idle;
+  _Phase? _preStop; // phase to restore if a mid-question stop is waved off
   int _qi = 0;
   bool _assisted = false;
   double _progress = 0.05;
@@ -171,6 +172,9 @@ class SessionController extends ChangeNotifier {
   /// While true, [submit] swallows the tap; the adapter shows the
   /// tap-submits explainer and calls [acknowledgeConf] from its button.
   bool get needsConfAck => !_confAcked;
+
+  /// Anything answered yet? Nothing to challenge a stop with if not.
+  bool get hasProgress => _attempts.isNotEmpty;
 
   /// Null until the session ends; transitions null → value exactly once.
   SessionOutcome? get outcome => _outcome;
@@ -239,6 +243,14 @@ class SessionController extends ChangeNotifier {
 
   void continueSession() {
     if (_phase != _Phase.offered && _phase != _Phase.stopChallenged) return;
+    // The challenge can now come mid-question (header ✕). "Keep going" must
+    // hand the learner back the question they were on, not skip it.
+    if (_preStop != null) {
+      _phase = _preStop!;
+      _preStop = null;
+      _notify();
+      return;
+    }
     _qi++;
     if (_qi >= questions().length) {
       _phase = _Phase.ended;
@@ -250,14 +262,30 @@ class SessionController extends ChangeNotifier {
     }
   }
 
-  void requestStop() {
-    if (_phase != _Phase.offered) return;
+  /// True when the challenge was raised (and the adapter should stay put);
+  /// false when there is nothing to challenge — the caller may just leave.
+  bool requestStop() {
+    switch (_phase) {
+      case _Phase.idle:
+      case _Phase.opening:
+      case _Phase.stopChallenged:
+      case _Phase.ended:
+        return false;
+      case _Phase.offered:
+        break; // end-of-question stop: "Keep going" advances, as before
+      case _Phase.framing:
+      case _Phase.answering:
+      case _Phase.verdict:
+        _preStop = _phase; // mid-question: "Keep going" returns here
+    }
     _phase = _Phase.stopChallenged;
     _add(StopChallenge(remaining: questions().length - 1 - _qi));
+    return true;
   }
 
   void confirmStop() {
     if (_phase != _Phase.stopChallenged) return;
+    _preStop = null;
     _phase = _Phase.ended;
     _add(const StopFarewell());
     _scheduler.after(_farewellToDebrief, () => _finish(completed: false));

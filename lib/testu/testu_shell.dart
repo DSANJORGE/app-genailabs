@@ -271,7 +271,8 @@ class _TodayHeader extends StatelessWidget {
                   child: ValueListenableBuilder<String>(
                     valueListenable: testuAvatar,
                     builder: (_, src, child) => ClipOval(
-                      child: Image.asset(src, fit: BoxFit.cover),
+                      child: Image(
+                          image: testuAvatarImage(src), fit: BoxFit.cover),
                     ),
                   ),
                 ),

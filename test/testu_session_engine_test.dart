@@ -112,7 +112,7 @@ void main() {
     sched.flush();
     c.submit(chosen: 1, confidence: 3);
     sched.flush();
-    c.requestStop();
+    expect(c.requestStop(), isTrue);
     expect((c.transcript.last as StopChallenge).remaining, 2);
     c.confirmStop();
     expect(c.transcript.last, isA<StopFarewell>());
@@ -129,7 +129,7 @@ void main() {
     sched.flush();
     c.submit(chosen: 0, confidence: 0);
     sched.flush();
-    c.requestStop();
+    expect(c.requestStop(), isTrue);
     c.continueSession();
     expect(c.transcript.last, isA<Framing>());
     expect(c.outcome, isNull);
@@ -145,12 +145,38 @@ void main() {
     final len = c.transcript.length;
     c.continueSession(); // not offered
     c.watchedVideo(); // q1 is not a video question
-    c.requestStop(); // not offered
     c.confirmStop(); // not challenged
     expect(c.transcript.length, len);
     c.submit(chosen: 1, confidence: 3);
     expect(c.submit(chosen: 1, confidence: 3), isNull); // double-tap
     expect(c.transcript.whereType<Verdict>(), hasLength(1));
+    c.dispose();
+  });
+
+  test('mid-question stop: keep going returns to the same question', () {
+    final sched = FakeScheduler();
+    final c = make(sched);
+    c.start();
+    sched.flush();
+    c.submit(chosen: 1, confidence: 3); // an attempt exists → hasProgress
+    expect(c.hasProgress, isTrue);
+    expect(c.requestStop(), isTrue); // phase is verdict, not offered
+    expect(c.transcript.last, isA<StopChallenge>());
+    final framings = c.transcript.whereType<Framing>().length;
+    c.continueSession();
+    // No new Framing: the learner is handed back the question they were on.
+    expect(c.transcript.whereType<Framing>().length, framings);
+    expect(c.transcript.last, isA<StopChallenge>());
+    c.dispose();
+  });
+
+  test('requestStop is false before anything can be challenged', () {
+    final sched = FakeScheduler();
+    final c = make(sched);
+    expect(c.hasProgress, isFalse);
+    expect(c.requestStop(), isFalse); // idle
+    c.start();
+    expect(c.requestStop(), isFalse); // opening
     c.dispose();
   });
 

@@ -27,6 +27,12 @@ Future<void> showTestuScheduleSheet(
       borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
       side: BorderSide(color: t.line2),
     ),
+    // isScrollControlled lifts the 9/16 cap, so without a ceiling this sheet
+    // grows to the full screen and its rounded top + grabber land under the
+    // status bar. 0.88 matches the resource and PDF sheets.
+    constraints: BoxConstraints(
+      maxHeight: MediaQuery.sizeOf(context).height * 0.88,
+    ),
     builder: (_) => _ScheduleSheetBody(onScheduled: onScheduled),
   );
 }

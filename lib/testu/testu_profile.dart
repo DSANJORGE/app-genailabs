@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 
 import 'testu_i18n.dart';
 import 'testu_theme.dart';
@@ -7,7 +10,13 @@ import 'testu_widgets.dart';
 
 /// Ana's chosen avatar — the Today header listens so the photo swap
 /// propagates, like the prototype's setAvatar() updating every .ana-ava.
+/// ponytail: a picked photo is held in memory as a device file path only —
+/// it does not survive an app restart, and there is no upload endpoint yet.
 final testuAvatar = ValueNotifier<String>('assets/img/p_ana.jpg');
+
+/// [testuAvatar] holds either a bundled asset key or a picked file path.
+ImageProvider testuAvatarImage(String src) =>
+    src.startsWith('assets/') ? AssetImage(src) : FileImage(File(src));
 
 void showTestuProfile(BuildContext context) {
   Navigator.of(context).push(
@@ -40,13 +49,19 @@ class _TestuProfileScreenState extends State<TestuProfileScreen> {
       backgroundColor: t.bg,
       body: SafeArea(
         bottom: false,
-        child: ListView(
-          padding: EdgeInsets.only(
-              bottom: MediaQuery.paddingOf(context).bottom + 28),
+        child: Column(
           children: [
             const SizedBox(height: 6),
             _Head(onBack: () => Navigator.of(context).pop()),
-            _ProfCard(children: [
+            Expanded(
+              child: Stack(
+                children: [
+                  ListView(
+                    padding: EdgeInsets.only(
+                        top: 6,
+                        bottom: MediaQuery.paddingOf(context).bottom + 28),
+                    children: [
+                      _ProfCard(children: [
               _H4(L('PROFILE PHOTO', 'FOTO DE PERFIL')),
               const _AvatarPicker(),
               const SizedBox(height: 10),
@@ -62,9 +77,15 @@ class _TestuProfileScreenState extends State<TestuProfileScreen> {
             _ProfCard(children: [
               _H4(L('LANGUAGE', 'IDIOMA')),
               _SetRow(
-                title: L('App language', 'Idioma de la app'),
-                sub: L('Applies across TestU Learn',
-                    'Se aplica en todo TestU Learn'),
+                // ponytail: one language setting, not two — Sully's copy
+                // resolves through the same `testuLang` notifier as the UI,
+                // so a "tutor language" row would be a second source of truth
+                // for the same fact. Split it only if the backend ever serves
+                // tutor content in a language the UI is not in.
+                title: L('App & tutor language',
+                    'Idioma de la app y del tutor'),
+                sub: L('Applies across TestU Learn, including Sully',
+                    'Se aplica en todo TestU Learn, incluido Sully'),
                 last: true,
                 trailing: _LangDropdown(
                     onChanged: (v) => setState(() => testuLang.value = v)),
@@ -214,6 +235,29 @@ class _TestuProfileScreenState extends State<TestuProfileScreen> {
                 ],
               ),
             ),
+                    ],
+                  ),
+                  // Cards fade out as they slide under the pinned header.
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: 16,
+                    child: IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [t.bg, t.bg.withValues(alpha: 0)],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -253,7 +297,11 @@ class _Head extends StatelessWidget {
           ValueListenableBuilder<String>(
             valueListenable: testuAvatar,
             builder: (_, src, child) => ClipOval(
-              child: Image.asset(src, width: 62, height: 62, fit: BoxFit.cover),
+              child: Image(
+                  image: testuAvatarImage(src),
+                  width: 62,
+                  height: 62,
+                  fit: BoxFit.cover),
             ),
           ),
           const SizedBox(width: 14),
@@ -302,13 +350,22 @@ class _AvatarPicker extends StatelessWidget {
     'assets/img/p_miranda.jpg',
   ];
 
+  Future<void> _pick() async {
+    HapticFeedback.selectionClick();
+    final picked = await ImagePicker()
+        .pickImage(source: ImageSource.gallery, maxWidth: 512);
+    if (picked != null) testuAvatar.value = picked.path;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final t = TestuTokens.of(context);
     return ValueListenableBuilder<String>(
       valueListenable: testuAvatar,
       builder: (_, sel, child) => Row(
         children: [
-          for (final src in _options)
+          // A picked photo joins the presets as a fourth, selected tile.
+          for (final src in [..._options, if (!_options.contains(sel)) sel])
             Padding(
               padding: const EdgeInsets.only(right: 11),
               child: TestuPressable(
@@ -325,10 +382,27 @@ class _AvatarPicker extends StatelessWidget {
                           : Colors.transparent,
                     ),
                   ),
-                  child: ClipOval(child: Image.asset(src, fit: BoxFit.cover)),
+                  child: ClipOval(
+                      child:
+                          Image(image: testuAvatarImage(src), fit: BoxFit.cover)),
                 ),
               ),
             ),
+          TestuPressable(
+            onTap: _pick,
+            child: Container(
+              width: 46,
+              height: 46,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: t.line2),
+              ),
+              child: Text('+',
+                  style: TextStyle(
+                      fontFamily: 'Sora', fontSize: 20, color: t.mut)),
+            ),
+          ),
         ],
       ),
     );

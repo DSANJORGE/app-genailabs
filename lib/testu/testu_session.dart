@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -61,6 +63,11 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
   final _scroll = ScrollController();
   late final SessionController _controller;
   int _grownTo = 0; // transcript length already auto-scrolled for
+
+  /// Keys on each question's framing bubble, and the one the auto-scroll is
+  /// currently not allowed to push above the viewport top.
+  final _anchors = <int, GlobalKey>{};
+  GlobalKey? _anchor;
 
   /// Adapter picked by the compile-time flag; falls back to local if the
   /// live load fails, so it is not final.
@@ -148,6 +155,14 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
     setState(() {});
     if (_controller.transcript.length > _grownTo) {
       _grownTo = _controller.transcript.length;
+      final last = _controller.transcript.last;
+      if (last is Framing) {
+        _anchor = _anchors[last.qi] ??= GlobalKey();
+      } else if (last is! Prompt && last is! HintNote) {
+        // Question answered (or a stop challenged): back to chat behavior,
+        // otherwise Sully's verdict/challenge lands below the fold unseen.
+        _anchor = null;
+      }
       _scrollDown();
     }
   }
@@ -155,8 +170,19 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
   void _scrollDown() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scroll.hasClients) return;
+      var target = _scroll.position.maxScrollExtent;
+      // Bottom-aligning a tall question card pushes the framing bubble and
+      // the question text off the top. Never scroll past the current
+      // question's framing bubble; letting options run off the bottom is
+      // the intended trade.
+      final box = _anchor?.currentContext?.findRenderObject();
+      if (box is RenderBox) {
+        target = math.min(
+            target, RenderAbstractViewport.of(box).getOffsetToReveal(box, 0.0).offset);
+      }
       _scroll.animateTo(
-        _scroll.position.maxScrollExtent,
+        target.clamp(_scroll.position.minScrollExtent,
+            _scroll.position.maxScrollExtent),
         duration: const Duration(milliseconds: 300),
         curve: TestuTokens.curve,
       );
@@ -169,7 +195,9 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
   Widget _entryWidget(SessionEntry e) {
     final qs = _qs;
     return switch (e) {
-      Framing f => _framingBubble(qs[f.qi], video: f.video),
+      Framing f => KeyedSubtree(
+          key: _anchors[f.qi] ??= GlobalKey(),
+          child: _framingBubble(qs[f.qi], video: f.video)),
       Prompt p => _questionCard(qs[p.qi]),
       HintNote h => _hintBubble(qs[h.qi]),
       Verdict v => _verdictBubble(qs[v.attempt.qi], v.attempt),
@@ -405,7 +433,15 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
                         ),
                       ),
                       TestuPressable(
-                        onTap: () => Navigator.of(context).pop(),
+                        onTap: () {
+                          // Both exits end a session, so they share one
+                          // flow. Nothing answered yet means there is
+                          // nothing to challenge — just leave.
+                          if (!_controller.hasProgress ||
+                              !_controller.requestStop()) {
+                            Navigator.of(context).pop();
+                          }
+                        },
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
                               vertical: 4, horizontal: 8),
@@ -989,13 +1025,29 @@ class _Option extends StatelessWidget {
 
 /// Citation, evidence line, message actions, and follow-up chips under a
 /// verdict — everything that makes the answer explainable.
-class _VerdictExtras extends StatelessWidget {
+class _VerdictExtras extends StatefulWidget {
   const _VerdictExtras({required this.q});
 
   final TestuQ q;
 
   @override
+  State<_VerdictExtras> createState() => _VerdictExtrasState();
+}
+
+class _VerdictExtrasState extends State<_VerdictExtras> {
+  int? _fb; // 0 = helpful, 1 = not helpful
+  bool _flagged = false;
+  bool _wrongs = false; // "why are the others wrong?" answered inline
+  bool _proc = false; // "show me the full procedure" answered inline
+
+  void _tap(VoidCallback fn) {
+    HapticFeedback.selectionClick();
+    setState(fn);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final q = widget.q;
     final t = TestuTokens.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1003,64 +1055,14 @@ class _VerdictExtras extends StatelessWidget {
         // Citation block only exists for authored questions; backend
         // questions carry no source quote.
         if (q.quote != null && q.page != null) const SizedBox(height: 12),
-        if (q.quote != null && q.page != null)
-        Container(
-          padding: const EdgeInsets.fromLTRB(13, 2, 0, 2),
-          decoration: BoxDecoration(
-            border: Border(left: BorderSide(color: t.orange, width: 2)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '“${q.quote}”',
-                style: const TextStyle(
-                  fontFamily: 'Sora',
-                  fontSize: 12.5,
-                  height: 1.62,
-                  color: Color(0xFFDCDAD6),
-                ),
-              ),
-              const SizedBox(height: 7),
-              Text.rich(
-                TextSpan(children: [
-                  TextSpan(text: '${q.cite} · p. ${q.page} · '),
-                  WidgetSpan(
-                    alignment: PlaceholderAlignment.baseline,
-                    baseline: TextBaseline.alphabetic,
-                    child: GestureDetector(
-                      onTap: () =>
-                          showTestuPdf(context, page: q.page!, cite: q.cite),
-                      child: Text(
-                        L('Open source', 'Abrir fuente'),
-                        style: TextStyle(
-                          fontFamily: 'Geist',
-                          fontSize: 10.5,
-                          color: t.blue,
-                          decoration: TextDecoration.underline,
-                          decorationColor: const Color(0xFF3D5C7D),
-                        ),
-                      ),
-                    ),
-                  ),
-                ]),
-                style: kMeta,
-              ),
-            ],
-          ),
-        ),
+        if (q.quote != null && q.page != null) _quoteBlock(t, q),
         // Backend questions carry no competency framework, so the whole
         // block is omitted rather than rendered with empty labels.
         if (q.skill != null || q.comp != null || q.ob != null) ...[
           const SizedBox(height: 9),
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 10),
-            decoration: BoxDecoration(
-              color: const Color(0xFF101013),
-              border: Border.all(color: t.line),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text.rich(
+          _box(
+            t,
+            Text.rich(
               TextSpan(children: [
                 TextSpan(
                     text: L('Evidence recorded · Skill: ',
@@ -1080,13 +1082,22 @@ class _VerdictExtras extends StatelessWidget {
         const SizedBox(height: 6),
         Row(
           children: [
-            for (final a in [
+            for (final (i, a) in [
               L('Helpful', 'Útil'),
               L('Not helpful', 'No útil'),
-              L('Flag question', 'Reportar pregunta')
-            ]) ...[
+              if (_flagged)
+                L('Flagged', 'Reportada')
+              else
+                L('Flag question', 'Reportar pregunta'),
+            ].indexed) ...[
               TestuPressable(
-                onTap: _noop,
+                onTap: () => _tap(() {
+                  if (i == 2) {
+                    _flagged = !_flagged;
+                  } else {
+                    _fb = i;
+                  }
+                }),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   child: Text(
@@ -1095,7 +1106,14 @@ class _VerdictExtras extends StatelessWidget {
                       fontFamily: 'Geist',
                       fontSize: 10.5,
                       letterSpacing: 0.42,
-                      color: t.faint,
+                      fontWeight: (i == 2 ? _flagged : _fb == i)
+                          ? FontWeight.w600
+                          : FontWeight.w400,
+                      color: i == 2 && _flagged
+                          ? t.orange
+                          : _fb == i
+                              ? t.mut
+                              : t.faint,
                     ),
                   ),
                 ),
@@ -1104,39 +1122,137 @@ class _VerdictExtras extends StatelessWidget {
             ],
           ],
         ),
+        // ponytail: both follow-ups are answered locally from the question
+        // data — there is no explain-endpoint yet, so nothing is fetched.
+        if (_wrongs) ...[
+          const SizedBox(height: 6),
+          _box(t, Text(_whyWrong(q), style: kNote)),
+        ],
+        if (_proc) ...[
+          const SizedBox(height: 6),
+          _box(t, _procedure(t, q)),
+        ],
         const SizedBox(height: 6),
         Wrap(
           spacing: 8,
           runSpacing: 8,
           children: [
-            for (final label in [
-              L('Why are the others wrong?', '¿Por qué las otras están mal?'),
-              L('Show me the full procedure', 'Muéstrame el procedimiento completo')
-            ])
-              TestuPressable(
-                onTap: _noop,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      vertical: 8, horizontal: 14),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: t.line2),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    label,
-                    style: const TextStyle(
-                      fontFamily: 'Geist',
-                      fontSize: 11.5,
-                      color: Color(0xFFC2C1BD),
-                    ),
-                  ),
-                ),
-              ),
+            if (!_wrongs)
+              _chip(
+                  t,
+                  L('Why are the others wrong?',
+                      '¿Por qué las otras están mal?'),
+                  () => _tap(() => _wrongs = true)),
+            if (!_proc)
+              _chip(
+                  t,
+                  L('Show me the full procedure',
+                      'Muéstrame el procedimiento completo'),
+                  () => _tap(() => _proc = true)),
           ],
         ),
       ],
     );
   }
+
+  /// One honest line per distractor — generic on purpose, since nothing in
+  /// the question data says *why* a given option is wrong.
+  String _whyWrong(TestuQ q) {
+    final ok = q.opts[q.okIdx];
+    return [
+      for (var i = 0; i < q.opts.length; i++)
+        if (i != q.okIdx)
+          L('“${q.opts[i]}” — not the one; “$ok” is what the standard requires.',
+              '«${q.opts[i]}» — no es la correcta; «$ok» es lo que exige la norma.'),
+    ].join('\n');
+  }
+
+  Widget _procedure(TestuTokens t, TestuQ q) {
+    if (q.quote != null && q.page != null) return _quoteBlock(t, q);
+    if (q.bad != null) return Text.rich(TextSpan(children: q.bad!), style: kNote);
+    return Text(
+      L('The full procedure is not attached to this question yet.',
+          'El procedimiento completo aún no está adjunto a esta pregunta.'),
+      style: kNote,
+    );
+  }
+
+  Widget _quoteBlock(TestuTokens t, TestuQ q) => Container(
+        padding: const EdgeInsets.fromLTRB(13, 2, 0, 2),
+        decoration: BoxDecoration(
+          border: Border(left: BorderSide(color: t.orange, width: 2)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '“${q.quote}”',
+              style: const TextStyle(
+                fontFamily: 'Sora',
+                fontSize: 12.5,
+                height: 1.62,
+                color: Color(0xFFDCDAD6),
+              ),
+            ),
+            const SizedBox(height: 7),
+            Text.rich(
+              TextSpan(children: [
+                TextSpan(text: '${q.cite} · p. ${q.page} · '),
+                WidgetSpan(
+                  alignment: PlaceholderAlignment.baseline,
+                  baseline: TextBaseline.alphabetic,
+                  child: GestureDetector(
+                    onTap: () =>
+                        showTestuPdf(context, page: q.page!, cite: q.cite),
+                    child: Text(
+                      L('Open source', 'Abrir fuente'),
+                      style: TextStyle(
+                        fontFamily: 'Geist',
+                        fontSize: 10.5,
+                        color: t.blue,
+                        decoration: TextDecoration.underline,
+                        decorationColor: const Color(0xFF3D5C7D),
+                      ),
+                    ),
+                  ),
+                ),
+              ]),
+              style: kMeta,
+            ),
+          ],
+        ),
+      );
+
+  Widget _box(TestuTokens t, Widget child) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFF101013),
+          border: Border.all(color: t.line),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: child,
+      );
+
+  Widget _chip(TestuTokens t, String label, VoidCallback onTap) =>
+      TestuPressable(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 14),
+          decoration: BoxDecoration(
+            border: Border.all(color: t.line2),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontFamily: 'Geist',
+              fontSize: 11.5,
+              color: Color(0xFFC2C1BD),
+            ),
+          ),
+        ),
+      );
 
   TextStyle _evBold(TestuTokens t) =>
       TextStyle(fontWeight: FontWeight.w600, color: t.mut);
@@ -1642,7 +1758,3 @@ class _CurvePainter extends CustomPainter {
   @override
   bool shouldRepaint(_CurvePainter old) => false;
 }
-
-// ponytail: feedback actions and follow-up chips are decorative until the
-// tutor backend exists.
-void _noop() {}
