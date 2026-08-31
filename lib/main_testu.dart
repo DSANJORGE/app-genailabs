@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'testu/testu_profile.dart';
 import 'testu/testu_shell.dart';
 import 'testu/testu_splash.dart';
 import 'testu/testu_theme.dart';
@@ -9,6 +10,7 @@ import 'testu/testu_theme.dart';
 /// Keeps the TestU surface separate from the catalog app in main.dart.
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  restoreTestuAvatar();
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 
 import 'testu_i18n.dart';
 import 'testu_theme.dart';
@@ -10,9 +11,18 @@ import 'testu_widgets.dart';
 
 /// Ana's chosen avatar — the Today header listens so the photo swap
 /// propagates, like the prototype's setAvatar() updating every .ana-ava.
-/// ponytail: a picked photo is held in memory as a device file path only —
-/// it does not survive an app restart, and there is no upload endpoint yet.
+/// ponytail: persisted as a fixed file in the documents dir — no upload
+/// endpoint yet, so the photo lives on-device only.
 final testuAvatar = ValueNotifier<String>('assets/img/p_ana.jpg');
+
+Future<File> _savedAvatarFile() async =>
+    File('${(await getApplicationDocumentsDirectory()).path}/avatar.jpg');
+
+/// Restores the last picked photo; call once at startup.
+Future<void> restoreTestuAvatar() async {
+  final f = await _savedAvatarFile();
+  if (f.existsSync()) testuAvatar.value = f.path;
+}
 
 /// [testuAvatar] holds either a bundled asset key or a picked file path.
 ImageProvider testuAvatarImage(String src) =>
@@ -354,7 +364,12 @@ class _AvatarPicker extends StatelessWidget {
     HapticFeedback.selectionClick();
     final picked = await ImagePicker()
         .pickImage(source: ImageSource.gallery, maxWidth: 512);
-    if (picked != null) testuAvatar.value = picked.path;
+    if (picked != null) {
+      // Show the unique tmp path now (FileImage caches by path, so reusing
+      // avatar.jpg in-session would serve a stale copy); persist for restarts.
+      testuAvatar.value = picked.path;
+      File(picked.path).copy((await _savedAvatarFile()).path);
+    }
   }
 
   @override

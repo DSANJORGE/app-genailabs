@@ -61,8 +61,15 @@ class TestuSessionScreen extends StatefulWidget {
 
 class _TestuSessionScreenState extends State<TestuSessionScreen> {
   final _scroll = ScrollController();
+  final _input = TextEditingController();
   late final SessionController _controller;
   int _grownTo = 0; // transcript length already auto-scrolled for
+
+  /// Chat with Sully, interleaved into the transcript: (engine transcript
+  /// length at send time — the entry the bubble renders after, isUser, text).
+  final _chat = <(int, bool, String)>[];
+  StreamSubscription<String>? _sullySub;
+  bool _waitingSully = false;
 
   /// Keys on each question's framing bubble, and the one the auto-scroll is
   /// currently not allowed to push above the viewport top.
@@ -129,7 +136,104 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
     _controller.removeListener(_onEngine);
     _controller.dispose();
     _scroll.dispose();
+    _input.dispose();
+    _sullySub?.cancel();
     super.dispose();
+  }
+
+  /// The question the free-text chat is about — the latest one on screen.
+  TestuQ? get _chatQ {
+    for (final e in _controller.transcript.reversed) {
+      final qi = switch (e) {
+        Framing f => f.qi,
+        Prompt p => p.qi,
+        HintNote h => h.qi,
+        Verdict v => v.attempt.qi,
+        _ => null,
+      };
+      if (qi != null) return _qs[qi];
+    }
+    return null;
+  }
+
+  /// Sends [text] into the chat as the user. Live questions go to Sully's
+  /// real channel; otherwise [offlineAnswer] (or a generic demo line) is
+  /// the reply.
+  void _sendChat(String text, {TestuQ? q, String? offlineAnswer}) {
+    q ??= _chatQ;
+    setState(() => _chat.add((_controller.transcript.length, true, text)));
+    _scrollDown();
+    if (q != null && canAskSully(q)) {
+      _sullySub ??= sullyReplies().listen((s) {
+        if (!mounted) return;
+        setState(() {
+          _waitingSully = false;
+          _chat.add((_controller.transcript.length, false, s));
+        });
+        _scrollDown();
+      });
+      setState(() => _waitingSully = true);
+      askSully(q, text).catchError((_) {
+        if (!mounted) return;
+        setState(() {
+          _waitingSully = false;
+          _chat.add((
+            _controller.transcript.length,
+            false,
+            L('Sully could not be reached.', 'No se pudo contactar a Sully.')
+          ));
+        });
+        _scrollDown();
+      });
+    } else {
+      setState(() => _chat.add((
+        _controller.transcript.length,
+        false,
+        offlineAnswer ??
+            L('In this demo I can only answer the suggested questions — in the live app, ask me anything about the material.',
+                'En esta demo solo puedo responder las preguntas sugeridas — en la app real, pregúntame lo que quieras sobre el material.')
+      )));
+      _scrollDown();
+    }
+  }
+
+  void _sendTyped() {
+    final text = _input.text.trim();
+    if (text.isEmpty) return;
+    _input.clear();
+    _sendChat(text);
+  }
+
+  Widget _chatBubble((int, bool, String) c) {
+    final (_, user, text) = c;
+    if (!user) {
+      return _SullyBubble(
+          spans: [TextSpan(text: text)], delay: 500, onGrew: _scrollDown);
+    }
+    final t = TestuTokens.of(context);
+    return _Rise(
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 16, left: 48),
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1A1A1E),
+            border: Border.all(color: t.line2),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontFamily: 'Geist',
+              fontSize: 13,
+              height: 1.5,
+              color: Color(0xFFE9E8E4),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   /// Question copy resolves `L()` at load time, so a language flip reloads
@@ -355,7 +459,11 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
       spans: spans,
       delay: 950,
       onGrew: _scrollDown,
-      extra: _VerdictExtras(q: q),
+      extra: _VerdictExtras(
+        q: q,
+        onAsk: (text, offline) =>
+            _sendChat(text, q: q, offlineAnswer: offline),
+      ),
     );
   }
 
@@ -478,7 +586,14 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
                     // bubble is replaced by the transcript when _boot lands.
                     if (_loading)
                       const _SullyBubble(spans: [], delay: 600000),
-                    for (final e in _controller.transcript) _entryWidget(e),
+                    for (final (i, e) in _controller.transcript.indexed) ...[
+                      _entryWidget(e),
+                      for (final c in _chat)
+                        if (c.$1 == i + 1) _chatBubble(c),
+                    ],
+                    // Live reply pending: Sully's typing indicator.
+                    if (_waitingSully)
+                      const _SullyBubble(spans: [], delay: 600000),
                   ],
                 ),
                 Positioned(
@@ -495,23 +610,72 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
                         colors: [t.bg.withValues(alpha: 0), t.bg],
                       ),
                     ),
-                    // ponytail: decorative — free-text answers need a backend.
                     child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          vertical: 11, horizontal: 16),
+                      padding: const EdgeInsets.only(left: 16, right: 4),
                       decoration: BoxDecoration(
                         color: const Color(0xFF101013),
                         border: Border.all(color: t.line2),
                         borderRadius: BorderRadius.circular(999),
                       ),
-                      child: Text(
-                        L('Ask Sully anything…',
-                            'Pregunta a Sully lo que quieras…'),
-                        style: TextStyle(
-                          fontFamily: 'Geist',
-                          fontSize: 12.5,
-                          color: t.faint,
-                        ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _input,
+                              onSubmitted: (_) => _sendTyped(),
+                              textInputAction: TextInputAction.send,
+                              style: const TextStyle(
+                                fontFamily: 'Geist',
+                                fontSize: 12.5,
+                                color: Color(0xFFE9E8E4),
+                              ),
+                              decoration: InputDecoration(
+                                isDense: true,
+                                border: InputBorder.none,
+                                contentPadding: const EdgeInsets.symmetric(
+                                    vertical: 12),
+                                hintText: L('Ask Sully anything…',
+                                    'Pregunta a Sully lo que quieras…'),
+                                hintStyle: TextStyle(
+                                  fontFamily: 'Geist',
+                                  fontSize: 12.5,
+                                  color: t.faint,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          ValueListenableBuilder<TextEditingValue>(
+                            valueListenable: _input,
+                            builder: (_, v, _) {
+                              final active = v.text.trim().isNotEmpty;
+                              return TestuPressable(
+                                onTap: active ? _sendTyped : () {},
+                                child: Container(
+                                  width: 32,
+                                  height: 32,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    color: active
+                                        ? t.primaryAction
+                                        : t.line2,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Text(
+                                    '↑',
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                      color: active
+                                          ? t.onPrimaryAction
+                                          : t.faint,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -1026,9 +1190,13 @@ class _Option extends StatelessWidget {
 /// Citation, evidence line, message actions, and follow-up chips under a
 /// verdict — everything that makes the answer explainable.
 class _VerdictExtras extends StatefulWidget {
-  const _VerdictExtras({required this.q});
+  const _VerdictExtras({required this.q, required this.onAsk});
 
   final TestuQ q;
+
+  /// Chip tapped: send [question] into the chat as the user; the second
+  /// argument is the canned answer used when the session is offline.
+  final void Function(String question, String offlineAnswer) onAsk;
 
   @override
   State<_VerdictExtras> createState() => _VerdictExtrasState();
@@ -1037,8 +1205,8 @@ class _VerdictExtras extends StatefulWidget {
 class _VerdictExtrasState extends State<_VerdictExtras> {
   int? _fb; // 0 = helpful, 1 = not helpful
   bool _flagged = false;
-  bool _wrongs = false; // "why are the others wrong?" answered inline
-  bool _proc = false; // "show me the full procedure" answered inline
+  bool _wrongs = false; // "why are the others wrong?" chip consumed
+  bool _proc = false; // "show me the full procedure" chip consumed
 
   void _tap(VoidCallback fn) {
     HapticFeedback.selectionClick();
@@ -1122,17 +1290,9 @@ class _VerdictExtrasState extends State<_VerdictExtras> {
             ],
           ],
         ),
-        // ponytail: both follow-ups are answered locally from the question
-        // data — there is no explain-endpoint yet, so nothing is fetched.
-        if (_wrongs) ...[
-          const SizedBox(height: 6),
-          _box(t, Text(_whyWrong(q), style: kNote)),
-        ],
-        if (_proc) ...[
-          const SizedBox(height: 6),
-          _box(t, _procedure(t, q)),
-        ],
         const SizedBox(height: 6),
+        // Suggested follow-ups: tapping one sends it into the chat as the
+        // user's own message; Sully answers in the chat flow.
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -1142,13 +1302,25 @@ class _VerdictExtrasState extends State<_VerdictExtras> {
                   t,
                   L('Why are the others wrong?',
                       '¿Por qué las otras están mal?'),
-                  () => _tap(() => _wrongs = true)),
+                  () => _tap(() {
+                        _wrongs = true;
+                        widget.onAsk(
+                            L('Why are the other options wrong?',
+                                '¿Por qué las otras opciones están mal?'),
+                            _whyWrong(q));
+                      })),
             if (!_proc)
               _chip(
                   t,
                   L('Show me the full procedure',
                       'Muéstrame el procedimiento completo'),
-                  () => _tap(() => _proc = true)),
+                  () => _tap(() {
+                        _proc = true;
+                        widget.onAsk(
+                            L('Show me the full procedure.',
+                                'Muéstrame el procedimiento completo.'),
+                            _procedureText(q));
+                      })),
           ],
         ),
       ],
@@ -1167,14 +1339,14 @@ class _VerdictExtrasState extends State<_VerdictExtras> {
     ].join('\n');
   }
 
-  Widget _procedure(TestuTokens t, TestuQ q) {
-    if (q.quote != null && q.page != null) return _quoteBlock(t, q);
-    if (q.bad != null) return Text.rich(TextSpan(children: q.bad!), style: kNote);
-    return Text(
-      L('The full procedure is not attached to this question yet.',
-          'El procedimiento completo aún no está adjunto a esta pregunta.'),
-      style: kNote,
-    );
+  /// The canned "full procedure" answer as chat-bubble text.
+  String _procedureText(TestuQ q) {
+    if (q.quote != null && q.page != null) {
+      return '“${q.quote}”\n— ${q.cite} · p. ${q.page}';
+    }
+    if (q.bad != null) return q.bad!.map((s) => s.toPlainText()).join();
+    return L('The full procedure is not attached to this question yet.',
+        'El procedimiento completo aún no está adjunto a esta pregunta.');
   }
 
   Widget _quoteBlock(TestuTokens t, TestuQ q) => Container(

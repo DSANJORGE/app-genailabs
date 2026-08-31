@@ -685,7 +685,7 @@ packages:
     source: hosted
     version: "9.5.0"
   openinsitute_core:
-    dependency: transitive
+    dependency: "direct main"
     description:
       path: "../eme_app_package/packages/openinsitute_core"
       relative: true
@@ -708,7 +708,7 @@ packages:
     source: hosted
     version: "1.9.1"
   path_provider:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: path_provider
       sha256: a7f4874f987173da295a61c181b8ee71dab59b332a486b391babf26a1b884825

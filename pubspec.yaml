@@ -14,9 +14,12 @@ dependencies:
 
   eme_app_package:
     path: ../eme_app_package
+  openinsitute_core:
+    path: ../eme_app_package/packages/openinsitute_core
   flutter_riverpod: ^2.6.1
   http: ^1.2.0
   image_picker: ^1.2.3
+  path_provider: ^2.1.0
   shared_preferences: ^2.5.5
   video_player: ^2.14.0
 

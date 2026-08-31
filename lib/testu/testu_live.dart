@@ -1,5 +1,8 @@
 import 'package:eme_app_package/eme_http.dart';
+import 'package:eme_app_package/models/chat_message.dart';
 import 'package:eme_app_package/models/topic.dart';
+import 'package:eme_app_package/models/tutor_channel.dart';
+import 'package:eme_app_package/services/chat_socket_service.dart';
 import 'package:eme_app_package/models/tutorial.dart';
 import 'package:eme_app_package/models/workspace.dart';
 import 'package:eme_app_package/services/auth_service.dart';
@@ -7,6 +10,7 @@ import 'package:eme_app_package/services/topic_service.dart';
 import 'package:eme_app_package/services/workspace_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
+import 'package:openinsitute_core/openinsitute_core.dart';
 
 import 'testu_i18n.dart';
 import 'testu_question_source.dart';
@@ -32,6 +36,8 @@ const _devOtp = '666666';
 /// only, falls back to the sanctioned test login. Never registers an account.
 Future<void> _ensureAuth({bool force = false}) async {
   await WorkspaceService.init(initialWorkspace: _workspace);
+  // The chat socket resolves its URL from OpenI; boot it like BaseApp does.
+  await OpenI().initialize(workspaceData: _workspace.toJson());
   if (!force) {
     await AuthService.init();
     if (AuthService.isLoggedIn) return;
@@ -51,9 +57,10 @@ Future<List<Topic>> loadLiveTopics() async {
 }
 
 /// Questions from the backend: first topic -> first tutorial -> its MCQ
-/// batch, judged locally off `correctoption`. Read-only in v1 --
-/// [reportAttempt] stays the inherited no-op so the shared test user's tutor
-/// state is not polluted.
+/// batch, judged locally off `correctoption`. [reportAttempt] stays the
+/// inherited no-op so the shared test user's question progress is not
+/// polluted; chat follow-ups ([askSully]) are the one sanctioned write
+/// (user-approved 2026-08-31).
 class EmeQuestionSource extends TestuQuestionSource {
   EmeQuestionSource({EmeHttp? http})
     : _service = TopicService(http: http),
@@ -82,6 +89,7 @@ class EmeQuestionSource extends TestuQuestionSource {
     final tutorials = await _service.fetchTutorialsForTopic(topic.id);
     if (tutorials.isEmpty) throw StateError('No tutorials in ${topic.id}');
 
+    _liveTutorialId = tutorials.first.id;
     final detail = await _service.fetchTutorialDetail(tutorials.first.id);
     final mcqs = detail?.mcqQuestions ?? const <SectionQuestion>[];
     if (mcqs.isEmpty) throw StateError('No questions in ${tutorials.first.id}');
@@ -90,6 +98,56 @@ class EmeQuestionSource extends TestuQuestionSource {
       for (final (i, m) in mcqs.indexed) _toTestuQ(m, i, mcqs.length, topic),
     ];
   }
+}
+
+// The tutorial the loaded questions belong to; follow-ups need its id.
+String? _liveTutorialId;
+Future<TutorChannel?>? _tutorChannel;
+
+/// True when [q] came from the backend, so a live follow-up can be sent.
+bool canAskSully(TestuQ q) =>
+    testuLive &&
+    _liveTutorialId != null &&
+    q.sectionId != null &&
+    q.componentId != null;
+
+/// Sully's textual replies from the live chat socket, as plain text.
+Stream<String> sullyReplies() => ChatSocketService()
+    .messageStream
+    .where((m) =>
+        m.isAI &&
+        !m.isKeepAlive &&
+        !m.isMessageRemoved &&
+        (m.messageType == MessageType.agentcomment ||
+            m.messageType == MessageType.text))
+    .map((m) => _plainText(m.text))
+    .where((s) => s.isNotEmpty);
+
+// ponytail: crude tag strip — the reply HTML is simple tutor prose.
+String _plainText(String html) => html
+    .replaceAll(RegExp(r'<br\s*/?>|</p\s*>|</li\s*>', caseSensitive: false),
+        '\n')
+    .replaceAll(RegExp(r'<[^>]*>'), '')
+    .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+    .trim();
+
+/// Sends [text] to Sully as a chat follow-up on this tutorial's tutor
+/// channel (same chat the eMe app shows). Replies arrive on [sullyReplies].
+Future<void> askSully(TestuQ q, String text) async {
+  final chan = await (_tutorChannel ??= () async {
+    final c = await TopicService().fetchTutorChannel(_liveTutorialId!);
+    if (c != null) await ChatSocketService().connect(channel: c.id);
+    return c;
+  }());
+  if (chan == null) throw StateError('No tutor channel');
+  await TopicService().sendFollowUp(
+    messageId: 'user_comment_${DateTime.now().millisecondsSinceEpoch}',
+    tutorialId: _liveTutorialId!,
+    channel: chan.id,
+    sectionId: q.sectionId!,
+    componentId: q.componentId!,
+    message: text,
+  );
 }
 
 TestuQ _toTestuQ(SectionQuestion m, int i, int total, Topic topic) {
