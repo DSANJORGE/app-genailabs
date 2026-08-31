@@ -6,8 +6,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'testu_i18n.dart';
 import 'testu_pdf.dart';
+import 'testu_question_source.dart';
 import 'testu_session_engine.dart';
 import 'testu_shell.dart';
+import 'testu_sully.dart';
 import 'testu_theme.dart';
 import 'testu_widgets.dart';
 
@@ -45,204 +47,6 @@ const _confSelectedBg = [
 const _ital = TextStyle(fontStyle: FontStyle.italic, color: Color(0xFFA9A8A4));
 const _bold = TextStyle(fontWeight: FontWeight.w700);
 
-class _Q {
-  const _Q({
-    required this.framing,
-    this.whyLink = false,
-    this.video = false,
-    required this.kicker,
-    this.image,
-    this.caption,
-    this.diagram = false,
-    required this.text,
-    required this.opts,
-    required this.okIdx,
-    required this.good,
-    required this.bad,
-    required this.quote,
-    required this.cite,
-    required this.page,
-    required this.hint,
-    required this.skill,
-    required this.comp,
-    required this.ob,
-  });
-
-  final List<InlineSpan> framing;
-  final bool whyLink;
-  final bool video;
-  final String kicker;
-  final String? image;
-  final String? caption;
-  final bool diagram;
-  final String text;
-  final List<String> opts;
-  final int okIdx;
-  final String good;
-  final List<InlineSpan> bad;
-  final String quote;
-  final String cite;
-  final int page;
-  final String hint;
-  final String skill;
-  final String comp;
-  final String ob;
-}
-
-// Question data verbatim from the approved prototype (FAA quotes and
-// citations stay in English — they are verbatim legal citations).
-List<_Q> get _questions => [
-  _Q(
-    framing: [
-      TextSpan(text: L('Next up in ', 'Siguiente en ')),
-      TextSpan(
-          text: L('Aircraft arrival & chocking', 'Llegada y calzado'),
-          style: _ital),
-      TextSpan(
-          text: L(
-              '. This one matters because approaching too early is one of the most common ramp near-misses.',
-              '. Esta importa porque aproximarse demasiado pronto es uno de los casi-incidentes más comunes en rampa.')),
-    ],
-    kicker: L('QUESTION 22 OF 36 · AIRCRAFT ARRIVAL',
-        'PREGUNTA 22 DE 36 · LLEGADA DE LA AERONAVE'),
-    image: 'assets/img/chocks.jpg',
-    caption: L('Main gear on chocks after arrival on stand',
-        'Tren principal calzado tras la llegada al stand'),
-    text: L(
-        'When must wheel chocks be positioned after aircraft arrival on stand?',
-        '¿Cuándo deben colocarse los calzos tras la llegada de la aeronave al stand?'),
-    opts: [
-      L('As soon as the aircraft comes to a complete stop, before engine shutdown',
-          'En cuanto la aeronave se detiene por completo, antes de apagar motores'),
-      L('Immediately after engines are shut down and anti-collision lights are off',
-          'Inmediatamente después de apagar motores y con las luces anticolisión apagadas'),
-      L('Only after the ground power unit has been connected',
-          'Solo después de conectar la unidad de energía de tierra (GPU)'),
-      L('When the flight crew confirms parking brake release',
-          'Cuando la tripulación confirma la liberación del freno de estacionamiento'),
-    ],
-    okIdx: 1,
-    good: L('Correct — and you were certain. That knowledge is consolidating.',
-        'Correcto — y estabas segura. Ese conocimiento se está consolidando.'),
-    bad: [
-      TextSpan(
-          text: L(
-              'Not quite. The anti-collision lights are the signal — engines off alone is not enough. Approaching a stopped aircraft with engines running is the hazard this rule exists for.',
-              'No exactamente. Las luces anticolisión son la señal — motores apagados no basta por sí solo. Aproximarse a una aeronave detenida con motores en marcha es el peligro por el que existe esta regla.')),
-    ],
-    quote:
-        'When an aircraft is parked, the main gear wheels should be chocked fore and aft.',
-    cite: 'FAA AC 00-34A · §5 Parked Aircraft',
-    page: 1,
-    hint: L(
-        'Try eliminating options that describe a moment while engines could still be running.',
-        'Prueba a eliminar las opciones que describen un momento en el que los motores aún podrían estar en marcha.'),
-    skill: L('Chock timing & sequence', 'Momento y secuencia de calzado'),
-    comp: L('Safe aircraft handling', 'Manejo seguro de la aeronave'),
-    ob: L('Positions chocks only after engines are shut down and anti-collision lights are off',
-        'Coloca los calzos solo con motores apagados y luces anticolisión apagadas'),
-  ),
-  _Q(
-    framing: [
-      TextSpan(
-          text: L(
-              'Ground guidance next. You will see one of the standard operating signals — read it the way a flight crew would from the cockpit.',
-              'Ahora guiado en tierra. Verás una de las señales operativas estándar — léela como lo haría la tripulación desde la cabina.')),
-    ],
-    kicker: L('QUESTION 23 OF 36 · GROUND GUIDANCE SIGNALS',
-        'PREGUNTA 23 DE 36 · SEÑALES DE GUIADO'),
-    image: 'assets/img/signal.png',
-    diagram: true,
-    text: L('What is the marshaller signalling to the flight crew here?',
-        '¿Qué está señalizando aquí el señalero a la tripulación?'),
-    opts: [
-      L('Slow down', 'Reducir velocidad'),
-      L('Cut engines', 'Cortar motores'),
-      L('Start engines', 'Arrancar motores'),
-      L('Insert chocks', 'Colocar calzos'),
-    ],
-    okIdx: 1,
-    good: L(
-        'Correct — and you were certain. The raised finger indicates which engine; the hand across the throat is the cut.',
-        'Correcto — y estabas segura. El dedo levantado indica qué motor; la mano cruzando la garganta es el corte.'),
-    bad: [
-      TextSpan(text: L('Not quite. This is the ', 'No exactamente. Esta es la señal de ')),
-      TextSpan(text: L('cut engines', 'cortar motores'), style: _bold),
-      TextSpan(
-          text: L(
-              ' signal — the raised finger indicates which engine, the hand across the throat is the cut. Misreading it keeps engines running with ground crew approaching.',
-              ' — el dedo levantado indica qué motor, la mano cruzando la garganta es el corte. Malinterpretarla deja motores en marcha con personal de tierra aproximándose.')),
-    ],
-    quote:
-        'Use the standard hand signals illustrated in Figures 1 and 2, as applicable, of Appendix 1 of this circular.',
-    cite: 'FAA AC 00-34A · Appendix 1, Figure 1',
-    page: 9,
-    hint: L('Look at where the free hand is — throat level means something specific.',
-        'Fíjate en dónde está la mano libre — a la altura de la garganta significa algo concreto.'),
-    skill: L('Signal reading', 'Lectura de señales'),
-    comp: L('Situational awareness on stand', 'Conciencia situacional en el stand'),
-    ob: L('Reads standard marshalling signals correctly from any position',
-        'Lee correctamente las señales estándar desde cualquier posición'),
-  ),
-  _Q(
-    framing: [
-      TextSpan(
-          text: L(
-              'Sully picked this because your last answer showed uncertainty in ',
-              'Sully eligió esta porque tu última respuesta mostró dudas en ')),
-      TextSpan(text: L('FOD reporting', 'notificación de FOD'), style: _ital),
-      TextSpan(
-          text: L('. Before you answer — I’ve cued the video to ',
-              '. Antes de responder — he dejado el vídeo en ')),
-      TextSpan(
-          text: L('Arrival & stand check', 'Llegada y revisión del stand'),
-          style: _ital),
-      TextSpan(
-          text: L(
-              '. Watch it and count how often the crew scans the stand surface.',
-              '. Míralo y cuenta cuántas veces el equipo examina la superficie del stand.')),
-    ],
-    whyLink: true,
-    video: true,
-    kicker: L('QUESTION 24 OF 36 · FOD INSPECTION',
-        'PREGUNTA 24 DE 36 · INSPECCIÓN FOD'),
-    text: L(
-        'What is the primary purpose of the FOD walk performed before aircraft arrival on stand?',
-        '¿Cuál es el propósito principal de la inspección FOD que se realiza antes de la llegada de la aeronave?'),
-    opts: [
-      L('To confirm the stand markings are visible for the marshaller',
-          'Confirmar que las marcas del stand son visibles para el señalero'),
-      L('To verify that ground support equipment is parked in designated areas',
-          'Verificar que los equipos de tierra están aparcados en las zonas designadas'),
-      L('To detect and remove foreign objects that could damage the aircraft or injure personnel',
-          'Detectar y retirar objetos extraños que podrían dañar la aeronave o herir al personal'),
-      L('To check surface conditions ahead of the pushback procedure',
-          'Comprobar el estado de la superficie antes del pushback'),
-    ],
-    okIdx: 2,
-    good: L(
-        'Correct — and you were certain. Note the manual frames FOD as both an aircraft and a personnel hazard; that dual framing is what evaluations test.',
-        'Correcto — y estabas segura. Fíjate en que el manual trata el FOD como peligro tanto para la aeronave como para el personal; ese doble enfoque es lo que evalúan.'),
-    bad: [
-      TextSpan(
-          text: L(
-              'Not quite. That is a real ramp duty, but not the purpose of the FOD walk — it exists to remove objects that could damage the aircraft or injure personnel.',
-              'No exactamente. Esa es una tarea real de rampa, pero no el propósito de la inspección FOD — existe para retirar objetos que podrían dañar la aeronave o herir al personal.')),
-    ],
-    quote:
-        'Ground personnel should develop a habit of making a visual check of the aircraft as soon as it is parked and secured.',
-    cite: 'FAA AC 00-34A · §5(b)',
-    page: 2,
-    hint: L(
-        'Read for the intent of the walk, not for tasks that merely happen on the same stand.',
-        'Céntrate en la intención de la inspección, no en tareas que simplemente ocurren en el mismo stand.'),
-    skill: L('FOD walk pattern', 'Patrón de inspección FOD'),
-    comp: L('Safe aircraft handling', 'Manejo seguro de la aeronave'),
-    ob: L('Performs a FOD walk before every aircraft arrival',
-        'Realiza una inspección FOD antes de cada llegada'),
-  ),
-];
-
 /// Learn Mode session — a chat with Sully. Confidence tap IS the submit;
 /// the debrief follows the last question.
 class TestuSessionScreen extends StatefulWidget {
@@ -257,12 +61,16 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
   late final SessionController _controller;
   int _grownTo = 0; // transcript length already auto-scrolled for
 
+  /// Adapter №1 today; a live EnterMedia source slots in here later.
+  final TestuQuestionSource _source = LocalQuestionSource();
+  List<TestuQ> _qs = const [];
+
   @override
   void initState() {
     super.initState();
     _controller = SessionController(
       questions: () =>
-          [for (final q in _questions) SessionQuestion(okIdx: q.okIdx, video: q.video)],
+          [for (final q in _qs) SessionQuestion(okIdx: q.okIdx, video: q.video)],
       scheduler: TimerScheduler(),
       confAcked: _confAcked,
     );
@@ -276,7 +84,13 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
     // Rebuild on language switch: entries are semantic, spans are built in
     // build(), so the whole transcript flips — past bubbles included.
     testuLang.addListener(_onLang);
-    _controller.start();
+    // Questions must be loaded before the engine starts — it reads them to
+    // size the session. Local load resolves on the next microtask.
+    _source.load().then((qs) {
+      if (!mounted) return;
+      setState(() => _qs = qs);
+      _controller.start();
+    });
   }
 
   @override
@@ -288,14 +102,21 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
     super.dispose();
   }
 
-  void _onLang() => setState(() {});
+  /// Question copy resolves `L()` at load time, so a language flip reloads
+  /// it; the transcript's own spans are rebuilt in build().
+  void _onLang() {
+    _source.load().then((qs) {
+      if (!mounted) return;
+      setState(() => _qs = qs);
+    });
+  }
 
   void _onEngine() {
     if (!mounted) return;
     final outcome = _controller.outcome;
     if (outcome != null) {
       Navigator.of(context).pushReplacement(MaterialPageRoute(
-          builder: (_) => TestuDebriefScreen(outcome: outcome)));
+          builder: (_) => TestuDebriefScreen(outcome: outcome, questions: _qs)));
       return;
     }
     setState(() {});
@@ -320,7 +141,7 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
   /// append-only, so positional Element matching keeps per-bubble state
   /// (typing reveal, chip vanish, card selection) across rebuilds.
   Widget _entryWidget(SessionEntry e) {
-    final qs = _questions;
+    final qs = _qs;
     return switch (e) {
       Framing f => _framingBubble(qs[f.qi], video: f.video),
       Prompt p => _questionCard(qs[p.qi]),
@@ -336,7 +157,7 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
     };
   }
 
-  Widget _framingBubble(_Q q, {required bool video}) {
+  Widget _framingBubble(TestuQ q, {required bool video}) {
     if (!video) {
       return _SullyBubble(
           spans: _framingSpans(q), delay: 900, onGrew: _scrollDown);
@@ -362,7 +183,7 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
     );
   }
 
-  List<InlineSpan> _framingSpans(_Q q) => [
+  List<InlineSpan> _framingSpans(TestuQ q) => [
         ...q.framing,
         if (q.whyLink)
           TextSpan(
@@ -376,14 +197,27 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
           ),
       ];
 
-  Widget _questionCard(_Q q) => _QuestionCard(
+  Widget _questionCard(TestuQ q) => _QuestionCard(
         q: q,
         onGrew: _scrollDown,
         onHint: _controller.markHintUsed,
         needsConfAck: () => _controller.needsConfAck,
         onConfGate: _confGate,
         onSubmit: (chosen, conf) {
-          switch (_controller.submit(chosen: chosen, confidence: conf)) {
+          final intent = _controller.submit(chosen: chosen, confidence: conf);
+          // The engine appends the Verdict synchronously when it accepts.
+          final last = _controller.transcript.last;
+          if (intent != null && last is Verdict) {
+            final a = last.attempt;
+            _source.reportAttempt(
+              qi: a.qi,
+              questionId: _qs[a.qi].questionId,
+              chosen: chosen,
+              confidence: conf,
+              correct: a.correct,
+            );
+          }
+          switch (intent) {
             case HapticIntent.medium:
               HapticFeedback.mediumImpact();
             case HapticIntent.heavy:
@@ -403,7 +237,7 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
     });
   }
 
-  Widget _hintBubble(_Q q) => _SullyBubble(
+  Widget _hintBubble(TestuQ q) => _SullyBubble(
         delay: 800,
         onGrew: _scrollDown,
         spans: [
@@ -415,7 +249,7 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
         ],
       );
 
-  Widget _verdictBubble(_Q q, Attempt a) {
+  Widget _verdictBubble(TestuQ q, Attempt a) {
     final good = a.correct;
     final conf = a.confidence;
     final List<InlineSpan> spans;
@@ -445,7 +279,14 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
                 fontSize: 12.5,
                 letterSpacing: 0.25,
                 color: Color(0xFFD08B8B))),
-        ...q.bad,
+        // Backend questions carry no tailored miss copy — fall back to the
+        // rationale-free generic line.
+        ...(q.bad ??
+            [
+              TextSpan(
+                  text: L('That is not the right answer.',
+                      'Esa no es la respuesta correcta.'))
+            ]),
         if (conf == 3)
           TextSpan(
               text: L(
@@ -636,64 +477,9 @@ class _Rise extends StatelessWidget {
   }
 }
 
-class _TypingDots extends StatefulWidget {
-  const _TypingDots();
-
-  @override
-  State<_TypingDots> createState() => _TypingDotsState();
-}
-
-class _TypingDotsState extends State<_TypingDots>
-    with SingleTickerProviderStateMixin {
-  late final _c = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 1100))
-    ..repeat();
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final t = TestuTokens.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
-      child: AnimatedBuilder(
-        animation: _c,
-        builder: (_, child) => Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (var i = 0; i < 3; i++) ...[
-              if (i > 0) const SizedBox(width: 4),
-              Opacity(
-                opacity: _blink((_c.value - i * 0.16) % 1.0),
-                child: Container(
-                  width: 5,
-                  height: 5,
-                  decoration:
-                      BoxDecoration(color: t.faint, shape: BoxShape.circle),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  // 0% .25 → 35% 1 → 70% .25, like the prototype's blink keyframes.
-  double _blink(double p) {
-    if (p < 0.35) return 0.25 + 0.75 * (p / 0.35);
-    if (p < 0.70) return 1.0 - 0.75 * ((p - 0.35) / 0.35);
-    return 0.25;
-  }
-}
-
-/// Sully chat bubble: typing dots for [delay] ms, then the message (and
-/// [extra] below it).
-class _SullyBubble extends StatefulWidget {
+/// Sully bubble as the session screen uses it: the shared [SullyMessage]
+/// with this screen's entrance animation and bubble spacing.
+class _SullyBubble extends StatelessWidget {
   const _SullyBubble({
     required this.spans,
     this.extra,
@@ -707,75 +493,15 @@ class _SullyBubble extends StatefulWidget {
   final VoidCallback? onGrew;
 
   @override
-  State<_SullyBubble> createState() => _SullyBubbleState();
-}
-
-class _SullyBubbleState extends State<_SullyBubble> {
-  late bool _revealed = widget.delay == 0;
-
-  @override
-  void initState() {
-    super.initState();
-    if (!_revealed) {
-      Timer(Duration(milliseconds: widget.delay), () {
-        if (mounted) {
-          setState(() => _revealed = true);
-          widget.onGrew?.call();
-        }
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final t = TestuTokens.of(context);
-    return _Rise(
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 16),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ClipOval(
-              child: Image.asset('assets/img/sully.png',
-                  width: 26, height: 26, fit: BoxFit.cover),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'SULLY',
-                    style: TextStyle(
-                      fontFamily: 'GeistMono',
-                      fontSize: 9,
-                      letterSpacing: 1.44, // +0.16em
-                      color: t.faint,
-                    ),
-                  ),
-                  const SizedBox(height: 5),
-                  if (!_revealed)
-                    const _TypingDots()
-                  else ...[
-                    Text.rich(
-                      TextSpan(children: widget.spans),
-                      style: const TextStyle(
-                        fontFamily: 'Geist',
-                        fontSize: 13.5,
-                        height: 1.62,
-                        color: Color(0xFFD6D4D0),
-                      ),
-                    ),
-                    if (widget.extra != null) widget.extra!,
-                  ],
-                ],
-              ),
-            ),
-          ],
+  Widget build(BuildContext context) => _Rise(
+        child: SullyMessage(
+          spans: spans,
+          extra: extra,
+          delay: delay,
+          onGrew: onGrew,
+          bottomPadding: 16,
         ),
-      ),
-    );
-  }
+      );
 }
 
 /// Chip row that vanishes once one chip is tapped.
@@ -904,7 +630,7 @@ class _QuestionCard extends StatefulWidget {
     required this.onSubmit,
   });
 
-  final _Q q;
+  final TestuQ q;
   final VoidCallback onGrew;
   final VoidCallback onHint;
   final bool Function() needsConfAck;
@@ -1236,7 +962,7 @@ class _Option extends StatelessWidget {
 class _VerdictExtras extends StatelessWidget {
   const _VerdictExtras({required this.q});
 
-  final _Q q;
+  final TestuQ q;
 
   @override
   Widget build(BuildContext context) {
@@ -1244,7 +970,10 @@ class _VerdictExtras extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 12),
+        // Citation block only exists for authored questions; backend
+        // questions carry no source quote.
+        if (q.quote != null && q.page != null) const SizedBox(height: 12),
+        if (q.quote != null && q.page != null)
         Container(
           padding: const EdgeInsets.fromLTRB(13, 2, 0, 2),
           decoration: BoxDecoration(
@@ -1271,7 +1000,7 @@ class _VerdictExtras extends StatelessWidget {
                     baseline: TextBaseline.alphabetic,
                     child: GestureDetector(
                       onTap: () =>
-                          showTestuPdf(context, page: q.page, cite: q.cite),
+                          showTestuPdf(context, page: q.page!, cite: q.cite),
                       child: Text(
                         L('Open source', 'Abrir fuente'),
                         style: TextStyle(
@@ -1528,7 +1257,14 @@ Future<void> _showConfAck(BuildContext context,
 /// Debrief — "end with meaning, not a score". Stats and findings are
 /// computed from the session's real [SessionOutcome].
 class TestuDebriefScreen extends StatelessWidget {
-  const TestuDebriefScreen({super.key, required this.outcome});
+  const TestuDebriefScreen({
+    super.key,
+    required this.outcome,
+    required this.questions,
+  });
+
+  /// The questions the session ran on — the findings quote their copy.
+  final List<TestuQ> questions;
 
   final SessionOutcome outcome;
 
@@ -1686,7 +1422,7 @@ class TestuDebriefScreen extends StatelessWidget {
   /// certain+correct = reinforced, certain+wrong = misconception,
   /// unsure+correct = fragile, otherwise a plain gap to review.
   Widget _findingRow(Attempt a, {required bool last}) {
-    final q = _questions[a.qi];
+    final q = questions[a.qi];
     final hint = a.assisted
         ? L(' Answered with a hint — counts less toward mastery.',
             ' Respondida con pista — cuenta menos para tu dominio.')
