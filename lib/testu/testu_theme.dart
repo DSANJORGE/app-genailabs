@@ -59,65 +59,58 @@ class TestuTokens extends ThemeExtension<TestuTokens> {
 /// Typography scale from the spec (390pt frame):
 /// Sora = display (headings, greetings, question text, −0.01em),
 /// Geist = everything else, GeistMono = uppercase tracked micro-labels.
-TextTheme _testuTextTheme(TestuTokens t) => TextTheme(
-      // Splash / big display moments ("Ana, welcome back.")
-      displaySmall: TextStyle(
-        fontFamily: 'Sora',
-        fontWeight: FontWeight.w800,
-        fontSize: 26,
-        letterSpacing: -0.26,
-        height: 1.2,
-        color: t.ink,
-      ),
-      // H1 — screen headings, Sora greeting
-      headlineSmall: TextStyle(
-        fontFamily: 'Sora',
-        fontWeight: FontWeight.w700,
-        fontSize: 22,
-        letterSpacing: -0.22,
-        height: 1.25,
-        color: t.ink,
-      ),
-      // Question text / sheet titles
-      titleMedium: TextStyle(
-        fontFamily: 'Sora',
-        fontWeight: FontWeight.w700,
-        fontSize: 15.5,
-        letterSpacing: -0.15,
-        height: 1.4,
-        color: t.ink,
-      ),
-      // Body / chat
-      bodyMedium: TextStyle(
-        fontFamily: 'Geist',
-        fontSize: 13.5,
-        height: 1.6,
-        color: t.ink,
-      ),
-      // Secondary text
-      bodySmall: TextStyle(
-        fontFamily: 'Geist',
-        fontSize: 11.5,
-        height: 1.5,
-        color: t.mut,
-      ),
-      // Buttons / options
-      labelLarge: TextStyle(
-        fontFamily: 'Geist',
-        fontWeight: FontWeight.w700,
-        fontSize: 13,
-        color: t.ink,
-      ),
-      // Mono micro-labels: eyebrows, nav items, numbers. Uppercase at call
-      // site — Flutter has no text-transform.
-      labelSmall: TextStyle(
-        fontFamily: 'GeistMono',
-        fontWeight: FontWeight.w500,
-        fontSize: 10,
-        letterSpacing: 1.5, // ≈ +0.15em
-        color: t.faint,
-      ),
-    );
+/// These are the repeated inline styles, hoisted verbatim — same family, size,
+/// height, colour. Anything differing in ANY property stays inline at its call
+/// site; the prototype's pixels are approved, so nothing is rounded to a shared
+/// value. `final` rather than `const` because the token colours hang off the
+/// const [TestuTokens.instance] singleton — which is exactly what
+/// `TestuTokens.of(context)` returns.
+const _t = TestuTokens.instance;
+
+/// H1 — screen headings, Sora greeting.
+final kH1 = TextStyle(
+  fontFamily: 'Sora',
+  fontWeight: FontWeight.w700,
+  fontSize: 22,
+  letterSpacing: -0.22,
+  height: 1.25,
+  color: _t.ink,
+);
+
+/// Body / chat. Also the implicit default: Material hands `bodyMedium` to the
+/// DefaultTextStyle that every unstyled `Text`/`TextSpan` in TestU inherits.
+final kBody = TextStyle(
+  fontFamily: 'Geist',
+  fontSize: 13.5,
+  height: 1.6,
+  color: _t.ink,
+);
+
+/// Running secondary copy inside a card — wraps, so it carries a line height.
+final kCardBody = TextStyle(
+  fontFamily: 'Geist',
+  fontSize: 11.5,
+  height: 1.5,
+  color: _t.mut,
+);
+
+/// Secondary label: a trailing value, an author, a one-line descriptor.
+final kLabel = TextStyle(fontFamily: 'Geist', fontSize: 11, color: _t.mut);
+
+/// The sub-line directly under a row/card title.
+final kMeta = TextStyle(fontFamily: 'Geist', fontSize: 10.5, color: _t.mut);
+
+/// Explanatory note paragraph — smallest thing that still wraps.
+final kNote = TextStyle(
+  fontFamily: 'Geist',
+  fontSize: 10,
+  height: 1.55,
+  color: _t.faint,
+);
+
+/// Caption / media credit — smallest single-line text.
+final kCaption =
+    TextStyle(fontFamily: 'Geist', fontSize: 9.5, color: _t.faint);
 
 /// The TestU Learn [ThemeData]. Wrap TestU screens in this (via `Theme` or a
 /// dedicated route/navigator); the rest of the app keeps its own theme.
@@ -140,7 +133,9 @@ ThemeData testuTheme() {
       onSurface: t.ink,
       onSurfaceVariant: t.mut,
     ),
-    textTheme: _testuTextTheme(t),
+    // The one slot Material itself reads: the DefaultTextStyle every
+    // unstyled Text in TestU falls back to. The other six were dead.
+    textTheme: TextTheme(bodyMedium: kBody),
     dividerColor: t.line,
     splashFactory: NoSplash.splashFactory,
     extensions: const [t],

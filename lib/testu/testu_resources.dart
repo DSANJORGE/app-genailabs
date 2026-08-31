@@ -272,10 +272,7 @@ class _ResSheetState extends State<_ResSheet> {
                         )),
                     const SizedBox(height: 2),
                     Text(res.meta,
-                        style: TextStyle(
-                            fontFamily: 'Geist',
-                            fontSize: 10.5,
-                            color: t.mut)),
+                        style: kMeta),
                   ],
                 ),
               ),
@@ -524,8 +521,7 @@ class _MiniPlayerState extends State<_MiniPlayer> {
             child: Text(
               L('Turnaround groundhandling, Frankfurt — demo footage · CC BY-SA Lufthansa Cargo',
                   'Handling de turnaround, Fráncfort — metraje de demo · CC BY-SA Lufthansa Cargo'),
-              style: TextStyle(
-                  fontFamily: 'Geist', fontSize: 9.5, color: t.faint),
+              style: kCaption,
             ),
           ),
         ],

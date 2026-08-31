@@ -202,10 +202,24 @@ class TestuPill extends StatelessWidget {
 
 /// Mono uppercase eyebrow — pass text already uppercased.
 class TestuEyebrow extends StatelessWidget {
-  const TestuEyebrow(this.text, {super.key, this.color});
+  const TestuEyebrow(
+    this.text, {
+    super.key,
+    this.color,
+    this.fontSize = 9.5,
+    this.letterSpacing = 1.71, // +0.18em
+  });
+
+  /// Card section label (`.dcard h4`) — same widget, one step down.
+  TestuEyebrow.h4(this.text, {super.key})
+      : color = TestuTokens.instance.faint,
+        fontSize = 9,
+        letterSpacing = 1.26; // +0.14em
 
   final String text;
   final Color? color;
+  final double fontSize;
+  final double letterSpacing;
 
   @override
   Widget build(BuildContext context) {
@@ -215,8 +229,8 @@ class TestuEyebrow extends StatelessWidget {
       style: TextStyle(
         fontFamily: 'GeistMono',
         fontWeight: FontWeight.w500,
-        fontSize: 9.5,
-        letterSpacing: 1.71, // +0.18em
+        fontSize: fontSize,
+        letterSpacing: letterSpacing,
         color: color ?? t.mut,
       ),
     );

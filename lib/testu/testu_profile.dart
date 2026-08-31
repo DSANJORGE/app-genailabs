@@ -169,8 +169,7 @@ class _TestuProfileScreenState extends State<TestuProfileScreen> {
                 last: true,
                 trailing: Text(
                   '22:00–07:00 ›',
-                  style: TextStyle(
-                      fontFamily: 'Geist', fontSize: 11, color: t.mut),
+                  style: kLabel,
                 ),
               ),
             ]),
@@ -379,8 +378,7 @@ class _SetRow extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   sub,
-                  style: TextStyle(
-                      fontFamily: 'Geist', fontSize: 10.5, color: t.mut),
+                  style: kMeta,
                 ),
               ],
             ),
@@ -516,28 +514,17 @@ class _ProfCard extends StatelessWidget {
   }
 }
 
+/// Profile section label: the shared h4 eyebrow plus this screen's spacing.
 class _H4 extends StatelessWidget {
   const _H4(this.text);
 
   final String text;
 
   @override
-  Widget build(BuildContext context) {
-    final t = TestuTokens.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontFamily: 'GeistMono',
-          fontSize: 9,
-          fontWeight: FontWeight.w500,
-          letterSpacing: 1.26, // .14em
-          color: t.faint,
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: TestuEyebrow.h4(text),
+      );
 }
 
 class _Note extends StatelessWidget {
@@ -550,8 +537,7 @@ class _Note extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text,
-      style: TextStyle(
-          fontFamily: 'Geist', fontSize: 10, height: 1.55, color: t.faint),
+      style: kNote,
     );
   }
 }

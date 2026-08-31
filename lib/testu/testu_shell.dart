@@ -240,7 +240,6 @@ class _TodayHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TestuTokens.of(context);
-    final text = Theme.of(context).textTheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 14, 18, 6),
       child: Column(
@@ -255,7 +254,7 @@ class _TodayHeader extends StatelessWidget {
                   child: Text(
                     L('Friday, August 29 · Vueling Ground Operations · BCN',
                         'Viernes, 29 de agosto · Vueling Operaciones en Tierra · BCN'),
-                    style: text.bodySmall,
+                    style: kCardBody,
                   ),
                 ),
               ),
@@ -282,7 +281,7 @@ class _TodayHeader extends StatelessWidget {
           const SizedBox(height: 10),
           Text.rich(
             TextSpan(
-              style: text.headlineSmall,
+              style: kH1,
               children: [
                 TextSpan(
                     text: L('Good morning, Ana.\nHere’s what ',

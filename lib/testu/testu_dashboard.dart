@@ -94,28 +94,6 @@ class TestuDashboardScreen extends StatelessWidget {
   }
 }
 
-/// Card section label (`.dcard h4`): mono 9px, +0.14em, faint.
-class _H4 extends StatelessWidget {
-  const _H4(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = TestuTokens.of(context);
-    return Text(
-      text,
-      style: TextStyle(
-        fontFamily: 'GeistMono',
-        fontWeight: FontWeight.w500,
-        fontSize: 9,
-        letterSpacing: 1.26, // +0.14em
-        color: t.faint,
-      ),
-    );
-  }
-}
-
 class _ReadinessCard extends StatelessWidget {
   const _ReadinessCard();
 
@@ -127,8 +105,9 @@ class _ReadinessCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _H4(L('ROLE READINESS · RAMP AGENT, SAFETY LEAD',
-              'PREPARACIÓN DEL ROL · AGENTE DE RAMPA')),
+          TestuEyebrow.h4(
+              L('ROLE READINESS · RAMP AGENT, SAFETY LEAD',
+                  'PREPARACIÓN DEL ROL · AGENTE DE RAMPA')),
           const SizedBox(height: 12),
           Row(
             crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -219,7 +198,8 @@ class _PeerCard extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                  child: _H4(L('PEER COMPARISON · RAMP AGENTS, BCN',
+                  child: TestuEyebrow.h4(L(
+                      'PEER COMPARISON · RAMP AGENTS, BCN',
                       'COMPARACIÓN CON COMPAÑEROS · AGENTES DE RAMPA, BCN'))),
               const _PeerStack(),
               const SizedBox(width: 8),
@@ -257,12 +237,7 @@ class _PeerCard extends StatelessWidget {
           Text(
             L('Anonymised comparison with ramp agents at your base. Your peers never see your individual results.',
                 'Comparación anónima con agentes de rampa de tu base. Tus compañeros nunca ven tus resultados individuales.'),
-            style: TextStyle(
-              fontFamily: 'Geist',
-              fontSize: 10,
-              height: 1.55,
-              color: t.faint,
-            ),
+            style: kNote,
           ),
         ],
       ),
@@ -395,7 +370,6 @@ class _LegendDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = TestuTokens.of(context);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -410,11 +384,7 @@ class _LegendDot extends StatelessWidget {
         const SizedBox(width: 5),
         Text(
           label,
-          style: TextStyle(
-            fontFamily: 'Geist',
-            fontSize: 9.5,
-            color: t.faint,
-          ),
+          style: kCaption,
         ),
       ],
     );
@@ -431,7 +401,8 @@ class _CalibrationCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _H4(L('CONFIDENCE CALIBRATION · 82%', 'CALIBRACIÓN DE CONFIANZA · 82%')),
+          TestuEyebrow.h4(L('CONFIDENCE CALIBRATION · 82%',
+              'CALIBRACIÓN DE CONFIANZA · 82%')),
           const SizedBox(height: 12),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -535,8 +506,9 @@ class _WeekCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _H4(L('LAST 7 DAYS · CORRECT VS INCORRECT',
-              'ÚLTIMOS 7 DÍAS · CORRECTAS VS INCORRECTAS')),
+          TestuEyebrow.h4(
+              L('LAST 7 DAYS · CORRECT VS INCORRECT',
+                  'ÚLTIMOS 7 DÍAS · CORRECTAS VS INCORRECTAS')),
           const SizedBox(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -611,13 +583,12 @@ class _MastRowsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = TestuTokens.of(context);
     return TestuCard(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _H4(title),
+          TestuEyebrow.h4(title),
           const SizedBox(height: 4),
           for (final r in rows)
             Container(
@@ -645,11 +616,7 @@ class _MastRowsCard extends StatelessWidget {
                         const SizedBox(height: 2),
                         Text(
                           r.sub,
-                          style: TextStyle(
-                            fontFamily: 'Geist',
-                            fontSize: 10.5,
-                            color: t.mut,
-                          ),
+                          style: kMeta,
                         ),
                       ],
                     ),
@@ -663,12 +630,7 @@ class _MastRowsCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               note!,
-              style: TextStyle(
-                fontFamily: 'Geist',
-                fontSize: 10,
-                height: 1.55,
-                color: t.faint,
-              ),
+              style: kNote,
             ),
           ],
         ],
@@ -721,11 +683,7 @@ class _CertCard extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   'Valid · renewal evaluation due Sep 10',
-                  style: TextStyle(
-                    fontFamily: 'Geist',
-                    fontSize: 11,
-                    color: t.mut,
-                  ),
+                  style: kLabel,
                 ),
               ],
             ),

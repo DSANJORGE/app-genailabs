@@ -638,11 +638,7 @@ class _FakePlayer extends StatelessWidget {
               child: Text(
                 L('Turnaround groundhandling, Frankfurt — demo footage · CC BY-SA Lufthansa Cargo',
                     'Handling de turnaround, Fráncfort — metraje de demo · CC BY-SA Lufthansa Cargo'),
-                style: TextStyle(
-                  fontFamily: 'Geist',
-                  fontSize: 9.5,
-                  color: t.faint,
-                ),
+                style: kCaption,
               ),
             ),
           ],
@@ -1048,11 +1044,7 @@ class _VerdictExtras extends StatelessWidget {
                     ),
                   ),
                 ]),
-                style: TextStyle(
-                  fontFamily: 'Geist',
-                  fontSize: 10.5,
-                  color: t.mut,
-                ),
+                style: kMeta,
               ),
             ],
           ),
@@ -1081,12 +1073,7 @@ class _VerdictExtras extends StatelessWidget {
                   TextSpan(text: '“${q.ob}”', style: _evBold(t)),
                 ],
               ]),
-              style: TextStyle(
-                fontFamily: 'Geist',
-                fontSize: 10,
-                height: 1.55,
-                color: t.faint,
-              ),
+              style: kNote,
             ),
           ),
         ],
@@ -1347,14 +1334,7 @@ class TestuDebriefScreen extends StatelessWidget {
             Text(
               L('Here’s what today’s session means, Ana.',
                   'Esto es lo que significa la sesión de hoy, Ana.'),
-              style: TextStyle(
-                fontFamily: 'Sora',
-                fontWeight: FontWeight.w700,
-                fontSize: 22,
-                letterSpacing: -0.22,
-                height: 1.25,
-                color: t.ink,
-              ),
+              style: kH1,
             ),
             const SizedBox(height: 20),
             _SullyBubble(
@@ -1560,7 +1540,6 @@ class _DebriefRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = TestuTokens.of(context);
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: last
@@ -1593,12 +1572,7 @@ class _DebriefRow extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   body,
-                  style: TextStyle(
-                    fontFamily: 'Geist',
-                    fontSize: 11.5,
-                    height: 1.5,
-                    color: t.mut,
-                  ),
+                  style: kCardBody,
                 ),
               ],
             ),

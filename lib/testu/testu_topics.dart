@@ -256,8 +256,7 @@ class _TopicRow extends StatelessWidget {
                       )),
                   const SizedBox(height: 4),
                   Text(topic.sub,
-                      style: TextStyle(
-                          fontFamily: 'Geist', fontSize: 10.5, color: t.mut)),
+                      style: kMeta),
                   const SizedBox(height: 5),
                   TestuPill(topic.pill,
                       color: topic.pillColor, borderColor: topic.pillBorder),
@@ -970,10 +969,7 @@ class _CompetenciesCard extends StatelessWidget {
                                   color: Color(0xFFECEBE7))),
                           const SizedBox(height: 2),
                           Text(_cmp[i].sub,
-                              style: TextStyle(
-                                  fontFamily: 'Geist',
-                                  fontSize: 10.5,
-                                  color: t.mut)),
+                              style: kMeta),
                         ],
                       ),
                     ),
@@ -1071,10 +1067,7 @@ class _BehaviorRow extends StatelessWidget {
                         color: Color(0xFFC2C1BD))),
                 const SizedBox(height: 1),
                 Text(b.sub,
-                    style: TextStyle(
-                        fontFamily: 'Geist',
-                        fontSize: 9.5,
-                        color: t.faint)),
+                    style: kCaption),
               ],
             ),
           ),
@@ -1233,8 +1226,7 @@ class _SubGroupWidget extends StatelessWidget {
           ),
           const SizedBox(height: 3),
           Text(sub,
-              style: TextStyle(
-                  fontFamily: 'Geist', fontSize: 11, color: t.mut)),
+              style: kLabel),
         ],
       );
     });
@@ -1334,10 +1326,7 @@ class _ResRow extends StatelessWidget {
                           color: Color(0xFFECEBE7))),
                   const SizedBox(height: 2),
                   Text(sub,
-                      style: TextStyle(
-                          fontFamily: 'Geist',
-                          fontSize: 10.5,
-                          color: t.mut)),
+                      style: kMeta),
                 ],
               ),
             ),
@@ -1379,7 +1368,6 @@ class _ReviewRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = TestuTokens.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 18),
       decoration: const BoxDecoration(
@@ -1394,8 +1382,7 @@ class _ReviewRow extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             Text(author,
-                style: TextStyle(
-                    fontFamily: 'Geist', fontSize: 11, color: t.mut)),
+                style: kLabel),
           ]),
           const SizedBox(height: 6),
           Text(body,

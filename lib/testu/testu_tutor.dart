@@ -131,11 +131,7 @@ class _TutorHeader extends StatelessWidget {
             Text(
               L('Your tutor · Vueling Ground Operations',
                   'Tu tutor · Vueling Operaciones en Tierra'),
-              style: TextStyle(
-                fontFamily: 'Geist',
-                fontSize: 11,
-                color: t.mut,
-              ),
+              style: kLabel,
             ),
           ],
         ),

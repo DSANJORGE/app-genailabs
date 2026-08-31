@@ -119,8 +119,7 @@ class _PdfSheetState extends State<_PdfSheet> {
                       const SizedBox(height: 1),
                       Text(
                         widget.sub,
-                        style: TextStyle(
-                            fontFamily: 'Geist', fontSize: 10.5, color: t.mut),
+                        style: kMeta,
                       ),
                     ],
                   ),
@@ -251,8 +250,7 @@ void showTestuZoom(BuildContext context,
                         padding: const EdgeInsets.only(left: 16),
                         child: Text(
                           label,
-                          style: TextStyle(
-                              fontFamily: 'Geist', fontSize: 11, color: t.mut),
+                          style: kLabel,
                         ),
                       ),
                     ),
