@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'testu_i18n.dart';
+import 'testu_sully.dart';
 import 'testu_theme.dart';
 import 'testu_widgets.dart';
 
@@ -108,7 +109,7 @@ class _ScheduleSheetBodyState extends State<_ScheduleSheetBody> {
         const SizedBox(height: 6),
         _SheetTitle(L('Schedule with Sully', 'Programa con Sully')),
         const SizedBox(height: 14),
-        _SullyMsg(L(
+        SullyMessage.text(L(
             'I checked your roster and calendar, Ana. The evaluation takes '
                 'about 25 minutes and needs a quiet slot. Here’s where you’re '
                 'clear before the deadline:',
@@ -129,7 +130,7 @@ class _ScheduleSheetBodyState extends State<_ScheduleSheetBody> {
         ),
         if (_extraMsg != null) ...[
           const SizedBox(height: 14),
-          _SullyMsg(_extraMsg!),
+          SullyMessage.text(_extraMsg!),
         ],
         const SizedBox(height: 12),
         Wrap(
@@ -214,54 +215,6 @@ class _SheetTitle extends StatelessWidget {
         letterSpacing: -0.17,
         color: TestuTokens.of(context).ink,
       ),
-    );
-  }
-}
-
-/// Sully chat row — 26px avatar, mono name, 13.5px body.
-class _SullyMsg extends StatelessWidget {
-  const _SullyMsg(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = TestuTokens.of(context);
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ClipOval(
-          child: Image.asset('assets/img/sully.png',
-              width: 26, height: 26, fit: BoxFit.cover),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'SULLY',
-                style: TextStyle(
-                  fontFamily: 'GeistMono',
-                  fontSize: 9,
-                  letterSpacing: 1.44,
-                  color: t.faint,
-                ),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                text,
-                style: const TextStyle(
-                  fontFamily: 'Geist',
-                  fontSize: 13.5,
-                  height: 1.62,
-                  color: Color(0xFFD6D4D0),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }

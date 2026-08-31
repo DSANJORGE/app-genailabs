@@ -1,11 +1,10 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 
 import 'testu_i18n.dart';
 import 'testu_pdf.dart';
+import 'testu_sully.dart';
 import 'testu_theme.dart';
 import 'testu_widgets.dart';
 
@@ -183,7 +182,7 @@ class _ResSheetState extends State<_ResSheet> {
   @override
   void initState() {
     super.initState();
-    _chat.add(_SullyMsg(html: widget.res.sully));
+    _chat.add(SullyMessage.text(widget.res.sully, delay: 850, bottomPadding: 12));
   }
 
   @override
@@ -201,7 +200,8 @@ class _ResSheetState extends State<_ResSheet> {
     setState(() {
       _used.add(i);
       _chat.add(_YouMsg(text: c.t));
-      _chat.add(_SullyMsg(html: c.a!, sourceLine: widget.res.title));
+      _chat.add(SullyMessage.text(c.a!,
+          delay: 850, sourceLine: widget.res.title, bottomPadding: 12));
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scroll.hasClients) {
@@ -362,110 +362,6 @@ class _ChipBtn extends StatelessWidget {
               fontWeight: primary ? FontWeight.w700 : FontWeight.w400,
               color: primary ? t.onPrimaryAction : const Color(0xFFC2C1BD),
             )),
-      ),
-    );
-  }
-}
-
-/// Sully bubble with the typing-dots delay, matching the session chat.
-class _SullyMsg extends StatefulWidget {
-  const _SullyMsg({required this.html, this.sourceLine});
-
-  final String html;
-  final String? sourceLine;
-
-  @override
-  State<_SullyMsg> createState() => _SullyMsgState();
-}
-
-class _SullyMsgState extends State<_SullyMsg> {
-  bool _shown = false;
-
-  @override
-  void initState() {
-    super.initState();
-    Timer(const Duration(milliseconds: 750), () {
-      if (mounted) setState(() => _shown = true);
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final t = TestuTokens.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipOval(
-            child: Image.asset('assets/img/sully.png',
-                width: 26, height: 26, fit: BoxFit.cover),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('SULLY',
-                    style: TextStyle(
-                        fontFamily: 'GeistMono',
-                        fontSize: 9,
-                        letterSpacing: 1.44,
-                        color: t.faint)),
-                const SizedBox(height: 5),
-                !_shown
-                    ? Text('· · ·',
-                        style: TextStyle(
-                            fontSize: 13.5, color: t.faint, height: 1.6))
-                    : Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(widget.html,
-                              style: const TextStyle(
-                                fontFamily: 'Geist',
-                                fontSize: 13.5,
-                                height: 1.62,
-                                color: Color(0xFFD6D4D0),
-                              )),
-                          if (widget.sourceLine != null) ...[
-                            const SizedBox(height: 8),
-                            Text.rich(
-                              TextSpan(children: [
-                                TextSpan(
-                                    text:
-                                        '${L('Source', 'Fuente')}: ${widget.sourceLine} · '),
-                                WidgetSpan(
-                                  alignment: PlaceholderAlignment.baseline,
-                                  baseline: TextBaseline.alphabetic,
-                                  child: GestureDetector(
-                                    onTap: () => showTestuPdf(context,
-                                        page: 1, cite: widget.sourceLine),
-                                    child: Text(
-                                      L('Open source', 'Abrir fuente'),
-                                      style: TextStyle(
-                                        fontFamily: 'Geist',
-                                        fontSize: 10.5,
-                                        color: t.blue,
-                                        decoration: TextDecoration.underline,
-                                        decorationColor:
-                                            const Color(0xFF3D5C7D),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ]),
-                              style: TextStyle(
-                                  fontFamily: 'Geist',
-                                  fontSize: 10.5,
-                                  color: t.faint),
-                            ),
-                          ],
-                        ],
-                      ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }

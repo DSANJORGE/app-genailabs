@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'testu_i18n.dart';
 import 'testu_session.dart';
+import 'testu_sully.dart';
 import 'testu_theme.dart';
 import 'testu_widgets.dart';
 
@@ -68,7 +69,7 @@ class _TestuTutorScreenState extends State<TestuTutorScreen> {
                 child: AnimatedOpacity(
                   opacity: _in ? 1 : 0,
                   duration: const Duration(milliseconds: 400),
-                  child: _SullyMessage(onCalibration: widget.onCalibration),
+                  child: _greeting(context, widget.onCalibration),
                 ),
               ),
               const SizedBox(height: 14),
@@ -143,88 +144,46 @@ class _TutorHeader extends StatelessWidget {
   }
 }
 
-class _SullyMessage extends StatelessWidget {
-  const _SullyMessage({required this.onCalibration});
-
-  final VoidCallback onCalibration;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = TestuTokens.of(context);
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ClipOval(
-          child: Image.asset('assets/img/sully.png',
-              width: 26, height: 26, fit: BoxFit.cover),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'SULLY',
-                style: TextStyle(
-                  fontFamily: 'GeistMono',
-                  fontSize: 9,
-                  letterSpacing: 1.44, // +0.16em
-                  color: t.faint,
-                ),
-              ),
-              const SizedBox(height: 5),
-              Text.rich(
-                TextSpan(
-                  children: [
-                    TextSpan(
-                        text: L('Hello Ana. Yesterday a misconception surfaced '
-                                'on ',
-                            'Hola, Ana. Ayer apareció un concepto erróneo '
-                                'sobre ')),
-                    TextSpan(
-                      text: L('chock timing', 'el momento de calzar'),
-                      style: const TextStyle(
-                          fontStyle: FontStyle.italic,
-                          color: Color(0xFFA9A8A4)),
-                    ),
-                    TextSpan(
-                        text: L(' — I’ve scheduled it into today’s Daily '
-                                'Challenge. Want to talk it through first, or '
-                                'is there anything else on your mind?',
-                            ' — lo he añadido al Reto Diario de hoy. ¿Quieres '
-                                'repasarlo primero, o hay algo más en lo que '
-                                'estés pensando?')),
-                  ],
-                ),
-                style: const TextStyle(
-                  fontFamily: 'Geist',
-                  fontSize: 13.5,
-                  height: 1.62,
-                  color: Color(0xFFD6D4D0),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _Chip(L('Review it now', 'Repasarlo ahora'),
-                      primary: true,
-                      onTap: () => showTestuSession(context)),
-                  _Chip(L('How is my calibration?', '¿Cómo va mi calibración?'),
-                      onTap: onCalibration),
-                  // ponytail: free-form tutor answers need the backend.
-                  _Chip(L('Explain the FOD walk again',
-                          'Explícame otra vez la inspección FOD'),
-                      onTap: _noop),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
+Widget _greeting(BuildContext context, VoidCallback onCalibration) {
+  return SullyMessage(
+    delay: 0,
+    spans: [
+      TextSpan(
+          text: L('Hello Ana. Yesterday a misconception surfaced '
+                  'on ',
+              'Hola, Ana. Ayer apareció un concepto erróneo '
+                  'sobre ')),
+      TextSpan(
+        text: L('chock timing', 'el momento de calzar'),
+        style: const TextStyle(
+            fontStyle: FontStyle.italic, color: Color(0xFFA9A8A4)),
+      ),
+      TextSpan(
+          text: L(' — I’ve scheduled it into today’s Daily '
+                  'Challenge. Want to talk it through first, or '
+                  'is there anything else on your mind?',
+              ' — lo he añadido al Reto Diario de hoy. ¿Quieres '
+                  'repasarlo primero, o hay algo más en lo que '
+                  'estés pensando?')),
+    ],
+    extra: Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          _Chip(L('Review it now', 'Repasarlo ahora'),
+              primary: true, onTap: () => showTestuSession(context)),
+          _Chip(L('How is my calibration?', '¿Cómo va mi calibración?'),
+              onTap: onCalibration),
+          // ponytail: free-form tutor answers need the backend.
+          _Chip(L('Explain the FOD walk again',
+                  'Explícame otra vez la inspección FOD'),
+              onTap: _noop),
+        ],
+      ),
+    ),
+  );
 }
 
 /// Suggestion chip — outlined, or white when it's the adaptive recommendation.
