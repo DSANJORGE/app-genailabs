@@ -479,7 +479,7 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
         TextSpan(
             text: L(
                 'Are you sure you want to stop here? You have only $qword to go in this block — finishing it is what moves ',
-                '¿Seguro que quieres parar aquí? Te quedan solo $qword en este bloque — terminarlo es lo que saca ')),
+                '¿${G('Seguro', 'Segura')} que quieres parar aquí? Te quedan solo $qword en este bloque — terminarlo es lo que saca ')),
         TextSpan(
             text: L('Aircraft arrival & chocking', 'Llegada y calzado'),
             style: _ital),
