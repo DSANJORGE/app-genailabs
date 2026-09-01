@@ -1,3 +1,3 @@
 <page>
-  <path-action name="AdminModule.setCrossOriginPolicy" alltypes="true"/>
+  <path-action name="Admin.setCrossOriginPolicy" alltypes="true"/>
 </page>
