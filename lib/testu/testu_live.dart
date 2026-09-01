@@ -135,7 +135,10 @@ String _plainText(String html) => html
 /// channel (same chat the eMe app shows). Replies arrive on [sullyReplies].
 Future<void> askSully(TestuQ q, String text) async {
   final chan = await (_tutorChannel ??= () async {
-    final c = await TopicService().fetchTutorChannel(_liveTutorialId!);
+    final r = await TopicService().fetchTutorHistory(
+      tutorialId: _liveTutorialId!,
+    );
+    final c = r.activeChannel;
     if (c != null) await ChatSocketService().connect(channel: c.id);
     return c;
   }());
