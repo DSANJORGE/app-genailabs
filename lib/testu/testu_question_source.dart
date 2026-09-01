@@ -124,7 +124,7 @@ List<TestuQ> get _questions => [
     ],
     okIdx: 1,
     good: L('Correct — and you were certain. That knowledge is consolidating.',
-        'Correcto — y estabas segura. Ese conocimiento se está consolidando.'),
+        'Correcto — y estabas ${G('seguro', 'segura')}. Ese conocimiento se está consolidando.'),
     bad: [
       TextSpan(
           text: L(
@@ -165,7 +165,7 @@ List<TestuQ> get _questions => [
     okIdx: 1,
     good: L(
         'Correct — and you were certain. The raised finger indicates which engine; the hand across the throat is the cut.',
-        'Correcto — y estabas segura. El dedo levantado indica qué motor; la mano cruzando la garganta es el corte.'),
+        'Correcto — y estabas ${G('seguro', 'segura')}. El dedo levantado indica qué motor; la mano cruzando la garganta es el corte.'),
     bad: [
       TextSpan(text: L('Not quite. This is the ', 'No exactamente. Esta es la señal de ')),
       TextSpan(text: L('cut engines', 'cortar motores'), style: _bold),
@@ -223,7 +223,7 @@ List<TestuQ> get _questions => [
     okIdx: 2,
     good: L(
         'Correct — and you were certain. Note the manual frames FOD as both an aircraft and a personnel hazard; that dual framing is what evaluations test.',
-        'Correcto — y estabas segura. Fíjate en que el manual trata el FOD como peligro tanto para la aeronave como para el personal; ese doble enfoque es lo que evalúan.'),
+        'Correcto — y estabas ${G('seguro', 'segura')}. Fíjate en que el manual trata el FOD como peligro tanto para la aeronave como para el personal; ese doble enfoque es lo que evalúan.'),
     bad: [
       TextSpan(
           text: L(

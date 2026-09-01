@@ -115,7 +115,9 @@ class _TutorHeader extends StatelessWidget {
               width: 40, height: 40, fit: BoxFit.cover),
         ),
         const SizedBox(width: 12),
-        Column(
+        // Expanded: lets the subtitle wrap instead of overflowing the Row.
+        Expanded(
+            child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
@@ -134,7 +136,7 @@ class _TutorHeader extends StatelessWidget {
               style: kLabel,
             ),
           ],
-        ),
+        )),
       ],
     );
   }

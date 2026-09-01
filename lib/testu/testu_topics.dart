@@ -318,7 +318,10 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
             padding: const EdgeInsets.fromLTRB(18, 10, 18, 0),
             decoration: BoxDecoration(
                 border: Border(bottom: BorderSide(color: t.line))),
-            child: Row(
+            // Scrolls instead of overflowing on narrow devices / long labels.
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
               children: [
                 for (var i = 0; i < _tabsL.length; i++)
                   TestuPressable(
@@ -347,6 +350,7 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
                     ),
                   ),
               ],
+              ),
             ),
           ),
         Expanded(
@@ -451,11 +455,13 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
                 color: const Color(0xFF7DBB9C),
                 borderColor: const Color(0xFF2F6A4C)),
             const SizedBox(width: 10),
-            Text(
-                L('Renewal evaluation due in 12 days',
-                    'Evaluación de renovación en 12 días'),
-                style: TextStyle(
-                    fontFamily: 'Geist', fontSize: 12, color: t.mut)),
+            // Flexible: Spanish copy is wider than the row at 390pt.
+            Flexible(
+                child: Text(
+                    L('Renewal evaluation due in 12 days',
+                        'Evaluación de renovación en 12 días'),
+                    style: TextStyle(
+                        fontFamily: 'Geist', fontSize: 12, color: t.mut))),
           ]),
         ),
         Padding(
@@ -892,7 +898,7 @@ class _CompetenciesCard extends StatelessWidget {
         text: L('Reports FOD findings through the correct chain',
             'Notifica los hallazgos FOD por la cadena correcta'),
         sub: L('Evidence building · marked "Unsure" last session',
-            'Evidencia en desarrollo · marcado "Inseguro" en la última sesión')),
+            'Evidencia en desarrollo · marcado "${G('Inseguro', 'Insegura')}" en la última sesión')),
      ]),
     (title: L('Situational awareness on stand',
         'Conciencia situacional en el stand'),

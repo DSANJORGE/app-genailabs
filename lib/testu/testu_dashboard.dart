@@ -196,6 +196,9 @@ class _PeerCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            // start-aligned: the eyebrow wraps to 2 lines in Spanish; the
+            // peer stack should hug the first line, not float mid-height.
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
                   child: TestuEyebrow.h4(L(
@@ -404,36 +407,40 @@ class _CalibrationCard extends StatelessWidget {
           TestuEyebrow.h4(L('CONFIDENCE CALIBRATION · 82%',
               'CALIBRACIÓN DE CONFIANZA · 82%')),
           const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          // IntrinsicHeight: neighbouring quads keep one height if a
+          // translation pushes one of them to an extra line.
+          IntrinsicHeight(
+              child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Expanded(
                   child: _Quad('14',
                       L('Consolidated\ncorrect · certain',
-                          'Consolidado\ncorrecto · seguro'))),
+                          'Consolidado\ncorrecto · ${G('seguro', 'segura')}'))),
               const SizedBox(width: 8),
               Expanded(
                   child: _Quad('4',
                       L('Fragile\ncorrect · unsure',
-                          'Frágil\ncorrecto · inseguro'))),
+                          'Frágil\ncorrecto · ${G('inseguro', 'insegura')}'))),
             ],
-          ),
+          )),
           const SizedBox(height: 8),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          IntrinsicHeight(
+              child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Expanded(
                   child: _Quad('3',
                       L('Known gaps\nincorrect · unsure',
-                          'Lagunas conocidas\nincorrecto · inseguro'))),
+                          'Lagunas conocidas\nincorrecto · ${G('inseguro', 'insegura')}'))),
               const SizedBox(width: 8),
               Expanded(
                   child: _Quad('1',
                       L('Misconception\nincorrect · certain',
-                          'Concepto erróneo\nincorrecto · seguro'),
+                          'Concepto erróneo\nincorrecto · ${G('seguro', 'segura')}'),
                       hot: true)),
             ],
-          ),
+          )),
         ],
       ),
     );
@@ -667,6 +674,8 @@ class _CertCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 13),
+          // Issuer line stacks under the title — a trailing caption column
+          // stole half the row's width and squeezed the title to 3 lines.
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -682,22 +691,24 @@ class _CertCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Valid · renewal evaluation due Sep 10',
+                  L('Valid · renewal evaluation due Sep 10',
+                      'Válido · evaluación de renovación el 10 sep'),
                   style: kLabel,
                 ),
+                const SizedBox(height: 7),
+                Text(
+                  L('ISSUED BY VUELING · VERIFIED BY TESTU',
+                      'EMITIDO POR VUELING · VERIFICADO POR TESTU'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: 'GeistMono',
+                    fontSize: 8,
+                    letterSpacing: 0.64, // +0.08em
+                    color: t.faint,
+                  ),
+                ),
               ],
-            ),
-          ),
-          Text(
-            L('ISSUED BY VUELING\nVERIFIED BY TESTU',
-                'EMITIDO POR VUELING\nVERIFICADO POR TESTU'),
-            textAlign: TextAlign.right,
-            style: TextStyle(
-              fontFamily: 'GeistMono',
-              fontSize: 8,
-              height: 1.6,
-              letterSpacing: 0.64, // +0.08em
-              color: t.faint,
             ),
           ),
         ],

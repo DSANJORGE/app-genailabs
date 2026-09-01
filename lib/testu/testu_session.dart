@@ -30,9 +30,10 @@ bool _confAcked = false;
 
 List<String> get _conf => [
   L('Guessing', 'Adivinando'),
-  L('Unsure', 'Inseguro'),
-  L('Fairly sure', 'Bastante seguro'),
-  L('Certain', 'Seguro'),
+  L('Unsure', G('Inseguro', 'Insegura')),
+  // ponytail: "Bastante" alone (user-approved) — also keeps the cell 1 line.
+  L('Fairly sure', 'Bastante'),
+  L('Certain', G('Seguro', 'Segura')),
 ];
 const _confColors = [
   Color(0xFFC25555),
@@ -424,7 +425,7 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
             text: conf >= 2
                 ? q.good ??
                     L('Correct — and you were certain. That knowledge is consolidating.',
-                        'Correcto — y estabas segura. Ese conocimiento se está consolidando.')
+                        'Correcto — y estabas ${G('seguro', 'segura')}. Ese conocimiento se está consolidando.')
                 : L('Correct. You marked it "${_conf[conf]}" — this knowledge may not be fully consolidated yet, so I’ll bring it back soon.',
                     'Correcto. Lo marcaste como «${_conf[conf]}» — puede que este conocimiento aún no esté consolidado, así que lo traeré de vuelta pronto.')),
       ];
@@ -432,7 +433,7 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
       spans = [
         TextSpan(
             text: conf == 3
-                ? '${L('Not quite · you were certain', 'No exactamente · estabas segura')}\n'
+                ? '${L('Not quite · you were certain', 'No exactamente · estabas ${G('seguro', 'segura')}')}\n'
                 : '${L('Not quite', 'No exactamente')} · ${_conf[conf]}\n',
             style: const TextStyle(
                 fontWeight: FontWeight.w700,
@@ -451,7 +452,7 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
           TextSpan(
               text: L(
                   '\n\nBecause you were certain, I’ve marked this as a priority to revisit — it’s the most valuable kind of finding.',
-                  '\n\nComo estabas segura, lo he marcado como prioridad para repasar — es el tipo de hallazgo más valioso.')),
+                  '\n\nComo estabas ${G('seguro', 'segura')}, lo he marcado como prioridad para repasar — es el tipo de hallazgo más valioso.')),
       ];
     }
 
@@ -916,6 +917,9 @@ class _QuestionCardState extends State<_QuestionCard> {
               children: [
                 Text(
                   q.kicker,
+                  // Live topic titles are backend-sized — cap the kicker.
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontFamily: 'GeistMono',
                     fontSize: 9,
@@ -1027,7 +1031,8 @@ class _QuestionCardState extends State<_QuestionCard> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    L('HOW CONFIDENT ARE YOU?', '¿CÓMO DE SEGURA ESTÁS?'),
+                    L('HOW CONFIDENT ARE YOU?',
+                        '¿CUÁN ${G('SEGURO', 'SEGURA')} ESTÁS?'),
                     style: TextStyle(
                       fontFamily: 'GeistMono',
                       fontSize: 9.5,
@@ -1043,7 +1048,12 @@ class _QuestionCardState extends State<_QuestionCard> {
                         border: Border.all(color: t.line2),
                         borderRadius: BorderRadius.circular(9),
                       ),
-                      child: Row(
+                      // Equal-height cells: a wrapping label ("Bastante
+                      // segura") must not leave its siblings shorter with
+                      // misaligned top bars.
+                      child: IntrinsicHeight(
+                        child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           for (var c = 0; c < 4; c++)
                             Expanded(
@@ -1054,6 +1064,7 @@ class _QuestionCardState extends State<_QuestionCard> {
                                   _pickConf(c);
                                 },
                                 child: Container(
+                                  alignment: Alignment.center,
                                   decoration: BoxDecoration(
                                     color: _confSel == c
                                         ? _confSelectedBg[c]
@@ -1082,6 +1093,7 @@ class _QuestionCardState extends State<_QuestionCard> {
                               ),
                             ),
                         ],
+                        ),
                       ),
                     ),
                   ),
@@ -1460,21 +1472,26 @@ class _ContinueWrapState extends State<_ContinueWrap> {
     return _Rise(
       child: Padding(
         padding: const EdgeInsets.only(top: 6, bottom: 18),
-        child: Row(
-          children: [
-            Expanded(
-              child: TestuButton(L('Continue', 'Continuar'),
-                  variant: TestuButtonVariant.primary,
-                  onTap: () => _pick(widget.onContinue)),
-            ),
-            if (!widget.last) ...[
-              const SizedBox(width: 9),
+        // IntrinsicHeight: keeps both button outlines the same height if a
+        // label ever wraps (same failure the confidence bar had).
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
               Expanded(
-                child: TestuButton(L('Stop here', 'Parar aquí'),
-                    onTap: () => _pick(widget.onStop)),
+                child: TestuButton(L('Continue', 'Continuar'),
+                    variant: TestuButtonVariant.primary,
+                    onTap: () => _pick(widget.onContinue)),
               ),
+              if (!widget.last) ...[
+                const SizedBox(width: 9),
+                Expanded(
+                  child: TestuButton(L('Stop here', 'Parar aquí'),
+                      onTap: () => _pick(widget.onStop)),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -1653,7 +1670,11 @@ class TestuDebriefScreen extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 2),
-            Row(
+            // IntrinsicHeight: the mastery label wraps to 2 lines, the mono
+            // stats don't — cards must still share one height.
+            IntrinsicHeight(
+              child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _Stat(L('CORRECT', 'CORRECTAS'),
                     child: _statMono('$correct / $total', t.ink)),
@@ -1664,9 +1685,9 @@ class TestuDebriefScreen extends StatelessWidget {
                 // ponytail: mastery band is illustrative — a real band needs
                 // the backend's mastery model, not 3 questions of evidence.
                 _Stat(L('MASTERY', 'DOMINIO'),
-                    child: const Text(
-                      'Competent · Strong ↑',
-                      style: TextStyle(
+                    child: Text(
+                      L('Competent · Strong ↑', 'Competente · Sólido ↑'),
+                      style: const TextStyle(
                         fontFamily: 'Geist',
                         fontWeight: FontWeight.w600,
                         fontSize: 12,
@@ -1674,6 +1695,7 @@ class TestuDebriefScreen extends StatelessWidget {
                       ),
                     )),
               ],
+              ),
             ),
             const SizedBox(height: 18),
             TestuCard(
@@ -1752,7 +1774,7 @@ class TestuDebriefScreen extends StatelessWidget {
           const Color(0xFFC25555),
           L('Misconception', 'Concepto erróneo'),
           L('Incorrect while certain — marked priority to revisit.',
-              'Incorrecta estando segura — marcada como prioridad para repasar.'),
+              'Incorrecta estando ${G('seguro', 'segura')} — marcada como prioridad para repasar.'),
         ),
       (false, _) => (
           const Color(0xFFC25555),
@@ -1880,7 +1902,8 @@ class _CurvePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final s = size.width / 320;
 
-    void label(String text, double x, double y, double fs) {
+    void label(String text, double x, double y, double fs,
+        {bool right = false}) {
       final tp = TextPainter(
         text: TextSpan(
           text: text,
@@ -1892,14 +1915,17 @@ class _CurvePainter extends CustomPainter {
         ),
         textDirection: TextDirection.ltr,
       )..layout();
-      // SVG text y is the baseline.
-      tp.paint(canvas, Offset(x * s, y * s - tp.height));
+      // SVG text y is the baseline. right: anchor to the right edge so a
+      // longer translation can't paint past the card border.
+      final dx = right ? size.width - tp.width - 8 * s : x * s;
+      tp.paint(canvas, Offset(dx, y * s - tp.height));
     }
 
     label(L('Expert', 'Experto'), 2, 12, 9);
     label(L('Competent', 'Competente'), 2, 50, 9);
     label(L('Beginner', 'Principiante'), 2, 88, 9);
-    label(L('required · Expert', 'requerido · Experto'), 230, 16, 8.5);
+    label(L('required · Expert', 'requerido · Experto'), 230, 16, 8.5,
+        right: true);
 
     final dash = Paint()
       ..color = const Color(0xFF26262C)

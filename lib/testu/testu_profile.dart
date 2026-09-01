@@ -331,9 +331,11 @@ class _Head extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  L('Ramp Agent · Safety Lead track\n'
+                  // No hand \n: the Spanish first half only just fits at
+                  // 390pt — let the text wrap where it needs to.
+                  L('Ramp Agent · Safety Lead track · '
                           'Vueling Ground Operations · BCN',
-                      'Agente de Rampa · Vía Líder de Seguridad\n'
+                      'Agente de Rampa · Vía Líder de Seguridad · '
                           'Vueling Operaciones en Tierra · BCN'),
                   style: TextStyle(
                     fontFamily: 'Geist',

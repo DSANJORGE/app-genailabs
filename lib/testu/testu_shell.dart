@@ -32,7 +32,7 @@ class _TestuShellState extends State<TestuShell> {
         L('TODAY', 'HOY'),
         L('TOPICS', 'TEMAS'),
         L('TUTOR', 'TUTOR'),
-        L('DASHBOARD', 'PANEL'),
+        L('DASHBOARD', 'DASHBOARD'),
       ];
 
   @override
@@ -140,6 +140,8 @@ class TestuNav extends StatelessWidget {
                           const SizedBox(height: 9),
                           Text(
                             items[i],
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontFamily: 'GeistMono',
                               fontWeight: FontWeight.w500,
@@ -482,12 +484,17 @@ class _ContinueHero extends StatelessWidget {
                             color: t.gold,
                             borderColor: const Color(0xFF8A7A3A)),
                         const SizedBox(width: 10),
-                        Text(
-                          L('21 of 36 questions', '21 de 36 preguntas'),
-                          style: const TextStyle(
-                            fontFamily: 'Geist',
-                            fontSize: 11.5,
-                            color: Color(0xFFB5B4B0),
+                        // Flexible: overflows at 360dp otherwise (Spanish).
+                        Flexible(
+                          child: Text(
+                            L('21 of 36 questions', '21 de 36 preguntas'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontFamily: 'Geist',
+                              fontSize: 11.5,
+                              color: Color(0xFFB5B4B0),
+                            ),
                           ),
                         ),
                       ],

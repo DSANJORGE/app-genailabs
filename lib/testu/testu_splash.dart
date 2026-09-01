@@ -190,7 +190,7 @@ class _TestuSplashState extends State<TestuSplash>
                                 offset: Offset(0, 10 * (1 - hi)),
                                 child: Text(
                                   L('Ana, welcome back.',
-                                      'Ana, bienvenida de nuevo.'),
+                                      'Ana, ${G('bienvenido', 'bienvenida')} de nuevo.'),
                                   style: const TextStyle(
                                     fontFamily: 'Sora',
                                     fontWeight: FontWeight.w700,

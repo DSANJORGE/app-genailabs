@@ -12,7 +12,9 @@ const _pageAspect = 1284 / 1667;
 /// scrolled to the cited page. Blue "Open source" links land here.
 void showTestuPdf(BuildContext context, {int page = 1, String? cite}) {
   HapticFeedback.selectionClick();
-  final sub = (cite ?? 'Aircraft Ground Handling and Servicing')
+  final sub = (cite ??
+          L('Aircraft Ground Handling and Servicing',
+              'Manipulación y Servicio de Aeronaves en Tierra'))
       .replaceFirst(RegExp(r'^FAA AC 00-34A\s*·\s*'), '');
   showModalBottomSheet<void>(
     context: context,
