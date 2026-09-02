@@ -109,10 +109,12 @@ class EmeQuestionSource extends TestuQuestionSource {
     final topics = await _service.fetchTopics();
     if (topics.isEmpty) throw StateError('No topics available');
 
-    // ponytail: an unknown id falls back to the first topic rather than
-    // erroring — the row that sent it came from this same list.
+    // ponytail: an unknown id falls back to the first topic that has
+    // tutorials rather than erroring — the row that sent it came from this
+    // same list, and the server lists topics with no content yet.
     final topic = topics.firstWhere((t) => t.id == topicId,
-        orElse: () => topics.first);
+        orElse: () => topics.firstWhere((t) => t.totalTutorials > 0,
+            orElse: () => topics.first));
     _topic = topic.title;
     final tutorials = await _service.fetchTutorialsForTopic(topic.id);
     if (tutorials.isEmpty) throw StateError('No tutorials in ${topic.id}');

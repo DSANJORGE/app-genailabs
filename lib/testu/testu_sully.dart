@@ -154,8 +154,7 @@ class _SullyMessageState extends State<SullyMessage> {
   }
 }
 
-// ponytail: verbatim copy of testu_session.dart's _TypingDots — that one gets
-// deleted when the session screen swaps to SullyMessage.
+/// Typing indicator shown while a message is pending.
 class _TypingDots extends StatefulWidget {
   const _TypingDots();
 

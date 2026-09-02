@@ -151,6 +151,20 @@ void main() {
     expect(http.requests[1].$2, {'entitytopic': 'TOPIC2'});
   });
 
+  test('without a topicId, skips topics that have no tutorials', () async {
+    http.canned[_topicsPath] = {
+      'topics': [
+        {'id': 'EMPTY', 'title': 'Vacío', 'tutorials': 0, 'progress': _progress},
+        {'id': 'TOPIC1', 'title': 'Lleno', 'tutorials': 2, 'progress': _progress},
+      ],
+    };
+
+    await source.load();
+
+    expect(source.topic, 'Lleno');
+    expect(http.requests[1].$2, {'entitytopic': 'TOPIC1'});
+  });
+
   test('carries questionId, sectionId and componentId', () async {
     final qs = await source.load();
 

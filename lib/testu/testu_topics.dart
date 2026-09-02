@@ -152,7 +152,9 @@ _Topic _mapTopic(Topic t, int i) {
     pill: pill,
     pillColor: color,
     pillBorder: border,
-    opens: true,
+    // A topic with no tutorials has no questions; opening it would drop the
+    // session into the offline demo under this topic's name.
+    opens: t.totalTutorials > 0,
     id: t.id,
   );
 }
@@ -198,7 +200,8 @@ Widget _topicsBody(BuildContext context, List<_Topic> topics) {
                     topic: topic,
                     // ponytail: in the demo only Ramp Safety has a Topic
                     // Home; the rest just give press feedback, like the
-                    // prototype. Every live row opens one.
+                    // prototype. A live row opens one when its topic has
+                    // tutorials.
                     onTap: topic.opens
                         ? () => Navigator.of(context).push(MaterialPageRoute(
                             builder: (_) => TestuTopicHomeScreen(
