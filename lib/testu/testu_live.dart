@@ -8,7 +8,6 @@ import 'package:eme_app_package/models/workspace.dart';
 import 'package:eme_app_package/services/auth_service.dart';
 import 'package:eme_app_package/services/topic_service.dart';
 import 'package:eme_app_package/services/workspace_service.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 import 'package:openinsitute_core/openinsitute_core.dart';
 
@@ -20,41 +19,67 @@ import 'testu_question_source.dart';
 /// and topics screens both read it from here.
 const bool testuLive = bool.fromEnvironment('TESTU_LIVE');
 
-const _ital = TextStyle(fontStyle: FontStyle.italic, color: Color(0xFFA9A8A4));
+/// The eMe server live mode talks to. Point a build elsewhere with
+/// `--dart-define=TESTU_MEDIADB=https://host/site/mediadb`.
+const _mediaDBRoot = String.fromEnvironment('TESTU_MEDIADB',
+    defaultValue: 'https://minsur.genailabs.tech/site/mediadb');
 
-// Same workspace main.dart boots with; init is idempotent.
-final _workspace = Workspace(
-  id: 'primary',
-  name: 'GenAILabs',
-  mediaDBRoot: 'https://minsur.genailabs.tech/site/mediadb',
-);
+// Same workspace shape main.dart boots with; init is idempotent.
+final _workspace =
+    Workspace(id: 'primary', name: 'GenAILabs', mediaDBRoot: _mediaDBRoot);
 
-const _devEmail = 'testuser@eme.world';
-const _devOtp = '666666';
+Future<void>? _ready;
 
-/// Restores the persisted eMe session (cookie + token) and, in debug builds
-/// only, falls back to the sanctioned test login. Never registers an account.
-Future<void> _ensureAuth({bool force = false}) async {
-  await WorkspaceService.init(initialWorkspace: _workspace);
-  // The chat socket resolves its URL from OpenI; boot it like BaseApp does.
-  await OpenI().initialize(workspaceData: _workspace.toJson());
-  if (!force) {
-    await AuthService.init();
-    if (AuthService.isLoggedIn) return;
-  }
-  // ponytail: dev-only lazy login, no login UI. A release live build is
-  // expected to piggyback an existing eMe session.
-  if (kDebugMode) {
-    // The fixed test OTP needs no prior sendusercode call (probed 2026-08-31).
-    await AuthService.loginWithOtp(_devEmail, _devOtp);
+/// Workspace, chat socket and the persisted eMe session (cookie + token),
+/// once. The sign-in gate awaits this before any screen exists, so the
+/// sources below can assume it ran.
+Future<void> _init() => _ready ??= () async {
+      await WorkspaceService.init(initialWorkspace: _workspace);
+      // The chat socket resolves its URL from OpenI; boot it like BaseApp does.
+      await OpenI().initialize(workspaceData: _workspace.toJson());
+      await AuthService.init();
+    }();
+
+// ---- Auth: the live bodies behind TestuAuth, same contract as AuthService.
+
+Future<bool> liveRestoreSession() async {
+  await _init();
+  return AuthService.isLoggedIn;
+}
+
+/// 'ok' | 'nouser' | 'error' — the server's own status word, or 'error'
+/// when it could not be reached.
+Future<String> liveSendUserCode(String email,
+    {String? firstName, String? lastName}) async {
+  await _init();
+  try {
+    final r = await AuthService.sendUserCode(
+        email: email, firstName: firstName, lastName: lastName);
+    return r['status']?.toString() ?? 'error';
+  } catch (_) {
+    return 'error';
   }
 }
 
-/// Topics for the live topics screen, behind the same lazy auth.
-Future<List<Topic>> loadLiveTopics() async {
-  await _ensureAuth();
-  return TopicService().fetchTopics();
+Future<bool> liveLoginWithOtp(String email, String code) async {
+  await _init();
+  try {
+    return await AuthService.loginWithOtp(email, code);
+  } catch (_) {
+    return false;
+  }
 }
+
+Future<void> liveSignOut() async {
+  await _init();
+  await AuthService.logout();
+  _tutorChannel = null;
+}
+
+// ---- Data.
+
+/// Topics for the live topics screen.
+Future<List<Topic>> loadLiveTopics() => TopicService().fetchTopics();
 
 /// Questions from the backend: first topic -> first tutorial -> its MCQ
 /// batch, judged locally off `correctoption`. [reportAttempt] stays the
@@ -62,27 +87,16 @@ Future<List<Topic>> loadLiveTopics() async {
 /// polluted; chat follow-ups ([askSully]) are the one sanctioned write
 /// (user-approved 2026-08-31).
 class EmeQuestionSource extends TestuQuestionSource {
-  EmeQuestionSource({EmeHttp? http})
-    : _service = TopicService(http: http),
-      _injected = http != null;
+  EmeQuestionSource({EmeHttp? http}) : _service = TopicService(http: http);
 
   final TopicService _service;
 
-  /// Tests inject an http and must never touch the network or prefs, so an
-  /// injected transport skips auth entirely.
-  final bool _injected;
-
   @override
   Future<List<TestuQ>> load() async {
-    if (!_injected) await _ensureAuth();
-
-    var topics = await _service.fetchTopics();
-    // fetchTopics swallows failures to []; an expired cookie is
-    // indistinguishable from "no topics", so re-login once and retry.
-    if (topics.isEmpty && !_injected) {
-      await _ensureAuth(force: true);
-      topics = await _service.fetchTopics();
-    }
+    // ponytail: fetchTopics swallows failures to [], so an expired session
+    // reads as "no topics" and the session falls back to the offline demo.
+    // Bounce to sign-in instead once the transport surfaces the 401.
+    final topics = await _service.fetchTopics();
     if (topics.isEmpty) throw StateError('No topics available');
 
     final topic = topics.first;
@@ -161,7 +175,7 @@ TestuQ _toTestuQ(SectionQuestion m, int i, int total, Topic topic) {
     componentId: m.contentId,
     framing: [
       TextSpan(text: L('Next up in ', 'Siguiente en ')),
-      TextSpan(text: m.section.title, style: _ital),
+      TextSpan(text: m.section.title, style: testuItal),
       const TextSpan(text: '.'),
     ],
     kicker:

@@ -6,7 +6,9 @@ import 'testu_i18n.dart';
 /// seam, so a live EnterMedia-backed source can slot in later without
 /// touching the widgets or the engine.
 
-const _ital = TextStyle(fontStyle: FontStyle.italic, color: Color(0xFFA9A8A4));
+/// Italic accent inside framing copy; shared with the live adapter.
+const testuItal =
+    TextStyle(fontStyle: FontStyle.italic, color: Color(0xFFA9A8A4));
 const _bold = TextStyle(fontWeight: FontWeight.w700);
 
 /// One session question, render-ready. Fields a backend can't supply are
@@ -107,7 +109,7 @@ List<TestuQ> get _questions => [
       TextSpan(text: L('Next up in ', 'Siguiente en ')),
       TextSpan(
           text: L('Aircraft arrival & chocking', 'Llegada y calzado'),
-          style: _ital),
+          style: testuItal),
       TextSpan(
           text: L(
               '. This one matters because approaching too early is one of the most common ramp near-misses.',
@@ -200,13 +202,13 @@ List<TestuQ> get _questions => [
           text: L(
               'Sully picked this because your last answer showed uncertainty in ',
               'Sully eligió esta porque tu última respuesta mostró dudas en ')),
-      TextSpan(text: L('FOD reporting', 'notificación de FOD'), style: _ital),
+      TextSpan(text: L('FOD reporting', 'notificación de FOD'), style: testuItal),
       TextSpan(
           text: L('. Before you answer — I’ve cued the video to ',
               '. Antes de responder — he dejado el vídeo en ')),
       TextSpan(
           text: L('Arrival & stand check', 'Llegada y revisión del stand'),
-          style: _ital),
+          style: testuItal),
       TextSpan(
           text: L(
               '. Watch it and count how often the crew scans the stand surface.',
