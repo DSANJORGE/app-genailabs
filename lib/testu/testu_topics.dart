@@ -120,10 +120,15 @@ class _LiveTopicsState extends State<_LiveTopics> {
       );
 }
 
-/// `Topic` → the row record `_TopicRow` already renders. Thumbnails stay
-/// bundled: the server's are not wired to an asset pipeline.
+/// `Topic` → the row record `_TopicRow` already renders. The server's
+/// thumbnail when it has one, else a bundled picture.
 const _imgs = ['ramp.jpg', 'chocks.jpg', 'radio.jpg', 'marshal.jpg',
     'cargo.jpg', 'winter.jpg', 'fire.jpg'];
+
+/// `img` is a bundled file name for prototype rows and an absolute URL for
+/// live ones.
+ImageProvider _topicImage(String img) =>
+    testuImage(img.startsWith('http') ? img : 'assets/img/$img');
 
 _Topic _mapTopic(Topic t, int i) {
   final (pill, color, border) = switch (t.progress.getEfficiency()) {
@@ -144,7 +149,12 @@ _Topic _mapTopic(Topic t, int i) {
       ),
   };
   return (
-    img: _imgs[i % _imgs.length],
+    // The server hands out the 200x200 rendition; the hero wants the large
+    // one, which the same generated path serves.
+    img: t.thumbnail.isEmpty
+        ? _imgs[i % _imgs.length]
+        : liveAssetUrl(
+            t.thumbnail.replaceFirst('image200x200', 'image3000x3000')),
     title: t.title,
     sub: L(
         '${t.totalTutorials} tutorials · ${t.completedSections} of ${t.totalSections} sections',
@@ -249,8 +259,8 @@ class _TopicRow extends StatelessWidget {
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(11),
-                child: Image.asset('assets/img/${topic.img}',
-                    fit: BoxFit.cover),
+                child: Image(
+                    image: _topicImage(topic.img), fit: BoxFit.cover),
               ),
             ),
             const SizedBox(width: 13),
@@ -709,7 +719,7 @@ class _TopicHero extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          Image.asset('assets/img/${home.img}',
+          Image(image: _topicImage(home.img),
               fit: BoxFit.cover,
               alignment: const Alignment(0, 0.24)), // center 62%
           const DecoratedBox(

@@ -375,7 +375,7 @@ void showTestuZoom(BuildContext context,
                 Expanded(
                   child: InteractiveViewer(
                     maxScale: 5,
-                    child: Center(child: Image.asset(asset)),
+                    child: Center(child: Image(image: testuImage(asset))),
                   ),
                 ),
               ],

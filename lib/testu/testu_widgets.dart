@@ -6,6 +6,11 @@ import 'package:flutter/services.dart';
 import 'testu_icons.dart';
 import 'testu_theme.dart';
 
+/// A bundled asset key, or an absolute URL from the server (its generated
+/// images are served without auth).
+ImageProvider testuImage(String src) =>
+    src.startsWith('http') ? NetworkImage(src) : AssetImage(src);
+
 /// Press feedback per spec: opacity .75 + scale .985 + selectionClick haptic.
 class TestuPressable extends StatefulWidget {
   const TestuPressable({super.key, required this.child, this.onTap});

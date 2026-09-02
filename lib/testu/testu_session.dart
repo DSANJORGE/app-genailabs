@@ -907,7 +907,8 @@ class _QuestionCardState extends State<_QuestionCard> {
                               color: const Color(0xFFF2F1EC),
                               borderRadius: BorderRadius.circular(10),
                             ),
-                            child: Image.asset(q.image!, height: 150),
+                            child: Image(
+                                image: testuImage(q.image!), height: 150),
                           ),
                         )
                       : ClipRRect(
@@ -924,22 +925,27 @@ class _QuestionCardState extends State<_QuestionCard> {
                                   onTap: () => showTestuZoom(context,
                                       asset: q.image!,
                                       label: q.caption ?? q.kicker),
-                                  child:
-                                      Image.asset(q.image!, fit: BoxFit.cover),
+                                  child: Image(
+                                      image: testuImage(q.image!),
+                                      fit: BoxFit.cover),
                                 ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      vertical: 7, horizontal: 11),
-                                  color: t.card2,
-                                  child: Text(
-                                    q.caption!,
-                                    style: TextStyle(
-                                      fontFamily: 'Geist',
-                                      fontSize: 10,
-                                      color: t.faint,
+                                // Live questions come with a picture but no
+                                // caption (the server's asset text spells
+                                // out the answer).
+                                if (q.caption != null)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 7, horizontal: 11),
+                                    color: t.card2,
+                                    child: Text(
+                                      q.caption!,
+                                      style: TextStyle(
+                                        fontFamily: 'Geist',
+                                        fontSize: 10,
+                                        color: t.faint,
+                                      ),
                                     ),
                                   ),
-                                ),
                               ],
                             ),
                           ),

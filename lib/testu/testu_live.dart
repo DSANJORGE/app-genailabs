@@ -24,6 +24,11 @@ const bool testuLive = bool.fromEnvironment('TESTU_LIVE');
 const _mediaDBRoot = String.fromEnvironment('TESTU_MEDIADB',
     defaultValue: 'https://minsur.genailabs.tech/site/mediadb');
 
+/// Absolute URL for a site-relative asset path from the server
+/// (`/site/mediadb/services/module/asset/generated/...`).
+String liveAssetUrl(String path) =>
+    path.startsWith('http') ? path : Uri.parse(_mediaDBRoot).origin + path;
+
 // Same workspace shape main.dart boots with; init is idempotent.
 final _workspace =
     Workspace(id: 'primary', name: 'GenAILabs', mediaDBRoot: _mediaDBRoot);
@@ -207,6 +212,8 @@ TestuQ _toTestuQ(SectionQuestion m, int i, int total, Topic topic) {
         '${L('QUESTION', 'PREGUNTA')} ${i + 1} '
         '${L('OF', 'DE')} $total · ${topic.title.toUpperCase()}',
     text: q.question,
+    // No caption: the asset row's text restates the correct answer.
+    image: m.image == null ? null : liveAssetUrl(m.image!.assetUrl),
     opts: q.optionsList,
     okIdx: q.correctAnswerIndex,
     bad: q.rationale.isEmpty ? null : [TextSpan(text: q.rationale)],
