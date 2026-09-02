@@ -496,19 +496,28 @@ class _AvatarPicker extends StatelessWidget {
                 // Presets ship with the app; only added photos can go.
                 onRemove: mine.contains(src) ? () => _removeAvatar(src) : null,
               ),
-            TestuPressable(
-              onTap: _addAvatar,
-              child: Container(
-                width: 46,
-                height: 46,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: t.line2),
+            // Same 58px box as the tiles so it sits on their baseline rather
+            // than floating in their badge gutter.
+            SizedBox(
+              width: 46,
+              height: 58,
+              child: Align(
+                alignment: Alignment.bottomLeft,
+                child: TestuPressable(
+                  onTap: _addAvatar,
+                  child: Container(
+                    width: 46,
+                    height: 46,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: t.line2),
+                    ),
+                    child: Text('+',
+                        style: TextStyle(
+                            fontFamily: 'Sora', fontSize: 20, color: t.mut)),
+                  ),
                 ),
-                child: Text('+',
-                    style: TextStyle(
-                        fontFamily: 'Sora', fontSize: 20, color: t.mut)),
               ),
             ),
           ],

@@ -40,16 +40,18 @@ class TestuLock {
 
   /// What to call it on screen — Apple and Android name their own sensors,
   /// so the UI must too ("Unlock with biometrics" reads like a spec sheet).
+  /// Each label is the platform's own name for the sensor, so it reads
+  /// correctly wherever it is dropped into a sentence.
   static String get name {
     if (_kinds.contains(BiometricType.face)) {
-      return Platform.isIOS ? 'Face ID' : L('face unlock', 'desbloqueo facial');
+      return Platform.isIOS
+          ? 'Face ID'
+          : L('Face Unlock', 'Desbloqueo facial');
     }
     if (_kinds.contains(BiometricType.fingerprint)) {
-      return Platform.isIOS
-          ? 'Touch ID'
-          : L('your fingerprint', 'tu huella');
+      return Platform.isIOS ? 'Touch ID' : L('Fingerprint', 'Huella');
     }
-    return L('your biometrics', 'tu biometría');
+    return L('Biometrics', 'Biometría');
   }
 
   /// Reads the stored setting and asks the platform what it has enrolled.
@@ -349,9 +351,13 @@ class _TestuLockScreenState extends State<TestuLockScreen> {
               Expanded(
                 child: Center(
                   child: SingleChildScrollView(
+                    // Vertically centred but left-aligned: the sign-in screen
+                    // this pairs with starts every line at the same margin.
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
+                        const SizedBox(width: double.infinity),
                         TestuIcon(TestuGlyph.faceId, size: 38, color: t.ink),
                         const SizedBox(height: 18),
                         Text(L('Welcome back', 'Bienvenida de nuevo'),

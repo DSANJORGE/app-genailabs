@@ -4,6 +4,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:genai_labs/testu/testu_lock.dart';
 import 'package:genai_labs/testu/testu_notifications.dart';
 import 'package:genai_labs/testu/testu_pdf.dart';
 import 'package:genai_labs/testu/testu_profile.dart';
@@ -18,6 +19,7 @@ import 'package:genai_labs/testu/testu_social.dart';
 import 'package:genai_labs/testu/testu_splash.dart';
 import 'package:genai_labs/testu/testu_theme.dart';
 import 'package:genai_labs/testu/testu_topics.dart';
+import 'package:local_auth_platform_interface/local_auth_platform_interface.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player_platform_interface/video_player_platform_interface.dart';
 
@@ -29,6 +31,24 @@ import 'package:video_player_platform_interface/video_player_platform_interface.
 ///   flutter test --update-goldens --run-skipped test/landscape_shots_test.dart
 /// The `session` test reports a pending-timer failure AFTER its shot is
 /// written (a long-lived Sully timer) — harmless here.
+
+/// Reports a face-enrolled device so the lock surfaces render their real copy.
+class _FakeLocalAuth extends LocalAuthPlatform {
+  @override
+  Future<bool> authenticate({
+    required String localizedReason,
+    required Iterable<AuthMessages> authMessages,
+    AuthenticationOptions options = const AuthenticationOptions(),
+  }) async =>
+      false; // never auto-dismiss the screen mid-shot
+  @override
+  Future<List<BiometricType>> getEnrolledBiometrics() async =>
+      const [BiometricType.face];
+  @override
+  Future<bool> deviceSupportsBiometrics() async => true;
+  @override
+  Future<bool> isDeviceSupported() async => true;
+}
 
 class _FakeVideoPlatform extends VideoPlayerPlatform {
   @override
@@ -73,6 +93,12 @@ void main() {
 
   void landscape(WidgetTester tester) {
     tester.view.physicalSize = const Size(874, 402);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+  }
+
+  void portrait(WidgetTester tester) {
+    tester.view.physicalSize = const Size(402, 874);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
   }
@@ -230,6 +256,67 @@ void main() {
             reasons: const ['Wrong answer marked', 'Outdated', 'Confusing'],
             onSend: (reason, note) {}));
     await shot(tester, 'sheet_report');
+  });
+
+  testWidgets('lock screen', (tester) async {
+    landscape(tester);
+    LocalAuthPlatform.instance = _FakeLocalAuth();
+    await TestuLock.restore();
+    await pumpApp(tester, TestuLockScreen(onUnlocked: () {}));
+    await settleAndPrecache(tester);
+    await shot(tester, 'lock_screen');
+  });
+
+  testWidgets('sheet lock offer', (tester) async {
+    landscape(tester);
+    LocalAuthPlatform.instance = _FakeLocalAuth();
+    await TestuLock.restore();
+    await openSheet(tester, showTestuLockOffer);
+    await shot(tester, 'sheet_lock_offer');
+  });
+
+  // Portrait shots for the surfaces the phone is actually held for.
+  testWidgets('portrait profile', (tester) async {
+    portrait(tester);
+    LocalAuthPlatform.instance = _FakeLocalAuth();
+    await TestuLock.restore();
+    await pumpApp(tester, const TestuProfileScreen());
+    await settleAndPrecache(tester);
+    await shot(tester, 'portrait_profile');
+  });
+
+  testWidgets('portrait profile with added photos', (tester) async {
+    portrait(tester);
+    LocalAuthPlatform.instance = _FakeLocalAuth();
+    await TestuLock.restore();
+    // The state where remove badges show. Asset paths stand in for picked
+    // files: the tile renders whatever the library holds, and precaching a
+    // real FileImage inside runAsync never returns under the test binding.
+    testuAvatarLibrary.value = const [
+      'assets/img/p_jordi.jpg',
+      'assets/img/p_karsten.jpg',
+    ];
+    addTearDown(() => testuAvatarLibrary.value = const []);
+    await pumpApp(tester, const TestuProfileScreen());
+    await settleAndPrecache(tester);
+    await shot(tester, 'portrait_profile_photos');
+  });
+
+  testWidgets('portrait lock screen', (tester) async {
+    portrait(tester);
+    LocalAuthPlatform.instance = _FakeLocalAuth();
+    await TestuLock.restore();
+    await pumpApp(tester, TestuLockScreen(onUnlocked: () {}));
+    await settleAndPrecache(tester);
+    await shot(tester, 'portrait_lock_screen');
+  });
+
+  testWidgets('portrait lock offer', (tester) async {
+    portrait(tester);
+    LocalAuthPlatform.instance = _FakeLocalAuth();
+    await TestuLock.restore();
+    await openSheet(tester, showTestuLockOffer);
+    await shot(tester, 'portrait_sheet_lock_offer');
   });
 
   testWidgets('sheet reactions', (tester) async {
