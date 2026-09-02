@@ -19,10 +19,11 @@ import 'testu_question_source.dart';
 /// and topics screens both read it from here.
 const bool testuLive = bool.fromEnvironment('TESTU_LIVE');
 
-/// The eMe server live mode talks to. Point a build elsewhere with
-/// `--dart-define=TESTU_MEDIADB=https://host/site/mediadb`.
+/// The eMe server live mode talks to: the local eme-server-minsur checkout
+/// (`eme-server-minsur/`, Tomcat on :8080). Point a build elsewhere with
+/// `--dart-define=TESTU_MEDIADB=https://minsur.genailabs.tech/site/mediadb`.
 const _mediaDBRoot = String.fromEnvironment('TESTU_MEDIADB',
-    defaultValue: 'https://minsur.genailabs.tech/site/mediadb');
+    defaultValue: 'http://localhost:8080/site/mediadb');
 
 /// Absolute URL for a site-relative asset path from the server
 /// (`/site/mediadb/services/module/asset/generated/...`).
