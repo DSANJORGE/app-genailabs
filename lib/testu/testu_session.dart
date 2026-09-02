@@ -19,10 +19,11 @@ import 'testu_sully.dart';
 import 'testu_theme.dart';
 import 'testu_widgets.dart';
 
-/// Every "start a session" CTA in the app lands here.
-void showTestuSession(BuildContext context) {
-  Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const TestuSessionScreen()));
+/// Every "start a session" CTA in the app lands here. [topicId] is the live
+/// topic to draw questions from; null means the first one.
+void showTestuSession(BuildContext context, {String? topicId}) {
+  Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => TestuSessionScreen(topicId: topicId)));
 }
 
 // Show-once-ever: the first confidence tap explains that tapping submits.
@@ -57,7 +58,9 @@ const _bold = TextStyle(fontWeight: FontWeight.w700);
 /// Learn Mode session — a chat with Sully. Confidence tap IS the submit;
 /// the debrief follows the last question.
 class TestuSessionScreen extends StatefulWidget {
-  const TestuSessionScreen({super.key});
+  const TestuSessionScreen({super.key, this.topicId});
+
+  final String? topicId;
 
   @override
   State<TestuSessionScreen> createState() => _TestuSessionScreenState();
@@ -82,8 +85,9 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
 
   /// Adapter picked by the compile-time flag; falls back to local if the
   /// live load fails, so it is not final.
-  TestuQuestionSource _source =
-      testuLive ? EmeQuestionSource() : LocalQuestionSource();
+  late TestuQuestionSource _source = testuLive
+      ? EmeQuestionSource(topicId: widget.topicId)
+      : LocalQuestionSource();
   List<TestuQ> _qs = const [];
   bool _loading = true;
 
@@ -257,7 +261,8 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
     final outcome = _controller.outcome;
     if (outcome != null) {
       Navigator.of(context).pushReplacement(MaterialPageRoute(
-          builder: (_) => TestuDebriefScreen(outcome: outcome, questions: _qs)));
+          builder: (_) => TestuDebriefScreen(
+              outcome: outcome, questions: _qs, topic: _source.topic)));
       return;
     }
     setState(() {});
@@ -535,8 +540,8 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
                     children: [
                       Expanded(
                         child: Text(
-                          L('LEARN MODE · RAMP SAFETY',
-                              'MODO APRENDER · SEGURIDAD EN RAMPA'),
+                          '${L('LEARN MODE', 'MODO APRENDER')} · '
+                          '${_source.topic.toUpperCase()}',
                           style: TextStyle(
                             fontFamily: 'GeistMono',
                             fontWeight: FontWeight.w500,
@@ -1569,10 +1574,14 @@ class TestuDebriefScreen extends StatelessWidget {
     super.key,
     required this.outcome,
     required this.questions,
+    required this.topic,
   });
 
   /// The questions the session ran on — the findings quote their copy.
   final List<TestuQ> questions;
+
+  /// Topic the session ran on; the mastery card is labelled with it.
+  final String topic;
 
   final SessionOutcome outcome;
 
@@ -1692,7 +1701,7 @@ class TestuDebriefScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    L('MASTERY · RAMP SAFETY', 'DOMINIO · SEGURIDAD EN RAMPA'),
+                    '${L('MASTERY', 'DOMINIO')} · ${topic.toUpperCase()}',
                     style: TextStyle(
                       fontFamily: 'GeistMono',
                       fontWeight: FontWeight.w500,

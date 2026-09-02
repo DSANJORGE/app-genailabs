@@ -136,6 +136,21 @@ void main() {
     ]);
   });
 
+  test('exposes the loaded topic title', () async {
+    await source.load();
+
+    expect(source.topic, 'Derechos Humanos');
+  });
+
+  test('a topicId picks that topic instead of the first', () async {
+    source = EmeQuestionSource(topicId: 'TOPIC2', http: http);
+
+    await source.load();
+
+    expect(source.topic, 'Otro');
+    expect(http.requests[1].$2, {'entitytopic': 'TOPIC2'});
+  });
+
   test('carries questionId, sectionId and componentId', () async {
     final qs = await source.load();
 

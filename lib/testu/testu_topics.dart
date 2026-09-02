@@ -23,6 +23,7 @@ typedef _Topic = ({
   Color pillColor,
   Color pillBorder,
   bool opens,
+  String? id, // live topic id; null for demo rows
 });
 
 class TestuTopicsScreen extends StatelessWidget {
@@ -36,12 +37,12 @@ class TestuTopicsScreen extends StatelessWidget {
          'Modo Aprender · 21 de 36 preguntas'),
      pill: L('Competent · Review soon', 'Competente · Repasar pronto'),
      pillColor: const Color(0xFFCDB96A),
-     pillBorder: const Color(0xFF8A7A3A), opens: true),
+     pillBorder: const Color(0xFF8A7A3A), opens: true, id: null),
     (img: 'chocks.jpg', title: L('FOD Prevention', 'Prevención de FOD'),
      sub: L('Improve Mode available', 'Modo Mejorar disponible'),
      pill: L('Expert · Stable', 'Experto · Estable'),
      pillColor: const Color(0xFF7DBB9C),
-     pillBorder: const Color(0xFF2F6A4C), opens: false),
+     pillBorder: const Color(0xFF2F6A4C), opens: false, id: null),
     (img: 'radio.jpg',
      title: L('Radio Communication & Phraseology',
          'Comunicación por Radio y Fraseología'),
@@ -49,7 +50,7 @@ class TestuTopicsScreen extends StatelessWidget {
          'Sully recomienda 10 min hoy'),
      pill: L('Competent · At risk', 'Competente · En riesgo'),
      pillColor: const Color(0xFFD9A23F),
-     pillBorder: const Color(0xFF7A5C1E), opens: false),
+     pillBorder: const Color(0xFF7A5C1E), opens: false, id: null),
     (img: 'marshal.jpg',
      title: L('Ground Guidance & Marshalling',
          'Guiado en Tierra y Señalización'),
@@ -57,7 +58,7 @@ class TestuTopicsScreen extends StatelessWidget {
          'Sully sugiere Modo Aprender esta semana'),
      pill: L('Beginner · Needs practice', 'Principiante · Necesita práctica'),
      pillColor: const Color(0xFFD08B8B),
-     pillBorder: const Color(0xFF6E3535), opens: false),
+     pillBorder: const Color(0xFF6E3535), opens: false, id: null),
     (img: 'cargo.jpg',
      title: L('Dangerous Goods Awareness',
          'Conciencia de Mercancías Peligrosas'),
@@ -65,14 +66,14 @@ class TestuTopicsScreen extends StatelessWidget {
          'Recertificación antes de nov 2026'),
      pill: L('Competent · Stable', 'Competente · Estable'),
      pillColor: const Color(0xFF7DBB9C),
-     pillBorder: const Color(0xFF2F6A4C), opens: false),
+     pillBorder: const Color(0xFF2F6A4C), opens: false, id: null),
     (img: 'winter.jpg',
      title: L('Aircraft De-icing Procedures',
          'Procedimientos de Deshielo'),
      sub: L('Seasonal · opens Oct 1', 'Estacional · abre el 1 oct'),
      pill: L('Not started', 'Sin empezar'),
      pillColor: const Color(0xFF8B8F98),
-     pillBorder: const Color(0xFF2C2C33), opens: false),
+     pillBorder: const Color(0xFF2C2C33), opens: false, id: null),
     (img: 'fire.jpg',
      title: L('Emergency Response & Fire Safety',
          'Respuesta a Emergencias y Contra Incendios'),
@@ -80,7 +81,7 @@ class TestuTopicsScreen extends StatelessWidget {
          'Repaso anual · antes de ene 2027'),
      pill: L('Competent · Strong', 'Competente · Sólido'),
      pillColor: const Color(0xFF7DBB9C),
-     pillBorder: const Color(0xFF2F6A4C), opens: false),
+     pillBorder: const Color(0xFF2F6A4C), opens: false, id: null),
   ];
 
   @override
@@ -151,8 +152,8 @@ _Topic _mapTopic(Topic t, int i) {
     pill: pill,
     pillColor: color,
     pillBorder: border,
-    // Matches today's behaviour: only the first row has a Topic Home.
-    opens: i == 0,
+    opens: true,
+    id: t.id,
   );
 }
 
@@ -195,12 +196,19 @@ Widget _topicsBody(BuildContext context, List<_Topic> topics) {
                 for (final topic in topics)
                   _TopicRow(
                     topic: topic,
-                    // ponytail: only Ramp Safety has a Topic Home; the rest
-                    // are demo rows that just give press feedback, like the
-                    // prototype.
+                    // ponytail: in the demo only Ramp Safety has a Topic
+                    // Home; the rest just give press feedback, like the
+                    // prototype. Every live row opens one.
                     onTap: topic.opens
                         ? () => Navigator.of(context).push(MaterialPageRoute(
-                            builder: (_) => const TestuTopicHomeScreen()))
+                            builder: (_) => TestuTopicHomeScreen(
+                                  topicId: topic.id,
+                                  title: topic.title,
+                                  img: topic.img,
+                                  pill: topic.pill,
+                                  pillColor: topic.pillColor,
+                                  pillBorder: topic.pillBorder,
+                                )))
                         : _nothing,
                   ),
               ],
@@ -273,12 +281,30 @@ class _TopicRow extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Topic Home — Ramp Safety (spec: prototype v6 scr-topic). Pushed full-screen
-// over the shell; no bottom nav, back chevron over the hero.
+// Topic Home (spec: prototype v6 scr-topic, Ramp Safety). Pushed full-screen
+// over the shell; no bottom nav, back chevron over the hero. The hero wears
+// the row that opened it; the panes below are still the prototype's Ramp
+// Safety content until the backend has subtopics and resources.
 // ---------------------------------------------------------------------------
 
 class TestuTopicHomeScreen extends StatefulWidget {
-  const TestuTopicHomeScreen({super.key});
+  const TestuTopicHomeScreen({
+    super.key,
+    this.topicId,
+    this.title,
+    this.img = 'ramp.jpg',
+    this.pill,
+    this.pillColor = const Color(0xFFCDB96A),
+    this.pillBorder = const Color(0xFF8A7A3A),
+  });
+
+  /// Live topic the session CTAs draw questions from; null → first topic.
+  final String? topicId;
+  final String? title; // null → the prototype's Ramp Safety title
+  final String img;
+  final String? pill; // null → the prototype's pill
+  final Color pillColor;
+  final Color pillBorder;
 
   @override
   State<TestuTopicHomeScreen> createState() => _TestuTopicHomeScreenState();
@@ -473,7 +499,8 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
           child: TestuButton(
               L('CONTINUE WITH YOUR TUTOR', 'CONTINUAR CON TU TUTOR'),
               variant: TestuButtonVariant.primary,
-              onTap: () => showTestuSession(context)),
+              onTap: () =>
+                  showTestuSession(context, topicId: widget.topicId)),
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(18, 10, 18, 0),
@@ -666,6 +693,9 @@ class _TopicHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Hero copy comes from the Topic Home that owns it.
+    final home =
+        context.findAncestorWidgetOfExactType<TestuTopicHomeScreen>()!;
     final t = TestuTokens.of(context);
     final topPad = MediaQuery.paddingOf(context).top;
     return SizedBox(
@@ -676,7 +706,7 @@ class _TopicHero extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          Image.asset('assets/img/ramp.jpg',
+          Image.asset('assets/img/${home.img}',
               fit: BoxFit.cover,
               alignment: const Alignment(0, 0.24)), // center 62%
           const DecoratedBox(
@@ -724,13 +754,16 @@ class _TopicHero extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 TestuPill(
-                    L('Competent · Review soon', 'Competente · Repasar pronto'),
-                    color: const Color(0xFFCDB96A),
-                    borderColor: const Color(0xFF8A7A3A)),
+                    home.pill ??
+                        L('Competent · Review soon',
+                            'Competente · Repasar pronto'),
+                    color: home.pillColor,
+                    borderColor: home.pillBorder),
                 const SizedBox(height: 12),
                 Text(
-                    L('Ramp Safety & Aircraft Turnaround',
-                        'Seguridad en Rampa y Turnaround'),
+                    home.title ??
+                        L('Ramp Safety & Aircraft Turnaround',
+                            'Seguridad en Rampa y Turnaround'),
                     style: TextStyle(
                       fontFamily: 'Sora',
                       fontWeight: FontWeight.w700,
@@ -1203,7 +1236,12 @@ class _ModeButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = TestuTokens.of(context);
     return TestuPressable(
-      onTap: () => showTestuSession(context),
+      // The subtopic tree is prototype content, so the topic id is read off
+      // the Topic Home above instead of being threaded through it.
+      onTap: () => showTestuSession(context,
+          topicId: context
+              .findAncestorWidgetOfExactType<TestuTopicHomeScreen>()
+              ?.topicId),
       child: Container(
         padding: small
             ? const EdgeInsets.symmetric(vertical: 6, horizontal: 9)

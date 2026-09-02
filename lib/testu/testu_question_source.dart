@@ -73,6 +73,10 @@ class TestuQ {
 abstract class TestuQuestionSource {
   Future<List<TestuQ>> load();
 
+  /// Title of the topic the loaded questions belong to; the session header
+  /// and the debrief show it. The prototype's fixed topic by default.
+  String get topic => L('Ramp Safety', 'Seguridad en rampa');
+
   /// Fire-and-forget: report a submitted attempt. No-op by default; the
   /// future live adapter overrides this to write back to the backend.
   void reportAttempt({

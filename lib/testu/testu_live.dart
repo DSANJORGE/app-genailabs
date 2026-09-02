@@ -73,7 +73,11 @@ Future<bool> liveLoginWithOtp(String email, String code) async {
 Future<void> liveSignOut() async {
   await _init();
   await AuthService.logout();
+  // The socket is a singleton: left connected, the next user would hear
+  // this user's tutor channel.
+  ChatSocketService().disconnect();
   _tutorChannel = null;
+  _liveTutorialId = null;
 }
 
 // ---- Data.
@@ -81,15 +85,21 @@ Future<void> liveSignOut() async {
 /// Topics for the live topics screen.
 Future<List<Topic>> loadLiveTopics() => TopicService().fetchTopics();
 
-/// Questions from the backend: first topic -> first tutorial -> its MCQ
-/// batch, judged locally off `correctoption`. [reportAttempt] stays the
-/// inherited no-op so the shared test user's question progress is not
-/// polluted; chat follow-ups ([askSully]) are the one sanctioned write
-/// (user-approved 2026-08-31).
+/// Questions from the backend: [topicId] (or the first topic) -> first
+/// tutorial -> its MCQ batch, judged locally off `correctoption`.
+/// [reportAttempt] stays the inherited no-op so the shared test user's
+/// question progress is not polluted; chat follow-ups ([askSully]) are the
+/// one sanctioned write (user-approved 2026-08-31).
 class EmeQuestionSource extends TestuQuestionSource {
-  EmeQuestionSource({EmeHttp? http}) : _service = TopicService(http: http);
+  EmeQuestionSource({this.topicId, EmeHttp? http})
+      : _service = TopicService(http: http);
 
+  final String? topicId;
   final TopicService _service;
+  String? _topic;
+
+  @override
+  String get topic => _topic ?? super.topic;
 
   @override
   Future<List<TestuQ>> load() async {
@@ -99,7 +109,11 @@ class EmeQuestionSource extends TestuQuestionSource {
     final topics = await _service.fetchTopics();
     if (topics.isEmpty) throw StateError('No topics available');
 
-    final topic = topics.first;
+    // ponytail: an unknown id falls back to the first topic rather than
+    // erroring — the row that sent it came from this same list.
+    final topic = topics.firstWhere((t) => t.id == topicId,
+        orElse: () => topics.first);
+    _topic = topic.title;
     final tutorials = await _service.fetchTutorialsForTopic(topic.id);
     if (tutorials.isEmpty) throw StateError('No tutorials in ${topic.id}');
 

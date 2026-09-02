@@ -200,6 +200,7 @@ void main() {
         tester,
         TestuDebriefScreen(
           questions: qs,
+          topic: LocalQuestionSource().topic,
           outcome: const SessionOutcome(completed: true, attempts: [
             Attempt(
                 qi: 0, chosen: 1, confidence: 3, correct: true, assisted: false),
