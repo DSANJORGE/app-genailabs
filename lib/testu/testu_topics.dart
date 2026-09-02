@@ -2,12 +2,12 @@ import 'dart:ui';
 
 import 'package:eme_app_package/models/topic.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import 'testu_i18n.dart';
 import 'testu_live.dart';
 import 'testu_resources.dart';
 import 'testu_session.dart';
+import 'testu_social.dart';
 import 'testu_theme.dart';
 import 'testu_widgets.dart';
 
@@ -288,14 +288,7 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
   int _tab = 0;
   final Set<int> _openCmp = {};
   final Set<int> _openSub = {};
-  final List<String> _posted = [];
-  final _reviewCtrl = TextEditingController();
-
-  @override
-  void dispose() {
-    _reviewCtrl.dispose();
-    super.dispose();
-  }
+  late final List<TestuComment> _reviews = _mockReviews();
 
   List<String> get _tabsL => [
         L('Overview', 'Resumen'),
@@ -315,6 +308,9 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
         const _TopicHero(),
         // Tabs — instant pane swap, like the prototype.
         Container(
+            // Full width so the tab row hugs the left edge — shrink-wrapped
+            // it floats centered on wide (landscape) screens.
+            width: double.infinity,
             padding: const EdgeInsets.fromLTRB(18, 10, 18, 0),
             decoration: BoxDecoration(
                 border: Border(bottom: BorderSide(color: t.line))),
@@ -374,7 +370,13 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
   List<Widget> _overview(TestuTokens t) => [
         Padding(
           padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
-          child: Text(
+          // Readable measure in landscape — full-width 13px prose runs
+          // 120+ characters per line.
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 640),
+              child: Text(
             L('Safe aircraft turnaround on stand: preparation, FOD inspection, '
                     'arrival, GSE positioning and departure. Required for your '
                     "role because ramp incidents are the airline's largest "
@@ -389,6 +391,8 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
                 fontSize: 13,
                 height: 1.65,
                 color: Color(0xFFB9B8B4)),
+              ),
+            ),
           ),
         ),
         Padding(
@@ -615,102 +619,46 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
 
   // ---- Review ----
 
+  /// The topic's review tab IS the house thread (full-alignment rule:
+  /// vote, reply, report work here exactly like the question conversation).
   List<Widget> _review(TestuTokens t) => [
-        _ReviewRow(
-            avatar: 'p_miranda.jpg',
-            author: L('Miranda J. · Ramp shift lead',
-                'Miranda J. · Jefa de turno de rampa'),
-            body: L(
-                'The arrival & chocking questions match the new station notice '
-                    '— good update since July.',
-                'Las preguntas de llegada y calzado coinciden con el nuevo '
-                    'aviso de estación — buena actualización desde julio.')),
-        _ReviewRow(
-            avatar: 'p_karsten.jpg',
-            author: L('Karsten B. · Turnaround coordinator',
-                'Karsten B. · Coordinador de turnaround'),
-            body: L(
-                'Suggest adding a night-operations variant for GSE positioning.',
-                'Sugiero añadir una variante nocturna para el posicionamiento '
-                    'de GSE.')),
-        // Posted comments land above the composer, like the prototype.
-        for (final body in _posted)
-          _ReviewRow(
-              avatar: 'p_ana.jpg',
-              author: L('Ana R. · Ramp agent · just now',
-                  'Ana R. · Agente de rampa · ahora mismo'),
-              body: body),
         Padding(
-          padding: const EdgeInsets.fromLTRB(18, 14, 18, 6),
-          child: Row(children: [
-            ClipOval(
-              child: Image.asset('assets/img/p_ana.jpg',
-                  width: 26, height: 26, fit: BoxFit.cover),
-            ),
-            const SizedBox(width: 9),
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  border: Border.all(color: t.line2),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: TextField(
-                  controller: _reviewCtrl,
-                  maxLength: 240,
-                  onSubmitted: (_) => _postReview(),
-                  style: const TextStyle(
-                      fontFamily: 'Geist',
-                      fontSize: 12.5,
-                      color: Color(0xFFECEBE7)),
-                  decoration: InputDecoration(
-                    isDense: true,
-                    counterText: '',
-                    border: InputBorder.none,
-                    contentPadding:
-                        const EdgeInsets.symmetric(vertical: 12),
-                    hintText: L('Add a review or comment…',
-                        'Añade una reseña o comentario…'),
-                    hintStyle: TextStyle(
-                        fontFamily: 'Geist', fontSize: 12.5, color: t.mut),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 9),
-            TestuPressable(
-              onTap: _postReview,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(vertical: 11, horizontal: 16),
-                decoration: BoxDecoration(
-                  color: t.primaryAction,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(L('Post', 'Publicar'),
-                    style: TextStyle(
-                        fontFamily: 'Geist',
-                        fontWeight: FontWeight.w700,
-                        fontSize: 11,
-                        letterSpacing: 0.55,
-                        color: t.onPrimaryAction)),
-              ),
-            ),
-          ]),
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 0),
+          child: TestuThread(
+            comments: _reviews,
+            composerHint: L('Add a review or comment…',
+                'Añade una reseña o comentario…'),
+            reportEyebrow: L('REVIEWS · REPORT', 'RESEÑAS · REPORTAR'),
+            reportTitle: L('Report this review', 'Reportar esta reseña'),
+          ),
         ),
       ];
+}
 
-  void _postReview() {
-    final text = _reviewCtrl.text.trim();
-    if (text.isEmpty) return;
-    HapticFeedback.selectionClick();
-    // ponytail: in-memory — reviews reach the backend when one exists.
-    setState(() {
-      _posted.add(text);
-      _reviewCtrl.clear();
-    });
-    FocusManager.instance.primaryFocus?.unfocus();
-  }
+List<TestuComment> _mockReviews() {
+  final karsten = TestuComment(
+      'Karsten B.',
+      L('COORDINATOR', 'COORDINADOR'),
+      'assets/img/p_karsten.jpg',
+      L('Suggest adding a night-operations variant for GSE positioning.',
+          'Sugiero añadir una variante nocturna para el posicionamiento de GSE.'),
+      reacts: {TestuReaction.like: 1, TestuReaction.idea: 1});
+  karsten.replies.add(TestuComment(
+      'Sully',
+      L('AI TUTOR', 'TUTOR IA'),
+      'assets/img/sully.png',
+      L('Logged — I passed the night-operations suggestion to the content team.',
+          'Anotado — he pasado la sugerencia de operaciones nocturnas al equipo de contenido.')));
+  return [
+    TestuComment(
+        'Miranda J.',
+        L('SHIFT LEAD', 'JEFA DE TURNO'),
+        'assets/img/p_miranda.jpg',
+        L('The arrival & chocking questions match the new station notice — good update since July.',
+            'Las preguntas de llegada y calzado coinciden con el nuevo aviso de estación — buena actualización desde julio.'),
+        reacts: {TestuReaction.like: 4, TestuReaction.applause: 1}),
+    karsten,
+  ];
 }
 
 class _TopicHero extends StatelessWidget {
@@ -721,7 +669,10 @@ class _TopicHero extends StatelessWidget {
     final t = TestuTokens.of(context);
     final topPad = MediaQuery.paddingOf(context).top;
     return SizedBox(
-      height: 300,
+      // 300 in portrait (approved v6); in landscape the pinned hero would
+      // swallow the screen and leave the tab panes nothing to scroll in,
+      // so it shrinks to a share of the height instead.
+      height: (MediaQuery.sizeOf(context).height * 0.38).clamp(0.0, 300.0),
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -744,7 +695,9 @@ class _TopicHero extends StatelessWidget {
           ),
           Positioned(
             top: topPad + 8,
-            left: 16,
+            // Right side: the pill/title/meta stack owns the hero's left,
+            // and in landscape the arrow was crowding it.
+            right: 16 + MediaQuery.paddingOf(context).right,
             child: TestuPressable(
               onTap: () => Navigator.of(context).pop(),
               child: ClipOval(
@@ -1362,43 +1315,3 @@ class _ResRow extends StatelessWidget {
   }
 }
 
-// ---- Reviews ----
-
-class _ReviewRow extends StatelessWidget {
-  const _ReviewRow(
-      {required this.avatar, required this.author, required this.body});
-
-  final String avatar;
-  final String author;
-  final String body;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 18),
-      decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: Color(0xFF17171A)))),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            ClipOval(
-              child: Image.asset('assets/img/$avatar',
-                  width: 22, height: 22, fit: BoxFit.cover),
-            ),
-            const SizedBox(width: 8),
-            Text(author,
-                style: kLabel),
-          ]),
-          const SizedBox(height: 6),
-          Text(body,
-              style: const TextStyle(
-                  fontFamily: 'Geist',
-                  fontSize: 12.5,
-                  height: 1.55,
-                  color: Color(0xFFC2C1BD))),
-        ],
-      ),
-    );
-  }
-}

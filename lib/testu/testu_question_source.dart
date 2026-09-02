@@ -80,6 +80,15 @@ abstract class TestuQuestionSource {
     required int confidence,
     required bool correct,
   }) {}
+
+  /// Fire-and-forget: the user flagged a question for the content team.
+  /// ponytail: no-op until the content-review endpoint exists — the live
+  /// adapter will override this with the real POST.
+  void reportFlag({
+    required TestuQ q,
+    required String reason,
+    String? note,
+  }) {}
 }
 
 /// The approved prototype's hardcoded questions. [load] completes

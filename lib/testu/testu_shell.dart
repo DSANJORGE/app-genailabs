@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import 'testu_dashboard.dart';
 import 'testu_i18n.dart';
+import 'testu_notifications.dart';
 import 'testu_profile.dart';
 import 'testu_schedule_sheet.dart';
 import 'testu_session.dart';
@@ -31,7 +32,10 @@ class _TestuShellState extends State<TestuShell> {
   List<String> get _tabs => [
         L('TODAY', 'HOY'),
         L('TOPICS', 'TEMAS'),
-        L('TUTOR', 'TUTOR'),
+        // The tab wears the org tutor's name (Vueling → Sully): it opens
+        // Sully's orchestrator — the general tutor that routes questions to
+        // the topic-expert Sullys who answer inside topic/question contexts.
+        'SULLY',
         L('DASHBOARD', 'DASHBOARD'),
       ];
 
@@ -65,20 +69,24 @@ class _TestuShellState extends State<TestuShell> {
     return Scaffold(
       // extendBody so screen content scrolls (blurred) underneath the nav.
       extendBody: true,
-      body: KeyedSubtree(
-        key: ValueKey(testuLang.value),
-        child: IndexedStack(
-          index: _tab,
-          children: [
-            const TestuTodayScreen(),
-            const TestuTopicsScreen(),
-            TestuTutorScreen(
-              active: _tab == 2,
-              onCalibration: () => setState(() => _tab = 3),
+      body: Stack(
+        children: [
+          KeyedSubtree(
+            key: ValueKey(testuLang.value),
+            child: IndexedStack(
+              index: _tab,
+              children: [
+                const TestuTodayScreen(),
+                const TestuTopicsScreen(),
+                TestuTutorScreen(
+                  active: _tab == 2,
+                  onCalibration: () => setState(() => _tab = 3),
+                ),
+                const TestuDashboardScreen(),
+              ],
             ),
-            const TestuDashboardScreen(),
-          ],
-        ),
+          ),
+        ],
       ),
       bottomNavigationBar: TestuNav(
         items: _tabs,
@@ -185,9 +193,40 @@ class _TestuTodayScreenState extends State<TestuTodayScreen> {
     );
   }
 
+  List<Widget> get _cards => [
+        _CertificationCard(scheduled: _scheduled, onSchedule: _openSchedule),
+        const SizedBox(height: 11),
+        const _DailyChallengeCard(),
+        const SizedBox(height: 12),
+        _ContinueHero(promoted: _scheduled != null),
+        const SizedBox(height: 12),
+        const _RiskNote(),
+      ];
+
   @override
   Widget build(BuildContext context) {
     final t = TestuTokens.of(context);
+    final size = MediaQuery.sizeOf(context);
+    if (size.width > size.height) {
+      // Landscape: pinned, the header would swallow half the height — it
+      // scrolls away with the cards instead (it has its own 18px padding).
+      return SafeArea(
+        bottom: false,
+        child: ListView(
+          padding: const EdgeInsets.only(bottom: 110),
+          children: [
+            const _TodayHeader(),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: _cards),
+            ),
+          ],
+        ),
+      );
+    }
     return SafeArea(
       bottom: false,
       child: Column(
@@ -198,16 +237,7 @@ class _TestuTodayScreenState extends State<TestuTodayScreen> {
               children: [
                 ListView(
                   padding: const EdgeInsets.fromLTRB(18, 12, 18, 110),
-                  children: [
-                    _CertificationCard(
-                        scheduled: _scheduled, onSchedule: _openSchedule),
-                    const SizedBox(height: 11),
-                    const _DailyChallengeCard(),
-                    const SizedBox(height: 12),
-                    _ContinueHero(promoted: _scheduled != null),
-                    const SizedBox(height: 12),
-                    const _RiskNote(),
-                  ],
+                  children: _cards,
                 ),
                 // Cards fade out as they slide under the pinned header.
                 Positioned(
@@ -260,6 +290,10 @@ class _TodayHeader extends StatelessWidget {
                   ),
                 ),
               ),
+              // Bell: informative notices only — actionable items stay as
+              // Today cards. Orange dot = unread.
+              const TestuBell(),
+              const SizedBox(width: 8),
               // Profile & settings opens from here, not from the nav.
               TestuPressable(
                 onTap: () => showTestuProfile(context),
@@ -438,6 +472,8 @@ class _ContinueHero extends StatelessWidget {
                 fit: BoxFit.cover,
                 alignment: const Alignment(0, 0.44), // center 72%
               ),
+              // Scrim length: "Actual" kept deliberately (variant test
+              // 2026-08-31 — Corta/Mínima rejected).
               const DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(

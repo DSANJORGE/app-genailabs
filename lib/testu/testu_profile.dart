@@ -5,23 +5,90 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'testu_auth.dart';
 import 'testu_i18n.dart';
+import 'testu_lock.dart';
 import 'testu_theme.dart';
 import 'testu_widgets.dart';
 
 /// Ana's chosen avatar — the Today header listens so the photo swap
 /// propagates, like the prototype's setAvatar() updating every .ana-ava.
-/// ponytail: persisted as a fixed file in the documents dir — no upload
-/// endpoint yet, so the photo lives on-device only.
-final testuAvatar = ValueNotifier<String>('assets/img/p_ana.jpg');
+/// ponytail: photos live on-device only; no upload endpoint yet.
+final testuAvatar = ValueNotifier<String>(_presetAvatars.first);
 
-Future<File> _savedAvatarFile() async =>
-    File('${(await getApplicationDocumentsDirectory()).path}/avatar.jpg');
+/// Photos the user added, oldest first. Presets are bundled and permanent;
+/// these are the ones that can be removed again.
+final testuAvatarLibrary = ValueNotifier<List<String>>(const []);
 
-/// Restores the last picked photo; call once at startup.
+const _presetAvatars = [
+  'assets/img/p_ana.jpg',
+  'assets/img/p_laia.jpg',
+  'assets/img/p_miranda.jpg',
+];
+
+const _kAvatarPref = 'testu_avatar';
+
+Future<Directory> _avatarDir() async {
+  final d =
+      Directory('${(await getApplicationDocumentsDirectory()).path}/avatars');
+  if (!d.existsSync()) d.createSync(recursive: true);
+  return d;
+}
+
+/// Restores the library and the selection; call once at startup.
 Future<void> restoreTestuAvatar() async {
-  final f = await _savedAvatarFile();
-  if (f.existsSync()) testuAvatar.value = f.path;
+  final dir = await _avatarDir();
+  // Carried over from the single-photo cut, which saved one fixed avatar.jpg.
+  final legacy = File('${dir.parent.path}/avatar.jpg');
+  if (legacy.existsSync()) {
+    legacy.renameSync(
+        '${dir.path}/${DateTime.now().millisecondsSinceEpoch}.jpg');
+  }
+  testuAvatarLibrary.value = dir
+      .listSync()
+      .whereType<File>()
+      .map((f) => f.path)
+      .toList()
+    ..sort();
+  final prefs = await SharedPreferences.getInstance();
+  final saved = prefs.getString(_kAvatarPref);
+  if (saved != null &&
+      (saved.startsWith('assets/') || File(saved).existsSync())) {
+    testuAvatar.value = saved;
+  }
+}
+
+Future<void> _selectAvatar(String src) async {
+  testuAvatar.value = src;
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setString(_kAvatarPref, src);
+}
+
+/// Copies the pick into the library under a unique name — FileImage caches by
+/// path, so reusing one filename would keep serving the previous photo.
+Future<void> _addAvatar() async {
+  final picked = await ImagePicker()
+      .pickImage(source: ImageSource.gallery, maxWidth: 512);
+  if (picked == null) return;
+  final dir = await _avatarDir();
+  final dest = '${dir.path}/${DateTime.now().millisecondsSinceEpoch}.jpg';
+  await File(picked.path).copy(dest);
+  testuAvatarLibrary.value = [...testuAvatarLibrary.value, dest];
+  await _selectAvatar(dest);
+}
+
+/// Removes a photo from TestU (not from the phone's own library). If it was
+/// the one in use, the profile falls back to the first preset rather than
+/// leaving the header with a missing file.
+Future<void> _removeAvatar(String path) async {
+  final f = File(path);
+  if (f.existsSync()) f.deleteSync();
+  await FileImage(f).evict();
+  testuAvatarLibrary.value =
+      testuAvatarLibrary.value.where((p) => p != path).toList();
+  if (testuAvatar.value == path) await _selectAvatar(_presetAvatars.first);
 }
 
 /// [testuAvatar] holds either a bundled asset key or a picked file path.
@@ -44,8 +111,24 @@ class TestuProfileScreen extends StatefulWidget {
 
 class _TestuProfileScreenState extends State<TestuProfileScreen> {
   // ponytail: in-memory settings — a demo restart resetting toggles is fine.
+  // (Biometric unlock is the exception: it must survive a restart to mean
+  // anything, so TestuLock persists it.)
   bool _outlookConnected = false;
   bool _googleOn = true;
+  String? _lockError;
+
+  /// Turning it on runs the sensor first; a refused or failed check leaves
+  /// the toggle where it was and says why.
+  Future<void> _toggleLock() async {
+    final want = !TestuLock.enabled;
+    final ok = await TestuLock.setEnabled(want);
+    if (!mounted) return;
+    setState(() => _lockError = ok
+        ? null
+        : L("${TestuLock.name} didn't confirm — unlock is still off.",
+            '${TestuLock.name} no lo confirmó: el desbloqueo sigue '
+                'desactivado.'));
+  }
   final _toggles = <String, bool>{
     'daily': true,
     'nudges': true,
@@ -78,10 +161,45 @@ class _TestuProfileScreenState extends State<TestuProfileScreen> {
               _Note(
                   L('Vueling allows personal photos on internal apps. Your '
                           'photo is visible to your team — never outside the '
-                          'airline.',
+                          'airline. Removing one here leaves it on your phone.',
                       'Vueling permite fotos personales en apps internas. Tu '
                           'foto es visible para tu equipo — nunca fuera de la '
-                          'aerolínea.'),
+                          'aerolínea. Quitar una aquí no la borra de tu '
+                          'teléfono.'),
+                  t: t),
+            ]),
+            _ProfCard(children: [
+              _H4(L('SECURITY', 'SEGURIDAD')),
+              _SetRow(
+                title: TestuLock.available
+                    ? L('Unlock with ${TestuLock.name}',
+                        'Desbloquear con ${TestuLock.name}')
+                    : L('Unlock with Face ID or fingerprint',
+                        'Desbloquear con Face ID o huella'),
+                sub: TestuLock.available
+                    ? L('Open the app without waiting for an emailed code',
+                        'Abre la app sin esperar un código por correo')
+                    : L('Set up Face ID or a fingerprint on this device first',
+                        'Configura Face ID o una huella en este dispositivo '
+                            'primero'),
+                last: true,
+                trailing: TestuLock.available
+                    ? _Toggle(on: TestuLock.enabled, onTap: _toggleLock)
+                    : Opacity(
+                        opacity: 0.55, child: _Toggle(on: false)),
+              ),
+              if (_lockError != null) ...[
+                const SizedBox(height: 8),
+                Text(_lockError!,
+                    style: TextStyle(
+                        fontFamily: 'Geist', fontSize: 11.5, color: t.red)),
+              ],
+              const SizedBox(height: 8),
+              _Note(
+                  L('Your face or fingerprint stays on this phone — TestU '
+                          'never receives it. Signing out turns this off.',
+                      'Tu cara o tu huella se quedan en este teléfono: TestU '
+                          'nunca las recibe. Al cerrar sesión se desactiva.'),
                   t: t),
             ]),
             _ProfCard(children: [
@@ -226,12 +344,14 @@ class _TestuProfileScreenState extends State<TestuProfileScreen> {
               padding: const EdgeInsets.fromLTRB(18, 14, 18, 0),
               child: Column(
                 children: [
-                  // ponytail: sign-out just leaves the screen — no auth yet.
                   TestuButton(
                     L('Sign out', 'Cerrar sesión'),
                     color: t.red,
                     borderColor: const Color(0x52C25555),
-                    onTap: () => Navigator.of(context).pop(),
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      TestuAuth.signOut();
+                    },
                   ),
                   const SizedBox(height: 12),
                   Text(
@@ -356,70 +476,122 @@ class _Head extends StatelessWidget {
 class _AvatarPicker extends StatelessWidget {
   const _AvatarPicker();
 
-  static const _options = [
-    'assets/img/p_ana.jpg',
-    'assets/img/p_laia.jpg',
-    'assets/img/p_miranda.jpg',
-  ];
-
-  Future<void> _pick() async {
-    HapticFeedback.selectionClick();
-    final picked = await ImagePicker()
-        .pickImage(source: ImageSource.gallery, maxWidth: 512);
-    if (picked != null) {
-      // Show the unique tmp path now (FileImage caches by path, so reusing
-      // avatar.jpg in-session would serve a stale copy); persist for restarts.
-      testuAvatar.value = picked.path;
-      File(picked.path).copy((await _savedAvatarFile()).path);
-    }
+  @override
+  Widget build(BuildContext context) {
+    final t = TestuTokens.of(context);
+    return ValueListenableBuilder<List<String>>(
+      valueListenable: testuAvatarLibrary,
+      builder: (_, mine, _) => ValueListenableBuilder<String>(
+        valueListenable: testuAvatar,
+        // Wraps rather than scrolls: the row grows a tile per added photo,
+        // and a second line reads better than a hidden horizontal overflow.
+        builder: (_, sel, _) => Wrap(
+          spacing: 11,
+          runSpacing: 11,
+          children: [
+            for (final src in [..._presetAvatars, ...mine])
+              _AvatarTile(
+                src: src,
+                selected: src == sel,
+                // Presets ship with the app; only added photos can go.
+                onRemove: mine.contains(src) ? () => _removeAvatar(src) : null,
+              ),
+            TestuPressable(
+              onTap: _addAvatar,
+              child: Container(
+                width: 46,
+                height: 46,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: t.line2),
+                ),
+                child: Text('+',
+                    style: TextStyle(
+                        fontFamily: 'Sora', fontSize: 20, color: t.mut)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
+}
+
+/// One avatar option: 46px circle, white ring when in use, and — for added
+/// photos — a remove badge that is always visible rather than a long-press
+/// nobody discovers. The badge sits in the tile's own 12px gutter so it never
+/// covers the face.
+class _AvatarTile extends StatelessWidget {
+  const _AvatarTile({
+    required this.src,
+    required this.selected,
+    required this.onRemove,
+  });
+
+  final String src;
+  final bool selected;
+  final VoidCallback? onRemove;
 
   @override
   Widget build(BuildContext context) {
     final t = TestuTokens.of(context);
-    return ValueListenableBuilder<String>(
-      valueListenable: testuAvatar,
-      builder: (_, sel, child) => Row(
+    return SizedBox(
+      width: 58,
+      height: 58,
+      child: Stack(
         children: [
-          // A picked photo joins the presets as a fourth, selected tile.
-          for (final src in [..._options, if (!_options.contains(sel)) sel])
-            Padding(
-              padding: const EdgeInsets.only(right: 11),
-              child: TestuPressable(
-                onTap: () => testuAvatar.value = src,
-                child: Container(
-                  width: 46,
-                  height: 46,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      width: 2,
-                      color: src == sel
-                          ? const Color(0xFFF4F2EE)
-                          : Colors.transparent,
-                    ),
+          Positioned(
+            left: 0,
+            bottom: 0,
+            child: TestuPressable(
+              onTap: () => _selectAvatar(src),
+              child: Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    width: 2,
+                    color:
+                        selected ? const Color(0xFFF4F2EE) : Colors.transparent,
                   ),
-                  child: ClipOval(
-                      child:
-                          Image(image: testuAvatarImage(src), fit: BoxFit.cover)),
+                ),
+                child: ClipOval(
+                    child:
+                        Image(image: testuAvatarImage(src), fit: BoxFit.cover)),
+              ),
+            ),
+          ),
+          if (onRemove != null)
+            Positioned(
+              right: 0,
+              top: 0,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  HapticFeedback.mediumImpact();
+                  onRemove!();
+                },
+                // 26px target around an 18px badge — the badge is the mark,
+                // the padding is the tap.
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: Container(
+                    width: 18,
+                    height: 18,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: t.card2,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: t.line2),
+                    ),
+                    child: Text('✕',
+                        style: TextStyle(fontSize: 8.5, color: t.mut)),
+                  ),
                 ),
               ),
             ),
-          TestuPressable(
-            onTap: _pick,
-            child: Container(
-              width: 46,
-              height: 46,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: t.line2),
-              ),
-              child: Text('+',
-                  style: TextStyle(
-                      fontFamily: 'Sora', fontSize: 20, color: t.mut)),
-            ),
-          ),
         ],
       ),
     );

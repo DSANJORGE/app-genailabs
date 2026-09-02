@@ -22,10 +22,13 @@ dependencies:
   path_provider: ^2.1.0
   shared_preferences: ^2.5.5
   video_player: ^2.14.0
+  local_auth: ^3.0.2
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  # Fake platform for widget-testing screens that embed the video player.
+  video_player_platform_interface: ^6.4.0
   flutter_launcher_icons: ^0.14.4
   flutter_native_splash: ^2.4.8
 

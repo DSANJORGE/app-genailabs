@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'testu_i18n.dart';
+import 'testu_icons.dart';
+import 'testu_sully.dart';
 import 'testu_theme.dart';
 import 'testu_widgets.dart';
 
@@ -37,13 +39,20 @@ class _PdfSheet extends StatefulWidget {
 
 class _PdfSheetState extends State<_PdfSheet> {
   final _scroll = ScrollController();
+  final _chat = <Widget>[];
+  final _chatScroll = ScrollController();
+
+  // Real rendered width of the page column (set by _pageList's
+  // LayoutBuilder during the first build) — the sheet is width-capped and
+  // splits in landscape, so deriving this from the screen guesses wrong.
+  double _pageListW = 0;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scroll.hasClients) return;
-      final pageW = MediaQuery.sizeOf(context).width - 24;
+      final pageW = _pageListW - 24;
       final off = (widget.page - 1) * (pageW / _pageAspect + 10);
       _scroll.jumpTo(off.clamp(0, _scroll.position.maxScrollExtent));
     });
@@ -52,7 +61,35 @@ class _PdfSheetState extends State<_PdfSheet> {
   @override
   void dispose() {
     _scroll.dispose();
+    _chatScroll.dispose();
     super.dispose();
+  }
+
+  /// Free text lands in a chat strip above the composer — the document
+  /// never leaves view (continuous-tutor rule). ponytail: canned reply
+  /// until the topic-expert backend answers with page context for real.
+  void _send(String text) {
+    setState(() {
+      _chat.add(TestuYouMsg(text: text));
+      _chat.add(SullyMessage.text(
+          L(
+              "I'm on p. ${widget.page} with you — the section your question "
+                  'cited. The rule on this page: chocks only after engines '
+                  'are shut down and anti-collision lights are off.',
+              'Estoy contigo en la p. ${widget.page} — la sección que citaba '
+                  'tu pregunta. La regla de esta página: calzos solo con '
+                  'motores apagados y luces anticolisión apagadas.'),
+          delay: 850,
+          sourceLine: 'FAA AC 00-34A',
+          bottomPadding: 12));
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_chatScroll.hasClients) {
+        _chatScroll.animateTo(_chatScroll.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 350),
+            curve: TestuTokens.curve);
+      }
+    });
   }
 
   @override
@@ -137,36 +174,98 @@ class _PdfSheetState extends State<_PdfSheet> {
               ],
             ),
           ),
-          Expanded(
-            child: Container(
-              color: const Color(0xFF26272B),
-              child: ListView.builder(
-                controller: _scroll,
-                padding: const EdgeInsets.symmetric(
-                    vertical: 10, horizontal: 12),
-                itemCount: _pages,
-                itemBuilder: (context, i) => _Page(index: i + 1),
+          if (MediaQuery.sizeOf(context).width >
+              MediaQuery.sizeOf(context).height)
+            // Landscape: pages + chat side by side — stacking them leaves
+            // the document a sliver (continuous-tutor rule as a split).
+            Expanded(
+              child: Row(children: [
+                Expanded(flex: 3, child: _pageList()),
+                Expanded(
+                  flex: 2,
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                        16, 10, 16, 12 + MediaQuery.paddingOf(context).bottom),
+                    child: Column(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          if (_chat.isNotEmpty)
+                            Flexible(
+                              child: ListView(
+                                controller: _chatScroll,
+                                shrinkWrap: true,
+                                children: List.of(_chat),
+                              ),
+                            )
+                          else
+                            _hint(t),
+                          const SizedBox(height: 4),
+                          _composer(),
+                        ]),
+                  ),
+                ),
+              ]),
+            )
+          else ...[
+            Expanded(child: _pageList()),
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.fromLTRB(
+                  18, 10, 18, 12 + MediaQuery.paddingOf(context).bottom),
+              color: t.card,
+              child: Column(
+                children: [
+                  if (_chat.isNotEmpty)
+                    Container(
+                      constraints: const BoxConstraints(maxHeight: 200),
+                      margin: const EdgeInsets.only(bottom: 4),
+                      child: ListView(
+                        controller: _chatScroll,
+                        shrinkWrap: true,
+                        children: List.of(_chat),
+                      ),
+                    )
+                  else
+                    Padding(
+                        padding: const EdgeInsets.only(bottom: 9),
+                        child: _hint(t)),
+                  _composer(),
+                ],
               ),
             ),
-          ),
-          Container(
-            width: double.infinity,
-            padding: EdgeInsets.only(
-                top: 8,
-                bottom: 10 + MediaQuery.paddingOf(context).bottom),
-            color: t.card,
-            child: Text(
-              L('Tap a page to zoom · scroll for more',
-                  'Toca una página para ampliar · desplázate para ver más'),
-              textAlign: TextAlign.center,
-              style:
-                  TextStyle(fontFamily: 'Geist', fontSize: 10, color: t.mut),
-            ),
-          ),
+          ],
         ],
       ),
     );
   }
+
+  Widget _pageList() => LayoutBuilder(builder: (context, bc) {
+        _pageListW = bc.maxWidth;
+        return Container(
+          color: const Color(0xFF26272B),
+          child: ListView.builder(
+            controller: _scroll,
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+            itemCount: _pages,
+            itemBuilder: (context, i) => _Page(index: i + 1),
+          ),
+        );
+      });
+
+  Widget _hint(TestuTokens t) => Text(
+        L('Tap a page to zoom · scroll for more',
+            'Toca una página para ampliar · desplázate para ver más'),
+        textAlign: TextAlign.center,
+        style: TextStyle(fontFamily: 'Geist', fontSize: 10, color: t.mut),
+      );
+
+  // Sully rides along inside the open source too (app-wide
+  // continuous-tutor rule) — live input, see _send.
+  Widget _composer() => TestuComposer(
+        hint: L('Ask Sully about this document…',
+            'Pregunta a Sully sobre este documento…'),
+        onSend: _send,
+      );
 }
 
 class _Page extends StatelessWidget {
@@ -210,14 +309,21 @@ class _Page extends StatelessWidget {
                   color: const Color(0xCC0A0A0B),
                   borderRadius: BorderRadius.circular(4),
                 ),
-                child: Text(
-                  'p. $index / $_pages',
-                  style: const TextStyle(
-                    fontFamily: 'GeistMono',
-                    fontSize: 9,
-                    color: Color(0xFFD8D7D3),
+                // Expand glyph = visible fullscreen affordance (whole page
+                // taps to zoom, but a hidden gesture isn't an "option").
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Text(
+                    'p. $index / $_pages',
+                    style: const TextStyle(
+                      fontFamily: 'GeistMono',
+                      fontSize: 9,
+                      color: Color(0xFFD8D7D3),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 5),
+                  const TestuIcon(TestuGlyph.expand,
+                      size: 9, color: Color(0xFFD8D7D3)),
+                ]),
               ),
             ),
           ],

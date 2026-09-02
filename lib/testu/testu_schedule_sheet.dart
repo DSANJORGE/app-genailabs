@@ -29,9 +29,12 @@ Future<void> showTestuScheduleSheet(
     ),
     // isScrollControlled lifts the 9/16 cap, so without a ceiling this sheet
     // grows to the full screen and its rounded top + grabber land under the
-    // status bar. 0.88 matches the resource and PDF sheets.
+    // status bar. 0.88 matches the resource and PDF sheets. maxWidth restores
+    // Material's landscape cap (passing constraints replaces the default),
+    // so every sheet floats centered at the same width on a rotated phone.
     constraints: BoxConstraints(
       maxHeight: MediaQuery.sizeOf(context).height * 0.88,
+      maxWidth: 640,
     ),
     builder: (_) => _ScheduleSheetBody(onScheduled: onScheduled),
   );
@@ -162,15 +165,12 @@ class _ScheduleSheetBodyState extends State<_ScheduleSheetBody> {
           ],
         ),
         const SizedBox(height: 16),
-        Opacity(
-          opacity: _picked == null ? 0.35 : 1,
-          child: TestuButton(
-            _picked == null
-                ? L('PICK A SLOT TO CONFIRM', 'ELIGE UN HUECO PARA CONFIRMAR')
-                : '${L('CONFIRM', 'CONFIRMAR')} · ${_slot!.label.toUpperCase()}',
-            variant: TestuButtonVariant.primary,
-            onTap: _picked == null ? null : _confirm,
-          ),
+        TestuButton(
+          _picked == null
+              ? L('PICK A SLOT TO CONFIRM', 'ELIGE UN HUECO PARA CONFIRMAR')
+              : '${L('CONFIRM', 'CONFIRMAR')} · ${_slot!.label.toUpperCase()}',
+          variant: TestuButtonVariant.primary,
+          onTap: _picked == null ? null : _confirm,
         ),
         const SizedBox(height: 9),
         TestuButton(L('Not now', 'Ahora no'),

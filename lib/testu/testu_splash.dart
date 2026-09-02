@@ -7,9 +7,13 @@ import 'testu_i18n.dart';
 /// wordmark, the rule draws like a runway with a landing light at its tip,
 /// then the whole thing lifts off. Tap to skip; auto-dismisses at 4.2 s.
 class TestuSplash extends StatefulWidget {
-  const TestuSplash({super.key, required this.onDone});
+  const TestuSplash({super.key, required this.onDone, this.welcomeBack = true});
 
   final VoidCallback onDone;
+
+  /// false right after a fresh sign-in ("Ana, welcome."), true on a restored
+  /// session ("Ana, welcome back.").
+  final bool welcomeBack;
 
   @override
   State<TestuSplash> createState() => _TestuSplashState();
@@ -29,6 +33,20 @@ class _TestuSplashState extends State<TestuSplash>
     ..repeat(reverse: true);
 
   bool _skipping = false;
+  bool _reducedMotionApplied = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Reduced motion: skip the letter/runway choreography — jump to the
+    // settled composition, hold, then the plain exit fade.
+    if (!_reducedMotionApplied && MediaQuery.disableAnimationsOf(context)) {
+      _reducedMotionApplied = true;
+      _glow.stop();
+      _glow.value = 0.7;
+      _c.value = 3000 / 4800;
+    }
+  }
 
   void _skip() {
     if (_skipping) return;
@@ -189,8 +207,11 @@ class _TestuSplashState extends State<TestuSplash>
                               child: Transform.translate(
                                 offset: Offset(0, 10 * (1 - hi)),
                                 child: Text(
-                                  L('Ana, welcome back.',
-                                      'Ana, ${G('bienvenido', 'bienvenida')} de nuevo.'),
+                                  widget.welcomeBack
+                                      ? L('Ana, welcome back.',
+                                          'Ana, ${G('bienvenido', 'bienvenida')} de nuevo.')
+                                      : L('Ana, welcome.',
+                                          'Ana, ${G('bienvenido', 'bienvenida')}.'),
                                   style: const TextStyle(
                                     fontFamily: 'Sora',
                                     fontWeight: FontWeight.w700,

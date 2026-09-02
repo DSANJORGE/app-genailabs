@@ -1,0 +1,3 @@
+tags:
+  shots:
+    skip: "Screenshot rig — capture with: flutter test --update-goldens --run-skipped test/landscape_shots_test.dart"

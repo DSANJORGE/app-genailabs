@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 
 import 'testu_i18n.dart';
+import 'testu_icons.dart';
 import 'testu_pdf.dart';
 import 'testu_sully.dart';
 import 'testu_theme.dart';
@@ -22,6 +23,7 @@ class _Res {
     required this.title,
     required this.meta,
     required this.sully,
+    required this.live,
     required this.chips,
     this.video = false,
   });
@@ -30,6 +32,12 @@ class _Res {
   final String title;
   final String meta;
   final String sully;
+
+  /// Sully's answer to free-text input — proves the full-context concept
+  /// (source + position + last question). ponytail: one canned reply per
+  /// source until the topic-expert backend answers real free text.
+  final String live;
+
   final List<_Chip> chips;
   final bool video;
 }
@@ -47,9 +55,22 @@ _Res _resource(String key) => switch (key) {
               'Este es el Manual de Operaciones en Tierra. Has leído 122 de '
                   '305 páginas — lo dejaste en la sección 4.5, Llegada de la '
                   'aeronave. ¿Qué te gustaría saber?'),
+          live: L(
+              'Short answer from where you are in section 4.5: guidance ends '
+                  'when the aircraft stops; chocks wait for engines off and '
+                  'anti-collision lights off; then GPU and hold-point release. '
+                  'Ask me another angle and I\'ll pull the exact page.',
+              'Respuesta corta desde donde estás en la sección 4.5: el guiado '
+                  'termina cuando la aeronave se detiene; los calzos esperan a '
+                  'motores y luces anticolisión apagados; después GPU y '
+                  'liberación del punto de espera. Pregúntame otro ángulo y '
+                  'te traigo la página exacta.'),
           chips: [
+            // ponytail: the demo doc is an 11-page stand-in for the 305-page
+            // manual — p. 6 plays the role of "where I left off" so the
+            // viewer demonstrably opens scrolled to the spot, not at p. 1.
             (t: L('Open where I left off', 'Abrir donde lo dejé'),
-             a: null, primary: true, open: true, page: 1),
+             a: null, primary: true, open: true, page: 6),
             (t: L('Summarize section 4.5', 'Resume la sección 4.5'),
              a: L(
                  'Section 4.5 covers arrival on stand: guidance ends when the '
@@ -90,6 +111,17 @@ _Res _resource(String key) => switch (key) {
                   'Llegada y revisión del stand dos veces — he dejado el vídeo '
                   'donde lo paraste. Salta a cualquier capítulo, o deja que '
                   'compruebe qué se te quedó.'),
+          live: L(
+              "You're cued at Hold preparation (0:32) — the key beat in this "
+                  'chapter is opening the holds only after the stand check is '
+                  'complete. I also remember the chock-timing question you '
+                  'just answered; tell me if you want the chapter that shows '
+                  'it.',
+              'Estás en Preparación de bodega (0:32) — la clave de este '
+                  'capítulo es abrir las bodegas solo tras completar la '
+                  'revisión del stand. También tengo presente la pregunta de '
+                  'calzos que acabas de responder; dime si quieres el '
+                  'capítulo donde se ve.'),
           chips: [
             (t: L('Quiz me on what I watched', 'Pregúntame sobre lo que vi'),
              a: L(
@@ -126,6 +158,14 @@ _Res _resource(String key) => switch (key) {
                   'lectura obligatoria, y es exactamente de donde viene tu '
                   'concepto erróneo. Dos páginas, unos 3 minutos. ¿Prefieres '
                   'que te explique el cambio?'),
+          live: L(
+              'The heart of the notice, since Aug 1: main gear first, fore '
+                  'and aft, nose gear last. The trigger for chocking did not '
+                  'change — engines off and anti-collision lights out.',
+              'Lo esencial del aviso, desde el 1 de agosto: tren principal '
+                  'primero, delante y detrás, tren de morro al final. El '
+                  'disparador del calzado no cambia — motores apagados y '
+                  'luces anticolisión apagadas.'),
           chips: [
             (t: L('Walk me through the change', 'Explícame el cambio'),
              a: L(
@@ -191,18 +231,7 @@ class _ResSheetState extends State<_ResSheet> {
     super.dispose();
   }
 
-  void _tapChip(int i) {
-    final c = widget.res.chips[i];
-    if (c.open) {
-      showTestuPdf(context, page: c.page, cite: widget.res.title);
-      return;
-    }
-    setState(() {
-      _used.add(i);
-      _chat.add(_YouMsg(text: c.t));
-      _chat.add(SullyMessage.text(c.a!,
-          delay: 850, sourceLine: widget.res.title, bottomPadding: 12));
-    });
+  void _autoScroll() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scroll.hasClients) {
         _scroll.animateTo(_scroll.position.maxScrollExtent,
@@ -212,13 +241,86 @@ class _ResSheetState extends State<_ResSheet> {
     });
   }
 
+  void _tapChip(int i) {
+    final c = widget.res.chips[i];
+    if (c.open) {
+      showTestuPdf(context, page: c.page, cite: widget.res.title);
+      return;
+    }
+    setState(() {
+      _used.add(i);
+      _chat.add(TestuYouMsg(text: c.t));
+      _chat.add(SullyMessage.text(c.a!,
+          delay: 850, sourceLine: widget.res.title, bottomPadding: 12));
+    });
+    _autoScroll();
+  }
+
+  void _send(String text) {
+    setState(() {
+      _chat.add(TestuYouMsg(text: text));
+      _chat.add(SullyMessage.text(widget.res.live,
+          delay: 850, sourceLine: widget.res.title, bottomPadding: 12));
+    });
+    _autoScroll();
+  }
+
+  /// The scrolling middle of the sheet: chat, canned chips, Close.
+  Widget _chatList(EdgeInsets padding) {
+    final res = widget.res;
+    return ListView(
+      controller: _scroll,
+      shrinkWrap: true,
+      padding: padding,
+      children: [
+        ...List.of(_chat),
+        const SizedBox(height: 14),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (var i = 0; i < res.chips.length; i++)
+              if (!_used.contains(i))
+                _ChipBtn(
+                  label: res.chips[i].t,
+                  primary: res.chips[i].primary,
+                  onTap: () => _tapChip(i),
+                ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        TestuButton(L('Close', 'Cerrar'),
+            onTap: () => Navigator.of(context).pop()),
+        const SizedBox(height: 4),
+      ],
+    );
+  }
+
+  // House composer, live — free text lands in the chat and Sully answers
+  // with the source context in view (continuous-tutor rule). ponytail:
+  // canned per-source reply until the topic-expert backend answers real
+  // free text.
+  Widget _composer(EdgeInsets padding) => Padding(
+        padding: padding,
+        child: TestuComposer(
+          hint: L('Ask Sully about this source…',
+              'Pregunta a Sully sobre esta fuente…'),
+          onSend: _send,
+        ),
+      );
+
   @override
   Widget build(BuildContext context) {
     final t = TestuTokens.of(context);
     final res = widget.res;
+    final size = MediaQuery.sizeOf(context);
+    // Landscape can't stack player + chapters + chat + composer — the
+    // continuous-tutor rule survives as a split instead: source pinned
+    // left, chat and composer right.
+    final split = res.video && size.width > size.height;
     return Container(
-      constraints: BoxConstraints(
-          maxHeight: MediaQuery.sizeOf(context).height * 0.88),
+      constraints:
+          BoxConstraints(maxHeight: size.height * (split ? 0.94 : 0.88)),
       decoration: BoxDecoration(
         color: t.card,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
@@ -278,54 +380,45 @@ class _ResSheetState extends State<_ResSheet> {
               ),
             ]),
           ),
-          Flexible(
-            child: ListView(
-              controller: _scroll,
-              shrinkWrap: true,
-              padding: const EdgeInsets.fromLTRB(18, 14, 18, 0),
-              children: [
-                if (res.video) ...[
-                  const _MiniPlayer(),
-                  const SizedBox(height: 14),
-                ],
-                ...List.of(_chat),
-                const SizedBox(height: 14),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+          // Source pinned above, ask bar pinned below, chat scrolls between:
+          // the user talks to Sully about the source without ever scrolling
+          // either out of view (app-wide continuous-tutor rule).
+          if (split)
+            Flexible(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(18, 14, 18, 0),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    for (var i = 0; i < res.chips.length; i++)
-                      if (!_used.contains(i))
-                        _ChipBtn(
-                          label: res.chips[i].t,
-                          primary: res.chips[i].primary,
-                          onTap: () => _tapChip(i),
-                        ),
+                    // Player pinned; only its chapter list scrolls.
+                    const Expanded(
+                      flex: 5,
+                      child: _MiniPlayer(pinned: true),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      flex: 4,
+                      child: Column(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            Flexible(child: _chatList(EdgeInsets.zero)),
+                            _composer(const EdgeInsets.only(top: 12)),
+                          ]),
+                    ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                TestuButton(L('Close', 'Cerrar'),
-                    onTap: () => Navigator.of(context).pop()),
-                const SizedBox(height: 14),
-                // ponytail: decorative — free-text needs the tutor backend.
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      vertical: 11, horizontal: 16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF101013),
-                    border: Border.all(color: t.line2),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    L('Ask Sully about this source…',
-                        'Pregunta a Sully sobre esta fuente…'),
-                    style: TextStyle(
-                        fontFamily: 'Geist', fontSize: 12.5, color: t.faint),
-                  ),
-                ),
-              ],
-            ),
-          ),
+              ),
+            )
+          else ...[
+            if (res.video)
+              const Padding(
+                padding: EdgeInsets.fromLTRB(18, 14, 18, 0),
+                child: _MiniPlayer(),
+              ),
+            Flexible(
+                child: _chatList(const EdgeInsets.fromLTRB(18, 14, 18, 0))),
+            _composer(const EdgeInsets.fromLTRB(18, 12, 18, 0)),
+          ],
         ],
       ),
     );
@@ -364,45 +457,18 @@ class _ChipBtn extends StatelessWidget {
   }
 }
 
-class _YouMsg extends StatelessWidget {
-  const _YouMsg({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = TestuTokens.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Align(
-        alignment: Alignment.centerRight,
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 280),
-          padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 13),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1D1D22),
-            border: Border.all(color: t.line2),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(text,
-              style: const TextStyle(
-                  fontFamily: 'Geist',
-                  fontSize: 12.5,
-                  color: Color(0xFFD6D4D0))),
-        ),
-      ),
-    );
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Minimal chaptered-video stand-in: real playback, tap to play/pause,
-// progress hairline. ponytail: chapters/fullscreen skipped — add when the
-// resource library is real.
+// progress hairline, seeking chapter rows, expand-to-fullscreen.
 // ---------------------------------------------------------------------------
 
 class _MiniPlayer extends StatefulWidget {
-  const _MiniPlayer();
+  const _MiniPlayer({this.pinned = false});
+
+  /// Landscape pane: the card is height-bounded — video, progress and
+  /// footer stay put while the chapter list scrolls on its own. Unpinned
+  /// (portrait) the card sits in the sheet's normal flow.
+  final bool pinned;
 
   @override
   State<_MiniPlayer> createState() => _MiniPlayerState();
@@ -412,14 +478,56 @@ class _MiniPlayerState extends State<_MiniPlayer> {
   late final VideoPlayerController _ctrl;
   bool _ready = false;
 
+  /// Full chapter list unfolded. Collapsed by default: only the playing
+  /// chapter + the next one show, so the chat below keeps room
+  /// (continuous-tutor rule — the composer must never hide behind the
+  /// timestamps). Sully can always point to the right chapter instead.
+  bool _chaptersOpen = false;
+
+  /// Index of the chapter the playhead is in (pre-ready: the cue point).
+  int get _currentCh {
+    final pos = _ready ? _ctrl.value.position : _chapters[2].at;
+    var idx = 0;
+    for (final (i, c) in _chapters.indexed) {
+      if (pos >= c.at) idx = i;
+    }
+    return idx;
+  }
+
   @override
   void initState() {
     super.initState();
     _ctrl = VideoPlayerController.asset('assets/video/turnaround.mp4')
-      ..initialize().then((_) {
+      ..initialize().then((_) async {
+        // Sully's copy promises the player is cued to where Ana stopped —
+        // Arrival & stand check watched → start of Hold preparation (0:32).
+        await _ctrl.seekTo(_chapters[2].at);
         if (mounted) setState(() => _ready = true);
       });
     _ctrl.addListener(_onTick);
+  }
+
+  /// The approved v6 chapter list, verbatim — timestamps are real seek
+  /// targets, matching Sully's "jump to any chapter with the timestamps".
+  List<({Duration at, String name})> get _chapters => [
+        (at: Duration.zero, name: L('Intro', 'Introducción')),
+        (at: const Duration(seconds: 15),
+         name: L('Arrival & stand check', 'Llegada y revisión del stand')),
+        (at: const Duration(seconds: 32),
+         name: L('Hold preparation', 'Preparación de bodega')),
+        (at: const Duration(seconds: 64),
+         name: L('Loading at the aircraft', 'Carga en la aeronave')),
+        (at: const Duration(seconds: 104),
+         name: L('Secured & ready', 'Asegurado y listo')),
+      ];
+
+  void _jump(Duration at) {
+    if (!_ready) return;
+    HapticFeedback.selectionClick();
+    _ctrl.seekTo(at);
+    _ctrl.play();
+    // Fold the list back — the collapsed pair follows the new position.
+    setState(() => _chaptersOpen = false);
   }
 
   void _onTick() {
@@ -436,6 +544,151 @@ class _MiniPlayerState extends State<_MiniPlayer> {
   String _fmt(Duration d) =>
       '${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}';
 
+  Widget _progress() => Row(children: [
+        Expanded(
+          child: TestuHairline(
+            _ready && _ctrl.value.duration.inMilliseconds > 0
+                ? _ctrl.value.position.inMilliseconds /
+                    _ctrl.value.duration.inMilliseconds
+                : 0,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          _ready
+              ? '${_fmt(_ctrl.value.position)} / ${_fmt(_ctrl.value.duration)}'
+              : '–:–',
+          style: const TextStyle(
+              fontFamily: 'GeistMono',
+              fontSize: 9.5,
+              color: Color(0xFFD6D6DA)),
+        ),
+      ]);
+
+  /// Full-screen playback — same lightbox grammar as showTestuZoom (PDF
+  /// pages), so video and PDF share one "expand" behavior. The sheet's
+  /// controller keeps playing; ✕ lands back where you were.
+  void _fullscreen() {
+    if (!_ready) return;
+    HapticFeedback.selectionClick();
+    Navigator.of(context).push(
+      PageRouteBuilder<void>(
+        opaque: false,
+        barrierColor: const Color(0xF20A0A0B),
+        pageBuilder: (context, animation, secondaryAnimation) {
+          final t = TestuTokens.of(context);
+          return Scaffold(
+            backgroundColor: Colors.transparent,
+            body: SafeArea(
+              child: AnimatedBuilder(
+                animation: _ctrl,
+                builder: (context, _) => Column(children: [
+                  Row(children: [
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 16),
+                        child: Text(_chapters[_currentCh].name, style: kLabel),
+                      ),
+                    ),
+                    TestuPressable(
+                      onTap: () => Navigator.of(context).pop(),
+                      child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Text('✕',
+                            style: TextStyle(fontSize: 16, color: t.mut)),
+                      ),
+                    ),
+                  ]),
+                  Expanded(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        // play()/pause() return Futures — never inside
+                        // setState (framework assertion).
+                        _ctrl.value.isPlaying ? _ctrl.pause() : _ctrl.play();
+                      },
+                      child: Stack(alignment: Alignment.center, children: [
+                        Center(
+                          child: AspectRatio(
+                              aspectRatio: _ctrl.value.aspectRatio,
+                              child: VideoPlayer(_ctrl)),
+                        ),
+                        if (!_ctrl.value.isPlaying)
+                          Container(
+                            width: 52,
+                            height: 52,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: const Color(0xCC0A0A0B),
+                              shape: BoxShape.circle,
+                              border:
+                                  Border.all(color: const Color(0x2EFFFFFF)),
+                            ),
+                            child: const Padding(
+                              padding: EdgeInsets.only(left: 4),
+                              child: Text('▶',
+                                  style: TextStyle(
+                                      fontSize: 17,
+                                      color: Color(0xFFF4F2EE))),
+                            ),
+                          ),
+                      ]),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+                    child: _progress(),
+                  ),
+                ]),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  /// Chapter row — the approved v6 design: full-width tappable rows, mono
+  /// timestamp column (blue = a link into the source; orange = playing now),
+  /// hairline between rows.
+  Widget _chapterRow(TestuTokens t, int i, ({Duration at, String name}) c) {
+    final pos = _ready ? _ctrl.value.position : Duration.zero;
+    final next = i + 1 < _chapters.length
+        ? _chapters[i + 1].at
+        : const Duration(days: 1);
+    final current = _ready && pos >= c.at && pos < next;
+    return TestuPressable(
+      onTap: () => _jump(c.at),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 12),
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: t.line)),
+        ),
+        child: Row(children: [
+          SizedBox(
+            width: 36,
+            child: Text(_fmt(c.at),
+                style: TextStyle(
+                    fontFamily: 'GeistMono',
+                    fontSize: 9.5,
+                    color: current ? t.orange : t.blue)),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(c.name,
+                style: TextStyle(
+                    fontFamily: 'Geist',
+                    fontSize: 11.5,
+                    fontWeight: current ? FontWeight.w600 : FontWeight.w400,
+                    color: current
+                        ? const Color(0xFFE9E8E4)
+                        : const Color(0xFFC2C1BD))),
+          ),
+        ]),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = TestuTokens.of(context);
@@ -447,24 +700,38 @@ class _MiniPlayerState extends State<_MiniPlayer> {
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           GestureDetector(
             onTap: () {
               if (!_ready) return;
               HapticFeedback.selectionClick();
-              setState(() =>
-                  _ctrl.value.isPlaying ? _ctrl.pause() : _ctrl.play());
+              // play()/pause() return Futures — kept outside setState
+              // (an async setState callback is a framework assertion).
+              _ctrl.value.isPlaying ? _ctrl.pause() : _ctrl.play();
+              setState(() {});
             },
-            child: AspectRatio(
-              aspectRatio: _ready ? _ctrl.value.aspectRatio : 16 / 9,
-              child: Stack(
+            // Full-width 16:9 in portrait (height is width-driven there, far
+            // under the cap); in landscape capped to 30% of screen height
+            // (letterboxed) so the pinned card — video + progress + chapter
+            // pair + toggle + footer — fits the pane without scrolling.
+            child: LayoutBuilder(builder: (context, bc) {
+              final ratio = _ready ? _ctrl.value.aspectRatio : 16 / 9;
+              final h = (bc.maxWidth / ratio)
+                  .clamp(0.0, MediaQuery.sizeOf(context).height * 0.30);
+              return SizedBox(
+                width: bc.maxWidth,
+                height: h,
+                child: Stack(
                 fit: StackFit.expand,
                 alignment: Alignment.center,
                 children: [
+                  const ColoredBox(color: Colors.black),
                   if (_ready)
-                    VideoPlayer(_ctrl)
-                  else
-                    const ColoredBox(color: Colors.black),
+                    Center(
+                      child: AspectRatio(
+                          aspectRatio: ratio, child: VideoPlayer(_ctrl)),
+                    ),
                   if (!_ready || !_ctrl.value.isPlaying)
                     Center(
                       child: Container(
@@ -484,32 +751,90 @@ class _MiniPlayerState extends State<_MiniPlayer> {
                         ),
                       ),
                     ),
+                  // Always-available fullscreen (portrait and landscape) —
+                  // the PDF's tap-to-zoom counterpart for video.
+                  Positioned(
+                    right: 8,
+                    bottom: 8,
+                    child: TestuPressable(
+                      onTap: _fullscreen,
+                      child: Container(
+                        width: 28,
+                        height: 28,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: const Color(0xCC0A0A0B),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: const Color(0x2EFFFFFF)),
+                        ),
+                        child: const TestuIcon(TestuGlyph.expand,
+                            size: 13, color: Color(0xFFF4F2EE)),
+                      ),
+                    ),
+                  ),
                 ],
-              ),
-            ),
+                ),
+              );
+            }),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 9, 12, 9),
-            child: Row(children: [
-              Expanded(
-                child: TestuHairline(
-                  _ready && _ctrl.value.duration.inMilliseconds > 0
-                      ? _ctrl.value.position.inMilliseconds /
-                          _ctrl.value.duration.inMilliseconds
-                      : 0,
+            child: _progress(),
+          ),
+          if (widget.pinned)
+            // Pinned card: the list gets whatever height is left and scrolls
+            // inside it — dragging the timestamps never moves the video.
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(children: [
+                  for (final (i, c) in _chapters.indexed)
+                    if (_chaptersOpen || i == _currentCh || i == _currentCh + 1)
+                      _chapterRow(t, i, c),
+                ]),
+              ),
+            )
+          else if (!_chaptersOpen) ...[
+            _chapterRow(t, _currentCh, _chapters[_currentCh]),
+            if (_currentCh + 1 < _chapters.length)
+              _chapterRow(t, _currentCh + 1, _chapters[_currentCh + 1]),
+          ] else
+            // Scrolls when the list outgrows the cap (real libraries have
+            // more than five chapters).
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 190),
+              child: SingleChildScrollView(
+                child: Column(children: [
+                  for (final (i, c) in _chapters.indexed) _chapterRow(t, i, c),
+                ]),
+              ),
+            ),
+          TestuPressable(
+            onTap: () {
+              HapticFeedback.selectionClick();
+              setState(() => _chaptersOpen = !_chaptersOpen);
+            },
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+              decoration: BoxDecoration(
+                border: Border(top: BorderSide(color: t.line)),
+              ),
+              child: Row(children: [
+                Expanded(
+                  child: Text(
+                    L('All chapters · ${_chapters.length}',
+                        'Todos los capítulos · ${_chapters.length}'),
+                    style: TextStyle(
+                        fontFamily: 'Geist',
+                        fontSize: 10,
+                        letterSpacing: 0.3,
+                        color: t.mut),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                _ready
-                    ? '${_fmt(_ctrl.value.position)} / ${_fmt(_ctrl.value.duration)}'
-                    : '–:–',
-                style: const TextStyle(
-                    fontFamily: 'GeistMono',
-                    fontSize: 9.5,
-                    color: Color(0xFFD6D6DA)),
-              ),
-            ]),
+                Text(_chaptersOpen ? '−' : '+',
+                    style: TextStyle(fontSize: 12, color: t.faint)),
+              ]),
+            ),
           ),
           Container(
             width: double.infinity,

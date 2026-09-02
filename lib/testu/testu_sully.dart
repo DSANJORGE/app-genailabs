@@ -80,7 +80,13 @@ class _SullyMessageState extends State<SullyMessage> {
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: Column(
+            // Readable measure: on a landscape phone an unbounded bubble runs
+            // 120+ characters per line; every Sully surface shares this cap.
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 620),
+                child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
@@ -138,6 +144,8 @@ class _SullyMessageState extends State<SullyMessage> {
                   if (widget.extra != null) widget.extra!,
                 ],
               ],
+                ),
+              ),
             ),
           ),
         ],

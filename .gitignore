@@ -49,3 +49,4 @@ android/app/crashlytics-build.properties
 android/app/build/outputs/mapping/
 
 firebase.json
+test/landscape_shots/

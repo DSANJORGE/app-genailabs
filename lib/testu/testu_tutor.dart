@@ -237,26 +237,11 @@ class _AskBar extends StatelessWidget {
           colors: [t.bg.withValues(alpha: 0), t.bg],
         ),
       ),
-      // ponytail: decorative — becomes a real input once Sully talks to the
-      // backend.
-      child: TestuPressable(
+      // House composer in facade mode — same pill as the session chat.
+      // ponytail: becomes a live input once Sully talks to the backend.
+      child: TestuComposer(
+        hint: L('Ask Sully anything…', 'Pregunta a Sully lo que quieras…'),
         onTap: _noop,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 16),
-          decoration: BoxDecoration(
-            color: const Color(0xFF101013),
-            border: Border.all(color: t.line2),
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Text(
-            L('Ask Sully anything…', 'Pregunta a Sully lo que quieras…'),
-            style: TextStyle(
-              fontFamily: 'Geist',
-              fontSize: 12.5,
-              color: t.faint,
-            ),
-          ),
-        ),
       ),
     );
   }

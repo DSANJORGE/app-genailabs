@@ -9,7 +9,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'testu_i18n.dart';
 import 'testu_live.dart';
 import 'testu_pdf.dart';
+import 'testu_notifications.dart';
 import 'testu_question_source.dart';
+import 'testu_report_sheet.dart';
+import 'testu_social.dart';
 import 'testu_session_engine.dart';
 import 'testu_shell.dart';
 import 'testu_sully.dart';
@@ -464,6 +467,8 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
         q: q,
         onAsk: (text, offline) =>
             _sendChat(text, q: q, offlineAnswer: offline),
+        onFlag: (reason, note) =>
+            _source.reportFlag(q: q, reason: reason, note: note),
       ),
     );
   }
@@ -611,73 +616,13 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
                         colors: [t.bg.withValues(alpha: 0), t.bg],
                       ),
                     ),
-                    child: Container(
-                      padding: const EdgeInsets.only(left: 16, right: 4),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF101013),
-                        border: Border.all(color: t.line2),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _input,
-                              onSubmitted: (_) => _sendTyped(),
-                              textInputAction: TextInputAction.send,
-                              style: const TextStyle(
-                                fontFamily: 'Geist',
-                                fontSize: 12.5,
-                                color: Color(0xFFE9E8E4),
-                              ),
-                              decoration: InputDecoration(
-                                isDense: true,
-                                border: InputBorder.none,
-                                contentPadding: const EdgeInsets.symmetric(
-                                    vertical: 12),
-                                hintText: L('Ask Sully anything…',
-                                    'Pregunta a Sully lo que quieras…'),
-                                hintStyle: TextStyle(
-                                  fontFamily: 'Geist',
-                                  fontSize: 12.5,
-                                  color: t.faint,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          ValueListenableBuilder<TextEditingValue>(
-                            valueListenable: _input,
-                            builder: (_, v, _) {
-                              final active = v.text.trim().isNotEmpty;
-                              return TestuPressable(
-                                onTap: active ? _sendTyped : () {},
-                                child: Container(
-                                  width: 32,
-                                  height: 32,
-                                  alignment: Alignment.center,
-                                  decoration: BoxDecoration(
-                                    color: active
-                                        ? t.primaryAction
-                                        : t.line2,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Text(
-                                    '↑',
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w700,
-                                      color: active
-                                          ? t.onPrimaryAction
-                                          : t.faint,
-                                    ),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        ],
-                      ),
+                    // House composer — same module as thread replies and
+                    // the tutor ask bar.
+                    child: TestuComposer(
+                      controller: _input,
+                      hint: L('Ask Sully anything\u2026',
+                          'Pregunta a Sully lo que quieras\u2026'),
+                      onSend: (_) => _sendTyped(),
                     ),
                   ),
                 ),
@@ -1202,7 +1147,8 @@ class _Option extends StatelessWidget {
 /// Citation, evidence line, message actions, and follow-up chips under a
 /// verdict — everything that makes the answer explainable.
 class _VerdictExtras extends StatefulWidget {
-  const _VerdictExtras({required this.q, required this.onAsk});
+  const _VerdictExtras(
+      {required this.q, required this.onAsk, required this.onFlag});
 
   final TestuQ q;
 
@@ -1210,12 +1156,18 @@ class _VerdictExtras extends StatefulWidget {
   /// argument is the canned answer used when the session is offline.
   final void Function(String question, String offlineAnswer) onAsk;
 
+  /// Report dialog confirmed: hand (reason, optional note) to the source.
+  final void Function(String reason, String? note) onFlag;
+
   @override
   State<_VerdictExtras> createState() => _VerdictExtrasState();
 }
 
 class _VerdictExtrasState extends State<_VerdictExtras> {
-  int? _fb; // 0 = helpful, 1 = not helpful
+  // "Was this helpful" — same reaction module as threads (app-wide rule).
+  // ponytail: base count is demo data until the backend returns real ones.
+  final _qReacts = <TestuReaction, int>{TestuReaction.like: 12};
+  TestuReaction? _qMine;
   bool _flagged = false;
   bool _wrongs = false; // "why are the others wrong?" chip consumed
   bool _proc = false; // "show me the full procedure" chip consumed
@@ -1223,6 +1175,40 @@ class _VerdictExtrasState extends State<_VerdictExtras> {
   void _tap(VoidCallback fn) {
     HapticFeedback.selectionClick();
     setState(fn);
+  }
+
+  /// Report-question dialog. UI is final; the send lands in
+  /// [TestuQuestionSource.reportFlag] (no-op until the backend exists) and
+  /// leaves a "review pending" notice on Today.
+  /// One report surface app-wide: the shared sheet (see
+  /// testu_report_sheet.dart). Send lands in [TestuQuestionSource.reportFlag]
+  /// (no-op until the backend exists) and leaves an informative notice
+  /// behind the Today bell.
+  void _openFlagDialog() {
+    HapticFeedback.selectionClick();
+    showTestuReportSheet(
+      context,
+      eyebrow: L('QUESTION · REPORT', 'PREGUNTA · REPORTAR'),
+      title: L('Report this question', 'Reportar esta pregunta'),
+      subtitle: L(
+          'It goes to the content team for review. You\u2019ll hear back in Notifications.',
+          'Llega al equipo de contenido para su revisi\u00f3n. Te avisaremos en Notificaciones.'),
+      reasons: [
+        L('Incorrect or outdated', 'Incorrecta o desactualizada'),
+        L('Confusing or badly worded', 'Confusa o mal redactada'),
+        L('Typo or formatting issue', 'Errata o problema de formato'),
+        L('Other', 'Otro'),
+      ],
+      onSend: (reason, note) {
+        widget.onFlag(reason, note);
+        addTestuNotice(
+          L('Question report sent', 'Reporte de pregunta enviado'),
+          L('\u201c$reason\u201d \u2014 under review by the content team.',
+              '\u00ab$reason\u00bb \u2014 en revisi\u00f3n por el equipo de contenido.'),
+        );
+        _tap(() => _flagged = true);
+      },
+    );
   }
 
   @override
@@ -1262,46 +1248,36 @@ class _VerdictExtrasState extends State<_VerdictExtras> {
         const SizedBox(height: 6),
         Row(
           children: [
-            for (final (i, a) in [
-              L('Helpful', 'Útil'),
-              L('Not helpful', 'No útil'),
-              if (_flagged)
-                L('Flagged', 'Reportada')
-              else
-                L('Flag question', 'Reportar pregunta'),
-            ].indexed) ...[
-              TestuPressable(
-                onTap: () => _tap(() {
-                  if (i == 2) {
-                    _flagged = !_flagged;
-                  } else {
-                    _fb = i;
-                  }
-                }),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Text(
-                    a,
-                    style: TextStyle(
-                      fontFamily: 'Geist',
-                      fontSize: 10.5,
-                      letterSpacing: 0.42,
-                      fontWeight: (i == 2 ? _flagged : _fb == i)
-                          ? FontWeight.w600
-                          : FontWeight.w400,
-                      color: i == 2 && _flagged
-                          ? t.orange
-                          : _fb == i
-                              ? t.mut
-                              : t.faint,
-                    ),
+            TestuReactions(
+              reacts: _qReacts,
+              mine: _qMine,
+              onChanged: (r) => setState(() => _qMine = r),
+            ),
+            const SizedBox(width: 18),
+            TestuPressable(
+              onTap: () {
+                if (!_flagged) _openFlagDialog();
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  _flagged
+                      ? L('Reported', 'Reportada')
+                      : L('Report question', 'Reportar pregunta'),
+                  style: TextStyle(
+                    fontFamily: 'Geist',
+                    fontSize: 10.5,
+                    letterSpacing: 0.42,
+                    fontWeight: _flagged ? FontWeight.w600 : FontWeight.w400,
+                    color: _flagged ? t.orange : t.faint,
                   ),
                 ),
               ),
-              const SizedBox(width: 16),
-            ],
+            ),
           ],
         ),
+        // Social thread: inline (decided 2026-08-31).
+        const SocialThreadEntry(),
         const SizedBox(height: 6),
         // Suggested follow-ups: tapping one sends it into the chat as the
         // user's own message; Sully answers in the chat flow.

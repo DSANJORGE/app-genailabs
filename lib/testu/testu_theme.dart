@@ -5,7 +5,8 @@ import 'package:flutter/material.dart';
 ///
 /// Each semantic accent has exactly ONE meaning — do not mix:
 /// orange = brand/progress, blue = source links only, green = positive,
-/// amber = caution, red = negative + destructive, gold = certificates.
+/// amber = caution, red = negative + destructive, gold = certificates,
+/// violet = the Support reaction only.
 @immutable
 class TestuTokens extends ThemeExtension<TestuTokens> {
   const TestuTokens._();
@@ -32,6 +33,7 @@ class TestuTokens extends ThemeExtension<TestuTokens> {
   final Color amber = const Color(0xFFD9A23F);
   final Color red = const Color(0xFFC25555);
   final Color gold = const Color(0xFFCDB96A);
+  final Color violet = const Color(0xFF9D8CD6);
 
   // The white CTA — the only filled button color in the app.
   final Color primaryAction = const Color(0xFFF4F2EE);
