@@ -32,7 +32,7 @@ class TestuApp extends StatefulWidget {
   State<TestuApp> createState() => _TestuAppState();
 }
 
-class _TestuAppState extends State<TestuApp> {
+class _TestuAppState extends State<TestuApp> with WidgetsBindingObserver {
   // Gate (spec: `testu-signin-flow` artifact): the app opens client-neutral;
   // the Vueling reveal plays only once the session says who the user is —
   // restored on launch, or fresh from the sign-in screen.
@@ -45,9 +45,19 @@ class _TestuAppState extends State<TestuApp> {
   /// (Settings › Security). Cleared by the lock screen.
   bool _locked = false;
 
+  /// When the app was last put away. Null while it's in the foreground.
+  DateTime? _leftAt;
+  final _nav = GlobalKey<NavigatorState>();
+
+  /// Long enough that answering a message or picking a photo doesn't make you
+  /// re-authenticate; short enough that the phone left on a crew-room table
+  /// is closed by the time someone else picks it up.
+  static const _grace = Duration(seconds: 15);
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     TestuAuth.onSessionEnded = () {
       if (mounted) {
         setState(() {
@@ -57,6 +67,35 @@ class _TestuAppState extends State<TestuApp> {
       }
     };
     _restore();
+  }
+
+  /// "Every time they open the app" includes coming back to it, not just a
+  /// cold start — a session left open on the home screen is the common case.
+  /// Only `paused` counts: the Face ID prompt and the photo picker make the
+  /// app `inactive`, and re-locking behind those would be a trap.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      _leftAt = DateTime.now();
+    } else if (state == AppLifecycleState.resumed) {
+      final away = _leftAt;
+      _leftAt = null;
+      if (away != null &&
+          _signedIn &&
+          TestuLock.enabled &&
+          DateTime.now().difference(away) > _grace) {
+        setState(() => _locked = true);
+        // The lock screen is the app's root; anything pushed over it (a
+        // session, Settings) would otherwise stay on top of it.
+        _nav.currentState?.popUntil((r) => r.isFirst);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   Future<void> _restore() async {
@@ -104,6 +143,7 @@ class _TestuAppState extends State<TestuApp> {
       ]);
     }
     return MaterialApp(
+      navigatorKey: _nav,
       title: 'TestU Learn',
       debugShowCheckedModeBanner: false,
       theme: testuTheme(),
