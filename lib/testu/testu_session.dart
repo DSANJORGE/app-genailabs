@@ -76,6 +76,7 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
   /// length at send time — the entry the bubble renders after, isUser, text).
   final _chat = <(int, bool, String)>[];
   StreamSubscription<String>? _sullySub;
+  Timer? _sullyTimeout;
   bool _waitingSully = false;
 
   /// Keys on each question's framing bubble, and the one the auto-scroll is
@@ -146,6 +147,7 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
     _scroll.dispose();
     _input.dispose();
     _sullySub?.cancel();
+    _sullyTimeout?.cancel();
     super.dispose();
   }
 
@@ -172,27 +174,29 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
     setState(() => _chat.add((_controller.transcript.length, true, text)));
     _scrollDown();
     if (q != null && canAskSully(q)) {
-      _sullySub ??= sullyReplies().listen((s) {
+      void sullySays(String s) {
         if (!mounted) return;
+        _sullyTimeout?.cancel();
         setState(() {
           _waitingSully = false;
           _chat.add((_controller.transcript.length, false, s));
         });
         _scrollDown();
-      });
+      }
+
+      _sullySub ??= sullyReplies().listen(sullySays);
       setState(() => _waitingSully = true);
-      askSully(q, text).catchError((_) {
-        if (!mounted) return;
-        setState(() {
-          _waitingSully = false;
-          _chat.add((
-            _controller.transcript.length,
-            false,
-            L('Sully could not be reached.', 'No se pudo contactar a Sully.')
-          ));
-        });
-        _scrollDown();
+      // The server acknowledges the follow-up before the tutor answers, and
+      // the answer may never come (minsur, 2026-09-02) — don't spin forever.
+      _sullyTimeout?.cancel();
+      _sullyTimeout = Timer(const Duration(seconds: 90), () {
+        if (_waitingSully) {
+          sullySays(L('Sully is taking longer than usual. Try again in a moment.',
+              'Sully está tardando más de lo normal. Inténtalo de nuevo en un momento.'));
+        }
       });
+      askSully(q, text).catchError((_) => sullySays(
+          L('Sully could not be reached.', 'No se pudo contactar a Sully.')));
     } else {
       setState(() => _chat.add((
         _controller.transcript.length,

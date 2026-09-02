@@ -161,14 +161,23 @@ String _plainText(String html) => html
     .replaceAll(RegExp(r'\n{3,}'), '\n\n')
     .trim();
 
+/// The tutor channel for [tutorialId]: the active one from tutor history,
+/// else the session record (minsur answers history without a channel even
+/// when a session exists, 2026-09-02). Null when neither has one.
+Future<TutorChannel?> findTutorChannel(String tutorialId,
+    {EmeHttp? http}) async {
+  final service = TopicService(http: http);
+  final r = await service.fetchTutorHistory(tutorialId: tutorialId);
+  return r.activeChannel ??
+      r.currentChannel ??
+      await service.fetchTutorSession(tutorialId);
+}
+
 /// Sends [text] to Sully as a chat follow-up on this tutorial's tutor
 /// channel (same chat the eMe app shows). Replies arrive on [sullyReplies].
 Future<void> askSully(TestuQ q, String text) async {
   final chan = await (_tutorChannel ??= () async {
-    final r = await TopicService().fetchTutorHistory(
-      tutorialId: _liveTutorialId!,
-    );
-    final c = r.activeChannel;
+    final c = await findTutorChannel(_liveTutorialId!);
     if (c != null) await ChatSocketService().connect(channel: c.id);
     return c;
   }());
