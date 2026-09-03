@@ -600,15 +600,23 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
                     // longer than any fetch, so the dots never resolve; the
                     // bubble is replaced by the transcript when _boot lands.
                     if (_loading)
-                      const _SullyBubble(spans: [], delay: 600000),
+                      const _SullyBubble(
+                          key: ValueKey('sully-loading'),
+                          spans: [],
+                          delay: 600000),
                     for (final (i, e) in _controller.transcript.indexed) ...[
                       _entryWidget(e),
                       for (final c in _chat)
                         if (c.$1 == i + 1) _chatBubble(c),
                     ],
-                    // Live reply pending: Sully's typing indicator.
+                    // Live reply pending: Sully's typing indicator. Keyed so
+                    // the reply bubble that takes its slot gets a fresh State
+                    // (otherwise it inherits these never-ending dots).
                     if (_waitingSully)
-                      const _SullyBubble(spans: [], delay: 600000),
+                      const _SullyBubble(
+                          key: ValueKey('sully-typing'),
+                          spans: [],
+                          delay: 600000),
                   ],
                 ),
                 Positioned(
@@ -669,6 +677,7 @@ class _Rise extends StatelessWidget {
 /// with this screen's entrance animation and bubble spacing.
 class _SullyBubble extends StatelessWidget {
   const _SullyBubble({
+    super.key,
     required this.spans,
     this.extra,
     this.delay = 850,

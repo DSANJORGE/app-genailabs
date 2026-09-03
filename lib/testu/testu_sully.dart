@@ -52,18 +52,25 @@ class SullyMessage extends StatefulWidget {
 
 class _SullyMessageState extends State<SullyMessage> {
   late bool _revealed = widget.delay == 0;
+  Timer? _reveal;
 
   @override
   void initState() {
     super.initState();
     if (!_revealed) {
-      Timer(Duration(milliseconds: widget.delay), () {
+      _reveal = Timer(Duration(milliseconds: widget.delay), () {
         if (mounted) {
           setState(() => _revealed = true);
           widget.onGrew?.call();
         }
       });
     }
+  }
+
+  @override
+  void dispose() {
+    _reveal?.cancel();
+    super.dispose();
   }
 
   @override
