@@ -453,7 +453,8 @@ class _SuccessView extends StatelessWidget {
                               'Evaluación. Te enviaré un recordatorio la '
                               'tarde anterior, y repasaremos ')),
                   TextSpan(
-                      text: L('chock timing', 'el momento de calzar'),
+                      text: CL('due diligence', 'la debida diligencia',
+                          'chock timing', 'el momento de calzar'),
                       style: const TextStyle(fontStyle: FontStyle.italic)),
                   TextSpan(
                       text: L(' once more before you sit it.',

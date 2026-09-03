@@ -41,18 +41,23 @@ class TestuDashboardScreen extends StatelessWidget {
           _MastRowsCard(
             title: L('MASTERY BY TOPIC', 'DOMINIO POR TEMA'),
             rows: [
-              _MastRow(L('FOD Prevention', 'Prevención de FOD'),
+              _MastRow(CL('Hazard Prevention', 'Prevención de Riesgos',
+                      'FOD Prevention', 'Prevención de FOD'),
                   L('Improve Mode available', 'Modo Mejorar disponible'),
                   TestuPill(L('Expert · Stable', 'Experto · Estable'),
                       color: t.greenText,
                       borderColor: const Color(0xFF2F6A4C))),
               _MastRow(
-                  L('Ramp Safety & Turnaround', 'Seguridad en Rampa y Turnaround'),
+                  CL('Human Rights & Due Diligence',
+                      'Derechos Humanos y Debida Diligencia',
+                      'Ramp Safety & Turnaround', 'Seguridad en Rampa y Turnaround'),
                   L('Learn Mode · 21 of 36', 'Modo Aprender · 21 de 36'),
                   TestuPill(
                       L('Competent · Review soon', 'Competente · Repasar pronto'),
                       color: t.gold, borderColor: const Color(0xFF8A7A3A))),
-              _MastRow(L('Radio Communication', 'Comunicación por Radio'),
+              _MastRow(
+                  CL('Cybersecurity', 'Ciberseguridad',
+                      'Radio Communication', 'Comunicación por Radio'),
                   L('${client.tutor} recommends 10 min today', '${client.tutor} recomienda 10 min hoy'),
                   TestuPill(L('Competent · At risk', 'Competente · En riesgo'),
                       color: t.amber, borderColor: const Color(0xFF7A5C1E))),
@@ -64,20 +69,25 @@ class TestuDashboardScreen extends StatelessWidget {
                 'COMPETENCIAS DEL ROL · EVIDENCIA DE TUS RESPUESTAS'),
             rows: [
               _MastRow(
-                  L('Safe aircraft handling', 'Manejo seguro de la aeronave'),
+                  CL('Safe operations conduct', 'Conducta segura en operaciones',
+                      'Safe aircraft handling', 'Manejo seguro de la aeronave'),
                   L('3 of 4 behaviors evidenced', '3 de 4 conductas evidenciadas'),
                   TestuPill(L('Strong', 'Sólido'),
                       color: t.greenText,
                       borderColor: const Color(0xFF2F6A4C))),
               _MastRow(
-                  L('Situational awareness on stand',
+                  CL('Situational awareness on site',
+                      'Conciencia situacional en la unidad',
+                      'Situational awareness on stand',
                       'Conciencia situacional en el stand'),
                   L('1 of 3 behaviors evidenced', '1 de 3 conductas evidenciadas'),
                   TestuPill(L('Building', 'En desarrollo'),
                       color: t.amber, borderColor: const Color(0xFF7A5C1E))),
               _MastRow(
                   L('Communication & coordination', 'Comunicación y coordinación'),
-                  L('1 of 5 behaviors evidenced · tied to Radio Communication',
+                  CL('1 of 5 behaviors evidenced · tied to Cybersecurity',
+                      '1 de 5 conductas evidenciadas · ligado a Ciberseguridad',
+                      '1 of 5 behaviors evidenced · tied to Radio Communication',
                       '1 de 5 conductas evidenciadas · ligado a Comunicación por Radio'),
                   TestuPill(L('At risk', 'En riesgo'),
                       color: const Color(0xFFD08B8B),
@@ -107,7 +117,9 @@ class _ReadinessCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           TestuEyebrow.h4(
-              L('ROLE READINESS · RAMP AGENT, SAFETY LEAD',
+              CL('ROLE READINESS · OPERATIONS, SAFETY LEAD',
+                  'PREPARACIÓN DEL ROL · OPERACIONES',
+                  'ROLE READINESS · RAMP AGENT, SAFETY LEAD',
                   'PREPARACIÓN DEL ROL · AGENTE DE RAMPA')),
           const SizedBox(height: 12),
           Row(
@@ -202,7 +214,9 @@ class _PeerCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                  child: TestuEyebrow.h4(L(
+                  child: TestuEyebrow.h4(CL(
+                      'PEER COMPARISON · MINSUR OPERATORS',
+                      'COMPARACIÓN CON COMPAÑEROS · OPERADORES MINSUR',
                       'PEER COMPARISON · RAMP AGENTS, BCN',
                       'COMPARACIÓN CON COMPAÑEROS · AGENTES DE RAMPA, BCN'))),
               const _PeerStack(),
@@ -239,7 +253,9 @@ class _PeerCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            L('Anonymised comparison with ramp agents at your base. Your peers never see your individual results.',
+            CL('Anonymised comparison with operators at your site. Your peers never see your individual results.',
+                'Comparación anónima con operadores de tu unidad. Tus compañeros nunca ven tus resultados individuales.',
+                'Anonymised comparison with ramp agents at your base. Your peers never see your individual results.',
                 'Comparación anónima con agentes de rampa de tu base. Tus compañeros nunca ven tus resultados individuales.'),
             style: kNote,
           ),
@@ -682,7 +698,8 @@ class _CertCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  L('Ramp Safety — Certified', 'Seguridad en Rampa — Certificada'),
+                  CL('Human Rights — Certified', 'Derechos Humanos — Certificado',
+                      'Ramp Safety — Certified', 'Seguridad en Rampa — Certificada'),
                   style: const TextStyle(
                     fontFamily: 'Geist',
                     fontWeight: FontWeight.w600,

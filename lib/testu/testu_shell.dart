@@ -389,7 +389,10 @@ class _CertificationCard extends StatelessWidget {
         children: [
           TestuEyebrow(L('CERTIFICATION', 'CERTIFICACIÓN'), color: t.amber),
           const SizedBox(height: 7),
-          _CardTitle(L('Ramp Safety certificate expires in 12 days',
+          _CardTitle(CL(
+              'Human Rights certificate expires in 12 days',
+              'Tu certificado de Derechos Humanos caduca en 12 días',
+              'Ramp Safety certificate expires in 12 days',
               'Tu certificado de Seguridad en Rampa caduca en 12 días')),
           const SizedBox(height: 4),
           _CardBody(L(
@@ -469,7 +472,9 @@ class _ContinueHero extends StatelessWidget {
             fit: StackFit.expand,
             children: [
               Image.asset(
-                'assets/img/ramp.jpg',
+                client.name == 'Minsur'
+                    ? 'assets/img/mine_hero.jpg'
+                    : 'assets/img/ramp.jpg',
                 fit: BoxFit.cover,
                 alignment: const Alignment(0, 0.44), // center 72%
               ),
@@ -501,7 +506,9 @@ class _ContinueHero extends StatelessWidget {
                         color: t.orange),
                     const SizedBox(height: 8),
                     Text(
-                      L('Ramp Safety & Aircraft Turnaround',
+                      CL('Human Rights & Due Diligence',
+                          'Derechos Humanos y Debida Diligencia',
+                          'Ramp Safety & Aircraft Turnaround',
                           'Seguridad en Rampa y Turnaround'),
                       style: TextStyle(
                         fontFamily: 'Sora',
@@ -572,7 +579,9 @@ class _RiskNote extends StatelessWidget {
           TestuEyebrow(L('NEEDS REINFORCEMENT', 'NECESITA REFUERZO'),
               color: const Color(0xFFD08B8B)),
           const SizedBox(height: 7),
-          _CardBody(L(
+          _CardBody(CL(
+              'Cybersecurity needs reinforcement. ${client.tutor} recommends a 10-minute session today.',
+              'Ciberseguridad necesita refuerzo. ${client.tutor} recomienda una sesión de 10 minutos hoy.',
               'Radio Communication needs reinforcement. ${client.tutor} recommends a 10-minute session today.',
               'Comunicación por Radio necesita refuerzo. ${client.tutor} recomienda una sesión de 10 minutos hoy.')),
           const SizedBox(height: 10),

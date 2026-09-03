@@ -637,20 +637,23 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
 
   List<Widget> _resources(TestuTokens t) => [
         _ResRow(icon: 'PDF',
-            title: L('Ground Operations Manual',
-                'Manual de Operaciones en Tierra'),
+            title: CL('Human Rights Policy', 'Política de Derechos Humanos',
+                'Ground Operations Manual', 'Manual de Operaciones en Tierra'),
             sub: L('Pages: 122 of 305 · viewed 27 times',
                 'Páginas: 122 de 305 · visto 27 veces'),
             required: true,
             onTap: () => showTestuResource(context, 'gom')),
         _ResRow(icon: 'VID',
-            title: L('Turnaround walkthrough', 'Recorrido del turnaround'),
+            title: CL('Due diligence walkthrough', 'Recorrido de debida diligencia',
+                'Turnaround walkthrough', 'Recorrido del turnaround'),
             sub: L('Chapter 1 of 5 watched · viewed twice',
                 'Capítulo 1 de 5 visto · visto dos veces'),
             required: false,
             onTap: () => showTestuResource(context, 'vid')),
         _ResRow(icon: 'DOC',
-            title: L('Station notice 2026-14: chocking update',
+            title: CL('Compliance notice 2026-14: grievance channel update',
+                'Aviso de cumplimiento 2026-14: cambio en el canal de reclamos',
+                'Station notice 2026-14: chocking update',
                 'Aviso de estación 2026-14: cambio de calzado'),
             sub: L('Pages: 0 of 2 · unread · effective Aug 1',
                 'Páginas: 0 de 2 · sin leer · vigente desde el 1 ago'),
@@ -934,7 +937,9 @@ class _CompetenciesCard extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
-            child: TestuEyebrow(L(
+            child: TestuEyebrow(CL(
+                'COMPETENCIES THIS TOPIC TRAINS · OPERATIONS, SAFETY LEAD',
+                'COMPETENCIAS QUE ENTRENA ESTE TEMA · OPERACIONES',
                 'COMPETENCIES THIS TOPIC TRAINS · RAMP AGENT, SAFETY LEAD',
                 'COMPETENCIAS QUE ENTRENA ESTE TEMA · AGENTE DE RAMPA')),
           ),

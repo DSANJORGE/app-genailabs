@@ -15,6 +15,12 @@ final testuLang = ValueNotifier<String>(client.lang);
 /// flutter gen-l10n when a third language or external translators arrive.
 String L(String en, String es) => testuLang.value == 'es' ? es : en;
 
+/// Client-aware bilingual string for the prototype (unwired) screens, whose
+/// sample copy is domain-specific: Minsur gets the mining wording, every
+/// other client the aviation wording. `CL(mEn, mEs, vEn, vEs)`.
+String CL(String mEn, String mEs, String vEn, String vEs) =>
+    client.name == 'Minsur' ? L(mEn, mEs) : L(vEn, vEs);
+
 /// The user's grammatical gender — Spanish copy that addresses the user
 /// must agree with it ("¿Cuán seguro estás?" vs "¿Cuán segura estás?").
 /// ponytail: fixed to the client's demo persona; wire to a profile

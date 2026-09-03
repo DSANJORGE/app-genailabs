@@ -46,7 +46,8 @@ class _Res {
 _Res _resource(String key) => switch (key) {
       'gom' => _Res(
           ic: 'PDF',
-          title: L('Ground Operations Manual', 'Manual de Operaciones en Tierra'),
+          title: CL('Human Rights Policy', 'Política de Derechos Humanos',
+              'Ground Operations Manual', 'Manual de Operaciones en Tierra'),
           meta: L('Pages: 122 of 305 · viewed 27 times · Required',
               'Páginas: 122 de 305 · visto 27 veces · Obligatorio'),
           sully: L(
@@ -99,7 +100,8 @@ _Res _resource(String key) => switch (key) {
         ),
       'vid' => _Res(
           ic: 'VID',
-          title: L('Turnaround walkthrough', 'Recorrido del turnaround'),
+          title: CL('Due diligence walkthrough', 'Recorrido de debida diligencia',
+              'Turnaround walkthrough', 'Recorrido del turnaround'),
           meta: L('Chapter 1 of 5 watched · viewed twice · Optional',
               'Capítulo 1 de 5 visto · visto dos veces · Opcional'),
           video: true,
@@ -146,7 +148,9 @@ _Res _resource(String key) => switch (key) {
         ),
       _ => _Res(
           ic: 'DOC',
-          title: L('Station notice 2026-14: chocking update',
+          title: CL('Compliance notice 2026-14: grievance channel update',
+              'Aviso de cumplimiento 2026-14: cambio en el canal de reclamos',
+              'Station notice 2026-14: chocking update',
               'Aviso de estación 2026-14: cambio de calzado'),
           meta: L('Pages: 0 of 2 · unread · effective Aug 1 · Required',
               'Páginas: 0 de 2 · sin leer · vigente desde el 1 ago · Obligatorio'),

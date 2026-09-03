@@ -455,7 +455,9 @@ class _Head extends StatelessWidget {
                 Text(
                   // No hand \n: the Spanish first half only just fits at
                   // 390pt — let the text wrap where it needs to.
-                  L('Ramp Agent · Safety Lead track · ${client.orgEn}',
+                  CL('Operations · Safety Lead track · ${client.orgEn}',
+                      'Operaciones · Vía Líder de Seguridad · ${client.orgEs}',
+                      'Ramp Agent · Safety Lead track · ${client.orgEn}',
                       'Agente de Rampa · Vía Líder de Seguridad · ${client.orgEs}'),
                   style: TextStyle(
                     fontFamily: 'Geist',

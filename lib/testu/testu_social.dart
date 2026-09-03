@@ -90,7 +90,7 @@ class _TestuThreadState extends State<TestuThread> {
         TestuComposer(
           hint: widget.composerHint,
           onSend: (text) => _mutate(() => widget.comments.add(
-              TestuComment('Ana R.', null, 'assets/img/p_ana.jpg', text))),
+              TestuComment('${client.persona} ${client.personaFull.split(' ').last[0]}.', null, client.personaAvatar, text))),
         ),
       ],
     );
@@ -119,7 +119,7 @@ class _TestuThreadState extends State<TestuThread> {
                       hint: L('Reply to $_replyName…', 'Responde a $_replyName…'),
                       onSend: (text) => _mutate(() {
                         c.replies.add(TestuComment(
-                            'Ana R.', null, 'assets/img/p_ana.jpg', text));
+                            '${client.persona} ${client.personaFull.split(' ').last[0]}.', null, client.personaAvatar, text));
                         _expanded.add(c);
                         _replyingTo = null;
                       }),
@@ -287,6 +287,44 @@ class _TestuThreadState extends State<TestuThread> {
 // ---------------------------------------------------------------------------
 
 List<TestuComment> _mockThread() {
+  if (client.name == 'Minsur') {
+    final lucia = TestuComment(
+        'Lucía M.',
+        null,
+        'assets/img/p_laia.jpg',
+        L('The part about who human rights apply to confused me — I thought it was only our own employees.',
+            'Me confundió a quiénes aplican los Derechos Humanos — pensaba que era solo a nuestros propios trabajadores.'),
+        reacts: {TestuReaction.like: 3, TestuReaction.support: 1});
+    lucia.replies.addAll([
+      TestuComment(
+          'Jorge P.',
+          'INSTRUCTOR',
+          'assets/img/p_jordi.jpg',
+          L('They apply to everyone equally: employees, contractors, visitors and neighbouring communities. The company relationship does not change the right.',
+              'Aplican a todas las personas por igual: propios, contratistas, visitantes y comunidades vecinas. El vínculo con la empresa no cambia el derecho.'),
+          reacts: {
+            TestuReaction.like: 7,
+            TestuReaction.idea: 3,
+            TestuReaction.applause: 1,
+          }),
+      TestuComment(
+          client.tutor,
+          L('AI TUTOR', 'TUTOR IA'),
+          client.tutorAvatar,
+          L('I attached the policy reference to this conversation for anyone who wants the source.',
+              'He añadido la referencia de la política a esta conversación para quien quiera la fuente.')),
+    ]);
+    return [
+      lucia,
+      TestuComment(
+          'Carlos V.',
+          null,
+          'assets/img/p_karsten.jpg',
+          L('Same at our site — I keep it simple: every person on the operation, no exceptions.',
+              'Igual en nuestra unidad — yo lo simplifico: toda persona en la operación, sin excepciones.'),
+          reacts: {TestuReaction.like: 2}),
+    ];
+  }
   final laia = TestuComment(
       'Laia M.',
       null,
@@ -694,23 +732,40 @@ class _TestuReactionsState extends State<TestuReactions> {
 void showTestuReactionsSheet(BuildContext context,
     {required Map<TestuReaction, int> reacts, TestuReaction? mine}) {
   HapticFeedback.selectionClick();
-  final roster = <(String, String)>[
-    ('Laia M.', L('Ramp ops · T1', 'Rampa · T1')),
-    ('Jordi P.', L('Instructor · Ground ops', 'Instructor · Ops en tierra')),
-    ('Karsten V.', L('Ramp ops · Outstations', 'Rampa · Escalas')),
-    ('Miranda J.', L('Load control', 'Control de carga')),
-    ('Pau G.', L('Ramp ops · T2', 'Rampa · T2')),
-    ('Nadia R.', L('Ramp ops · T1', 'Rampa · T1')),
-    ('Tomás E.', L('GSE maintenance', 'Mantenimiento GSE')),
-    ('Ewa K.', L('Ramp ops · Cargo', 'Rampa · Carga')),
-    ('Marc S.', L('Turnaround coordinator', 'Coordinación de turnaround')),
-    ('Iris B.', L('Ramp ops · T2', 'Rampa · T2')),
-    ('Olek W.', L('Ramp ops · Night shift', 'Rampa · Turno de noche')),
-  ];
+  final roster = client.name == 'Minsur'
+      ? <(String, String)>[
+          ('Lucía M.', L('Operations · Mine', 'Operaciones · Mina')),
+          ('Jorge P.', L('Supervisor · Plant', 'Supervisor · Planta')),
+          ('Carlos V.', L('Maintenance', 'Mantenimiento')),
+          ('Rosa J.', L('Geology', 'Geología')),
+          ('Pedro G.', L('Operations · Plant', 'Operaciones · Planta')),
+          ('Nadia R.', L('Safety & Health', 'Seguridad y Salud')),
+          ('Tomás E.', L('Environment', 'Medio Ambiente')),
+          ('Elena K.', L('Logistics', 'Logística')),
+          ('Marco S.', L('Shift coordinator', 'Coordinación de guardia')),
+          ('Sofía B.', L('Community relations', 'Relaciones comunitarias')),
+          ('Óscar W.', L('Operations · Night shift', 'Operaciones · Turno de noche')),
+        ]
+      : <(String, String)>[
+          ('Laia M.', L('Ramp ops · T1', 'Rampa · T1')),
+          ('Jordi P.', L('Instructor · Ground ops', 'Instructor · Ops en tierra')),
+          ('Karsten V.', L('Ramp ops · Outstations', 'Rampa · Escalas')),
+          ('Miranda J.', L('Load control', 'Control de carga')),
+          ('Pau G.', L('Ramp ops · T2', 'Rampa · T2')),
+          ('Nadia R.', L('Ramp ops · T1', 'Rampa · T1')),
+          ('Tomás E.', L('GSE maintenance', 'Mantenimiento GSE')),
+          ('Ewa K.', L('Ramp ops · Cargo', 'Rampa · Carga')),
+          ('Marc S.', L('Turnaround coordinator', 'Coordinación de turnaround')),
+          ('Iris B.', L('Ramp ops · T2', 'Rampa · T2')),
+          ('Olek W.', L('Ramp ops · Night shift', 'Rampa · Turno de noche')),
+        ];
+  final myRole = client.name == 'Minsur'
+      ? L('Operations · Mine', 'Operaciones · Mina')
+      : L('Ramp ops · T1', 'Rampa · T1');
   final sorted = reacts.entries.where((e) => e.value > 0).toList()
     ..sort((a, b) => b.value.compareTo(a.value));
   final rows = <(String who, String role, TestuReaction r, bool you)>[
-    if (mine != null) ('Ana R.', L('Ramp ops · T1', 'Rampa · T1'), mine, true),
+    if (mine != null) ('${client.persona} ${client.personaFull.split(' ').last[0]}.', myRole, mine, true),
   ];
   var i = 0;
   for (final e in sorted) {
