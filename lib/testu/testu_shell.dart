@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import 'testu_dashboard.dart';
 import 'testu_i18n.dart';
+import 'testu_live.dart';
 import 'testu_notifications.dart';
 import 'testu_profile.dart';
 import 'testu_schedule_sheet.dart';
@@ -451,7 +452,7 @@ class _DailyChallengeCard extends StatelessWidget {
   }
 }
 
-class _ContinueHero extends StatelessWidget {
+class _ContinueHero extends StatefulWidget {
   const _ContinueHero({required this.promoted});
 
   /// True once the evaluation is scheduled — the CTA handoff makes this the
@@ -459,25 +460,55 @@ class _ContinueHero extends StatelessWidget {
   final bool promoted;
 
   @override
+  State<_ContinueHero> createState() => _ContinueHeroState();
+}
+
+class _ContinueHeroState extends State<_ContinueHero> {
+  // The Today hero shows the same backend cover the Topics list does, and
+  // opens that topic's Home. One fetch; null in the offline demo, where the
+  // bundled placeholder and the prototype's Topic Home stand in.
+  late final Future<LiveTopicHead?> _head =
+      testuLive ? primaryLiveTopic() : Future.value(null);
+
+  @override
   Widget build(BuildContext context) {
     final t = TestuTokens.of(context);
-    return TestuPressable(
-      onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const TestuTopicHomeScreen())),
-      child: SizedBox(
-        height: 340,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              Image.asset(
-                client.name == 'Minsur'
-                    ? 'assets/img/mine_hero.jpg'
-                    : 'assets/img/ramp.jpg',
-                fit: BoxFit.cover,
-                alignment: const Alignment(0, 0.44), // center 72%
-              ),
+    return FutureBuilder<LiveTopicHead?>(
+      future: _head,
+      builder: (context, snap) {
+        final head = snap.data;
+        return TestuPressable(
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => head == null
+                  ? const TestuTopicHomeScreen()
+                  : TestuTopicHomeScreen(
+                      topicId: head.id,
+                      title: head.title,
+                      img: head.img,
+                      pill: head.pill,
+                      pillColor: head.pillColor,
+                      pillBorder: head.pillBorder,
+                    ))),
+          child: SizedBox(
+            height: 340,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  head == null
+                      ? Image.asset(
+                          client.name == 'Minsur'
+                              ? 'assets/img/mine_hero.jpg'
+                              : 'assets/img/ramp.jpg',
+                          fit: BoxFit.cover,
+                          alignment: const Alignment(0, 0.44), // center 72%
+                        )
+                      : Image(
+                          image: testuImage(head.img),
+                          fit: BoxFit.cover,
+                          alignment: const Alignment(0, 0.44),
+                        ),
               // Scrim length: "Actual" kept deliberately (variant test
               // 2026-08-31 — Corta/Mínima rejected).
               const DecoratedBox(
@@ -550,17 +581,19 @@ class _ContinueHero extends StatelessWidget {
                     // to white (one white CTA per screen).
                     TestuButton(
                         L('CONTINUE WITH YOUR TUTOR', 'CONTINUAR CON TU TUTOR'),
-                        variant: promoted
+                        variant: widget.promoted
                             ? TestuButtonVariant.primary
                             : TestuButtonVariant.onimg,
                         onTap: () => showTestuSession(context)),
                   ],
                 ),
               ),
-            ],
+                ],
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

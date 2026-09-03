@@ -131,6 +131,40 @@ const _imgs = ['ramp.jpg', 'chocks.jpg', 'radio.jpg', 'marshal.jpg',
 ImageProvider _topicImage(String img) =>
     testuImage(img.startsWith('http') ? img : 'assets/img/$img');
 
+/// The Today hero's slice of a live topic: cover URL plus the fields it
+/// needs to open the topic's Home. Public so [testu_shell] can render the
+/// same backend cover the Topics list shows.
+typedef LiveTopicHead = ({
+  String img,
+  String? id,
+  String title,
+  String pill,
+  Color pillColor,
+  Color pillBorder,
+});
+
+/// The primary live topic — the first that opens (has tutorials). Null when
+/// live topics are unavailable/empty, so the Today hero keeps its bundled
+/// placeholder. Its own fetch: the Topics list keeps a per-visit fetch so
+/// progress there stays fresh after a session.
+Future<LiveTopicHead?> primaryLiveTopic() async {
+  final live = await loadLiveTopics();
+  for (var i = 0; i < live.length; i++) {
+    final r = _mapTopic(live[i], i);
+    if (r.opens) {
+      return (
+        img: r.img,
+        id: r.id,
+        title: r.title,
+        pill: r.pill,
+        pillColor: r.pillColor,
+        pillBorder: r.pillBorder,
+      );
+    }
+  }
+  return null;
+}
+
 _Topic _mapTopic(Topic t, int i) {
   final (pill, color, border) = switch (t.progress.getEfficiency()) {
     Efficiency.beginner => (
