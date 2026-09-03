@@ -112,7 +112,7 @@ class _TutorHeader extends StatelessWidget {
     return Row(
       children: [
         ClipOval(
-          child: Image.asset('assets/img/sully.png',
+          child: Image.asset(client.tutorAvatar,
               width: 40, height: 40, fit: BoxFit.cover),
         ),
         const SizedBox(width: 12),

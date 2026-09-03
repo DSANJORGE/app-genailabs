@@ -83,7 +83,7 @@ class _SullyMessageState extends State<SullyMessage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ClipOval(
-            child: Image.asset('assets/img/sully.png',
+            child: Image.asset(client.tutorAvatar,
                 width: 26, height: 26, fit: BoxFit.cover),
           ),
           const SizedBox(width: 10),

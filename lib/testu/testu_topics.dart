@@ -687,7 +687,7 @@ List<TestuComment> _mockReviews() {
   karsten.replies.add(TestuComment(
       client.tutor,
       L('AI TUTOR', 'TUTOR IA'),
-      'assets/img/sully.png',
+      client.tutorAvatar,
       L('Logged — I passed the night-operations suggestion to the content team.',
           'Anotado — he pasado la sugerencia de operaciones nocturnas al equipo de contenido.')));
   return [
@@ -789,7 +789,7 @@ class _TopicHero extends StatelessWidget {
                 const SizedBox(height: 8),
                 Row(children: [
                   ClipOval(
-                    child: Image.asset('assets/img/sully.png',
+                    child: Image.asset(client.tutorAvatar,
                         width: 22, height: 22, fit: BoxFit.cover),
                   ),
                   const SizedBox(width: 8),

@@ -309,7 +309,7 @@ List<TestuComment> _mockThread() {
     TestuComment(
         client.tutor,
         L('AI TUTOR', 'TUTOR IA'),
-        'assets/img/sully.png',
+        client.tutorAvatar,
         L('I attached the manual citation (p. 12) to this conversation for anyone who wants the source.',
             'He añadido la cita del manual (p. 12) a esta conversación para quien quiera la fuente.')),
   ]);

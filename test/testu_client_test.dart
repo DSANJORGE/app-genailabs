@@ -11,15 +11,20 @@ void main() {
     expect(testuLive, isTrue);
   });
 
-  testWidgets('the launch intro spells the client wordmark in its brand colour',
+  testWidgets('the launch intro shows the client logo, or its wordmark in the brand colour',
       (tester) async {
     await tester.pumpWidget(MaterialApp(home: TestuSplash(onDone: () {})));
     await tester.pump(const Duration(milliseconds: 1500));
-    for (final ch in client.wordmark.split('')) {
-      expect(find.text(ch), findsWidgets);
+    if (client.logo != null) {
+      final img = tester.widget<Image>(find.byType(Image));
+      expect((img.image as AssetImage).assetName, client.logo);
+    } else {
+      for (final ch in client.wordmark.split('')) {
+        expect(find.text(ch), findsWidgets);
+      }
+      final letter = tester.widget<Text>(find.text(client.wordmark[0]).first);
+      expect(letter.style!.color, client.brand);
     }
-    final letter = tester.widget<Text>(find.text(client.wordmark[0]).first);
-    expect(letter.style!.color, client.brand);
     await tester.pumpWidget(const SizedBox());
   });
 }

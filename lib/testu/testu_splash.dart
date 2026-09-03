@@ -137,18 +137,27 @@ class _TestuSplashState extends State<TestuSplash>
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
                                   vertical: 10, horizontal: 16),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  for (var i = 0; i < word.length; i++)
-                                    _Letter(
-                                      word[i],
-                                      tracking: tracking,
-                                      t: _seg(120 + i * 80.0,
-                                          870 + i * 80.0, _letterCurve),
+                              child: client.logo != null
+                                  // A logo rises in as one piece, on the
+                                  // same beat the letters would take.
+                                  ? _Rise(
+                                      t: _seg(120, 1350, _letterCurve),
+                                      child: Image.asset(client.logo!,
+                                          width: 220,
+                                          filterQuality: FilterQuality.high),
+                                    )
+                                  : Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        for (var i = 0; i < word.length; i++)
+                                          _Letter(
+                                            word[i],
+                                            tracking: tracking,
+                                            t: _seg(120 + i * 80.0,
+                                                870 + i * 80.0, _letterCurve),
+                                          ),
+                                      ],
                                     ),
-                                ],
-                              ),
                             ),
                           ),
                           // Runway rule with landing-light tip.
@@ -244,6 +253,26 @@ class _TestuSplashState extends State<TestuSplash>
   }
 }
 
+/// The rise-in every wordmark piece shares: fades up from 52 px below while
+/// settling from 115% to 100%.
+class _Rise extends StatelessWidget {
+  const _Rise({required this.t, required this.child});
+
+  final double t;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: t,
+      child: Transform.translate(
+        offset: Offset(0, 52 * (1 - t)),
+        child: Transform.scale(scale: 1.15 - 0.15 * t, child: child),
+      ),
+    );
+  }
+}
+
 class _Letter extends StatelessWidget {
   const _Letter(this.char, {required this.tracking, required this.t});
 
@@ -255,22 +284,16 @@ class _Letter extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.only(right: tracking.clamp(0, 12)),
-      child: Opacity(
-        opacity: t,
-        child: Transform.translate(
-          offset: Offset(0, 52 * (1 - t)),
-          child: Transform.scale(
-            scale: 1.15 - 0.15 * t,
-            child: Text(
-              char,
-              style: TextStyle(
-                fontFamily: 'Sora',
-                fontWeight: FontWeight.w800,
-                fontSize: 46,
-                letterSpacing: tracking < 0 ? tracking : 0,
-                color: client.brand,
-              ),
-            ),
+      child: _Rise(
+        t: t,
+        child: Text(
+          char,
+          style: TextStyle(
+            fontFamily: 'Sora',
+            fontWeight: FontWeight.w800,
+            fontSize: 46,
+            letterSpacing: tracking < 0 ? tracking : 0,
+            color: client.brand,
           ),
         ),
       ),

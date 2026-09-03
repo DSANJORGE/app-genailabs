@@ -23,7 +23,8 @@ final testuAvatar = ValueNotifier<String>(_presetAvatars.first);
 /// these are the ones that can be removed again.
 final testuAvatarLibrary = ValueNotifier<List<String>>(const []);
 
-const _presetAvatars = [
+final _presetAvatars = [
+  client.personaAvatar,
   'assets/img/p_ana.jpg',
   'assets/img/p_laia.jpg',
   'assets/img/p_miranda.jpg',
