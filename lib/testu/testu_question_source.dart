@@ -1,6 +1,7 @@
 import 'package:flutter/painting.dart';
 
 import 'testu_i18n.dart';
+import 'testu_client.dart';
 
 /// Where session questions come from. The session screen only sees this
 /// seam, so a live EnterMedia-backed source can slot in later without
@@ -204,8 +205,8 @@ List<TestuQ> get _questions => [
     framing: [
       TextSpan(
           text: L(
-              'Sully picked this because your last answer showed uncertainty in ',
-              'Sully eligió esta porque tu última respuesta mostró dudas en ')),
+              '${client.tutor} picked this because your last answer showed uncertainty in ',
+              '${client.tutor} eligió esta porque tu última respuesta mostró dudas en ')),
       TextSpan(text: L('FOD reporting', 'notificación de FOD'), style: testuItal),
       TextSpan(
           text: L('. Before you answer — I’ve cued the video to ',

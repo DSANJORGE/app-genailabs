@@ -12,6 +12,7 @@ import 'testu_i18n.dart';
 import 'testu_lock.dart';
 import 'testu_theme.dart';
 import 'testu_widgets.dart';
+import 'testu_client.dart';
 
 /// Ana's chosen avatar — the Today header listens so the photo swap
 /// propagates, like the prototype's setAvatar() updating every .ana-ava.
@@ -159,10 +160,10 @@ class _TestuProfileScreenState extends State<TestuProfileScreen> {
               const _AvatarPicker(),
               const SizedBox(height: 10),
               _Note(
-                  L('Vueling allows personal photos on internal apps. Your '
+                  L('${client.name} allows personal photos on internal apps. Your '
                           'photo is visible to your team — never outside the '
                           'airline. Removing one here leaves it on your phone.',
-                      'Vueling permite fotos personales en apps internas. Tu '
+                      '${client.name} permite fotos personales en apps internas. Tu '
                           'foto es visible para tu equipo — nunca fuera de la '
                           'aerolínea. Quitar una aquí no la borra de tu '
                           'teléfono.'),
@@ -212,18 +213,18 @@ class _TestuProfileScreenState extends State<TestuProfileScreen> {
                 // tutor content in a language the UI is not in.
                 title: L('App & tutor language',
                     'Idioma de la app y del tutor'),
-                sub: L('Applies across TestU Learn, including Sully',
-                    'Se aplica en todo TestU Learn, incluido Sully'),
+                sub: L('Applies across TestU Learn, including ${client.tutor}',
+                    'Se aplica en todo TestU Learn, incluido ${client.tutor}'),
                 last: true,
                 trailing: _LangDropdown(
                     onChanged: (v) => setState(() => testuLang.value = v)),
               ),
             ]),
             _ProfCard(children: [
-              _H4(L('CALENDARS · SULLY USES THESE TO FIND QUIET SLOTS',
-                  'CALENDARIOS · SULLY LOS USA PARA ENCONTRAR HUECOS')),
+              _H4(L('CALENDARS · ${client.tutor.toUpperCase()} USES THESE TO FIND QUIET SLOTS',
+                  'CALENDARIOS · ${client.tutor.toUpperCase()} LOS USA PARA ENCONTRAR HUECOS')),
               _SetRow(
-                title: L('Vueling roster', 'Turnos Vueling'),
+                title: L('${client.name} roster', 'Turnos ${client.name}'),
                 sub: L('Shifts & briefings · required by your organisation',
                     'Turnos y briefings · requerido por tu organización'),
                 trailing: _GreenPill(L('Connected', 'Conectado')),
@@ -245,9 +246,9 @@ class _TestuProfileScreenState extends State<TestuProfileScreen> {
               ),
               _SetRow(
                 title: 'Outlook',
-                sub: L('Work · lets Sully avoid meetings when proposing '
+                sub: L('Work · lets ${client.tutor} avoid meetings when proposing '
                         'evaluations',
-                    'Trabajo · permite a Sully evitar reuniones al proponer '
+                    'Trabajo · permite a ${client.tutor} evitar reuniones al proponer '
                         'evaluaciones'),
                 last: true,
                 trailing: _outlookConnected
@@ -279,28 +280,28 @@ class _TestuProfileScreenState extends State<TestuProfileScreen> {
               ),
               const SizedBox(height: 8),
               _Note(
-                  L('Sully only reads free/busy times — never event contents.',
-                      'Sully solo lee horas libres/ocupadas — nunca el contenido de los eventos.'),
+                  L('${client.tutor} only reads free/busy times — never event contents.',
+                      '${client.tutor} solo lee horas libres/ocupadas — nunca el contenido de los eventos.'),
                   t: t),
             ]),
             _ProfCard(children: [
               _H4(L('NOTIFICATIONS', 'NOTIFICACIONES')),
               _SetRow(
                 title: L('Certification deadlines', 'Plazos de certificación'),
-                sub: L('Required by Vueling — cannot be turned off',
-                    'Requerido por Vueling — no se puede desactivar'),
+                sub: L('Required by ${client.name} — cannot be turned off',
+                    'Requerido por ${client.name} — no se puede desactivar'),
                 trailing:
                     const Opacity(opacity: 0.55, child: _Toggle(on: true)),
               ),
               _SetRow(
                 title: L('Daily Challenge reminder',
                     'Recordatorio del Reto Diario'),
-                sub: L('“Hey, this is Sully…” · 08:00',
-                    '«Hola, soy Sully…» · 08:00'),
+                sub: L('“Hey, this is ${client.tutor}…” · 08:00',
+                    '«Hola, soy ${client.tutor}…» · 08:00'),
                 trailing: _tgl('daily'),
               ),
               _SetRow(
-                title: L('Sully nudges', 'Avisos de Sully'),
+                title: L('${client.tutor} nudges', 'Avisos de ${client.tutor}'),
                 sub: L('When a topic drifts to “At risk”',
                     'Cuando un tema pasa a «En riesgo»'),
                 trailing: _tgl('nudges'),
@@ -325,10 +326,10 @@ class _TestuProfileScreenState extends State<TestuProfileScreen> {
             _ProfCard(children: [
               _H4(L('PRIVACY', 'PRIVACIDAD')),
               Text(
-                L('Your conversations with Sully are private to you. Your '
+                L('Your conversations with ${client.tutor} are private to you. Your '
                         'managers see readiness signals and certification '
                         'status — never your chats, never individual answers.',
-                    'Tus conversaciones con Sully son privadas. Tus '
+                    'Tus conversaciones con ${client.tutor} son privadas. Tus '
                         'responsables ven señales de preparación y estado de '
                         'certificación — nunca tus chats, nunca respuestas '
                         'individuales.'),
@@ -440,7 +441,7 @@ class _Head extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Ana Ruiz',
+                  client.personaFull,
                   style: TextStyle(
                     fontFamily: 'Sora',
                     fontWeight: FontWeight.w700,
@@ -453,10 +454,8 @@ class _Head extends StatelessWidget {
                 Text(
                   // No hand \n: the Spanish first half only just fits at
                   // 390pt — let the text wrap where it needs to.
-                  L('Ramp Agent · Safety Lead track · '
-                          'Vueling Ground Operations · BCN',
-                      'Agente de Rampa · Vía Líder de Seguridad · '
-                          'Vueling Operaciones en Tierra · BCN'),
+                  L('Ramp Agent · Safety Lead track · ${client.orgEn}',
+                      'Agente de Rampa · Vía Líder de Seguridad · ${client.orgEs}'),
                   style: TextStyle(
                     fontFamily: 'Geist',
                     fontSize: 11,

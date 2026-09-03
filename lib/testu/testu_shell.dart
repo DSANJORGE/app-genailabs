@@ -13,6 +13,7 @@ import 'testu_theme.dart';
 import 'testu_topics.dart';
 import 'testu_tutor.dart';
 import 'testu_widgets.dart';
+import 'testu_client.dart';
 
 /// TestU Learn shell: four-tab surface with the pinned translucent bottom nav
 /// (spec: screens artifact — Today · Topics · Tutor · Dashboard).
@@ -35,7 +36,7 @@ class _TestuShellState extends State<TestuShell> {
         // The tab wears the org tutor's name (Vueling → Sully): it opens
         // Sully's orchestrator — the general tutor that routes questions to
         // the topic-expert Sullys who answer inside topic/question contexts.
-        'SULLY',
+        client.tutor.toUpperCase(),
         L('DASHBOARD', 'DASHBOARD'),
       ];
 
@@ -284,8 +285,8 @@ class _TodayHeader extends StatelessWidget {
                 child: Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(
-                    L('Friday, August 29 · Vueling Ground Operations · BCN',
-                        'Viernes, 29 de agosto · Vueling Operaciones en Tierra · BCN'),
+                    L('Friday, August 29 · ${client.orgEn}',
+                        'Viernes, 29 de agosto · ${client.orgEs}'),
                     style: kCardBody,
                   ),
                 ),
@@ -321,9 +322,9 @@ class _TodayHeader extends StatelessWidget {
               style: kH1,
               children: [
                 TextSpan(
-                    text: L('Good morning, Ana.\nHere’s what ',
-                        'Buenos días, Ana.\nEsto es lo que ')),
-                TextSpan(text: 'Sully', style: TextStyle(color: t.orange)),
+                    text: L('Good morning, ${client.persona}.\nHere’s what ',
+                        'Buenos días, ${client.persona}.\nEsto es lo que ')),
+                TextSpan(text: client.tutor, style: TextStyle(color: t.orange)),
                 TextSpan(
                     text: L(' recommends today.', ' te recomienda hoy.')),
               ],
@@ -342,7 +343,7 @@ class _TodayHeader extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      L('SULLY · YOUR TUTOR', 'SULLY · TU TUTOR'),
+                      L('${client.tutor.toUpperCase()} · YOUR TUTOR', '${client.tutor.toUpperCase()} · TU TUTOR'),
                       style: TextStyle(
                         fontFamily: 'GeistMono',
                         fontSize: 9,
@@ -392,8 +393,8 @@ class _CertificationCard extends StatelessWidget {
               'Tu certificado de Seguridad en Rampa caduca en 12 días')),
           const SizedBox(height: 4),
           _CardBody(L(
-              'Sully says: complete the renewal evaluation this week to keep your readiness status stable.',
-              'Sully dice: completa la evaluación de renovación esta semana para mantener estable tu preparación.')),
+              '${client.tutor} says: complete the renewal evaluation this week to keep your readiness status stable.',
+              '${client.tutor} dice: completa la evaluación de renovación esta semana para mantener estable tu preparación.')),
           const SizedBox(height: 12),
           scheduled == null
               ? TestuAct(L('Schedule evaluation', 'Programar evaluación'),
@@ -439,7 +440,7 @@ class _DailyChallengeCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          TestuAct(L('Continue with Sully', 'Continuar con Sully'),
+          TestuAct(L('Continue with ${client.tutor}', 'Continuar con ${client.tutor}'),
               onTap: () => showTestuSession(context)),
         ],
       ),
@@ -572,8 +573,8 @@ class _RiskNote extends StatelessWidget {
               color: const Color(0xFFD08B8B)),
           const SizedBox(height: 7),
           _CardBody(L(
-              'Radio Communication needs reinforcement. Sully recommends a 10-minute session today.',
-              'Comunicación por Radio necesita refuerzo. Sully recomienda una sesión de 10 minutos hoy.')),
+              'Radio Communication needs reinforcement. ${client.tutor} recommends a 10-minute session today.',
+              'Comunicación por Radio necesita refuerzo. ${client.tutor} recomienda una sesión de 10 minutos hoy.')),
           const SizedBox(height: 10),
           TestuAct(L('Start training', 'Empezar a entrenar'),
               onTap: () => showTestuSession(context)),

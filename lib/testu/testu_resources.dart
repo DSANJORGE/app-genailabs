@@ -8,6 +8,7 @@ import 'testu_pdf.dart';
 import 'testu_sully.dart';
 import 'testu_theme.dart';
 import 'testu_widgets.dart';
+import 'testu_client.dart';
 
 // ---------------------------------------------------------------------------
 // Resource sheets (spec: prototype v6 openRes) — each resource opens a chat
@@ -303,8 +304,8 @@ class _ResSheetState extends State<_ResSheet> {
   Widget _composer(EdgeInsets padding) => Padding(
         padding: padding,
         child: TestuComposer(
-          hint: L('Ask Sully about this source…',
-              'Pregunta a Sully sobre esta fuente…'),
+          hint: L('Ask ${client.tutor} about this source…',
+              'Pregunta a ${client.tutor} sobre esta fuente…'),
           onSend: _send,
         ),
       );

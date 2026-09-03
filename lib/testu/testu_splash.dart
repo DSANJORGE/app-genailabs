@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
+import 'testu_client.dart';
 import 'testu_i18n.dart';
 
-/// Cinematic launch intro (spec: prototype v6 .splash) — breathing gold glow,
-/// "vueling" letters rise in as tracking tightens, a shine sweeps the
+/// Cinematic launch intro (spec: prototype v6 .splash) — breathing glow in
+/// the client's brand colour, its wordmark's letters rise in as tracking
+/// tightens, a shine sweeps the
 /// wordmark, the rule draws like a runway with a landing light at its tip,
 /// then the whole thing lifts off. Tap to skip; auto-dismisses at 4.2 s.
 class TestuSplash extends StatefulWidget {
@@ -72,7 +74,7 @@ class _TestuSplashState extends State<TestuSplash>
 
   @override
   Widget build(BuildContext context) {
-    const word = 'vueling';
+    final word = client.wordmark;
     return Material(
       type: MaterialType.transparency,
       child: GestureDetector(
@@ -110,11 +112,14 @@ class _TestuSplashState extends State<TestuSplash>
                             child: Container(
                               width: 340,
                               height: 340,
-                              decoration: const BoxDecoration(
+                              decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 gradient: RadialGradient(
-                                  colors: [Color(0x1FFFCC00), Color(0x00FFCC00)],
-                                  stops: [0.0, 0.62],
+                                  colors: [
+                                    client.brand.withAlpha(0x1F),
+                                    client.brand.withAlpha(0),
+                                  ],
+                                  stops: const [0.0, 0.62],
                                 ),
                               ),
                             ),
@@ -171,12 +176,13 @@ class _TestuSplashState extends State<TestuSplash>
                                         child: Container(
                                           width: 6,
                                           height: 6,
-                                          decoration: const BoxDecoration(
+                                          decoration: BoxDecoration(
                                             shape: BoxShape.circle,
-                                            color: Color(0xFFFFCC00),
+                                            color: client.brand,
                                             boxShadow: [
                                               BoxShadow(
-                                                  color: Color(0x90FFCC00),
+                                                  color: client.brand
+                                                      .withAlpha(0x90),
                                                   blurRadius: 14,
                                                   spreadRadius: 3),
                                             ],
@@ -208,10 +214,10 @@ class _TestuSplashState extends State<TestuSplash>
                                 offset: Offset(0, 10 * (1 - hi)),
                                 child: Text(
                                   widget.welcomeBack
-                                      ? L('Ana, welcome back.',
-                                          'Ana, ${G('bienvenido', 'bienvenida')} de nuevo.')
-                                      : L('Ana, welcome.',
-                                          'Ana, ${G('bienvenido', 'bienvenida')}.'),
+                                      ? L('${client.persona}, welcome back.',
+                                          '${client.persona}, ${G('bienvenido', 'bienvenida')} de nuevo.')
+                                      : L('${client.persona}, welcome.',
+                                          '${client.persona}, ${G('bienvenido', 'bienvenida')}.'),
                                   style: const TextStyle(
                                     fontFamily: 'Sora',
                                     fontWeight: FontWeight.w700,
@@ -262,7 +268,7 @@ class _Letter extends StatelessWidget {
                 fontWeight: FontWeight.w800,
                 fontSize: 46,
                 letterSpacing: tracking < 0 ? tracking : 0,
-                color: const Color(0xFFFFCC00),
+                color: client.brand,
               ),
             ),
           ),

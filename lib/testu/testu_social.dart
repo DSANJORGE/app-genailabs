@@ -6,6 +6,7 @@ import 'testu_icons.dart';
 import 'testu_report_sheet.dart';
 import 'testu_theme.dart';
 import 'testu_widgets.dart';
+import 'testu_client.dart';
 
 /// Comment threads — THE one conversation surface for social learning.
 /// Question threads and topic reviews share it (full alignment rule: vote,
@@ -306,7 +307,7 @@ List<TestuComment> _mockThread() {
           TestuReaction.applause: 1,
         }),
     TestuComment(
-        'Sully',
+        client.tutor,
         L('AI TUTOR', 'TUTOR IA'),
         'assets/img/sully.png',
         L('I attached the manual citation (p. 12) to this conversation for anyone who wants the source.',

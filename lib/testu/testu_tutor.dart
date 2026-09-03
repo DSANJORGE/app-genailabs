@@ -5,6 +5,7 @@ import 'testu_session.dart';
 import 'testu_sully.dart';
 import 'testu_theme.dart';
 import 'testu_widgets.dart';
+import 'testu_client.dart';
 
 /// Tutor tab — Sully's standalone chat (spec: Sully on every screen; this is
 /// where you talk to him outside a session). One white element: the
@@ -76,9 +77,9 @@ class _TestuTutorScreenState extends State<TestuTutorScreen> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4),
                 child: Text(
-                  L('Private to you. Sully’s answers always cite their sources. '
+                  L('Private to you. ${client.tutor}’s answers always cite their sources. '
                           'Your managers see readiness signals — never this conversation.',
-                      'Privado para ti. Las respuestas de Sully siempre citan sus fuentes. '
+                      'Privado para ti. Las respuestas de ${client.tutor} siempre citan sus fuentes. '
                           'Tus responsables ven señales de preparación — nunca esta conversación.'),
                   style: TextStyle(
                     fontFamily: 'Geist',
@@ -121,7 +122,7 @@ class _TutorHeader extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Sully',
+              client.tutor,
               style: TextStyle(
                 fontFamily: 'Sora',
                 fontWeight: FontWeight.w700,
@@ -131,8 +132,8 @@ class _TutorHeader extends StatelessWidget {
               ),
             ),
             Text(
-              L('Your tutor · Vueling Ground Operations',
-                  'Tu tutor · Vueling Operaciones en Tierra'),
+              L('Your tutor · ${client.name} Ground Operations',
+                  'Tu tutor · ${client.name} Operaciones en Tierra'),
               style: kLabel,
             ),
           ],
@@ -147,9 +148,9 @@ Widget _greeting(BuildContext context, VoidCallback onCalibration) {
     delay: 0,
     spans: [
       TextSpan(
-          text: L('Hello Ana. Yesterday a misconception surfaced '
+          text: L('Hello ${client.persona}. Yesterday a misconception surfaced '
                   'on ',
-              'Hola, Ana. Ayer apareció un concepto erróneo '
+              'Hola, ${client.persona}. Ayer apareció un concepto erróneo '
                   'sobre ')),
       TextSpan(
         text: L('chock timing', 'el momento de calzar'),
@@ -240,7 +241,7 @@ class _AskBar extends StatelessWidget {
       // House composer in facade mode — same pill as the session chat.
       // ponytail: becomes a live input once Sully talks to the backend.
       child: TestuComposer(
-        hint: L('Ask Sully anything…', 'Pregunta a Sully lo que quieras…'),
+        hint: L('Ask ${client.tutor} anything…', 'Pregunta a ${client.tutor} lo que quieras…'),
         onTap: _noop,
       ),
     );

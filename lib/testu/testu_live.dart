@@ -11,13 +11,16 @@ import 'package:eme_app_package/services/workspace_service.dart';
 import 'package:flutter/painting.dart';
 import 'package:openinsitute_core/openinsitute_core.dart';
 
+import 'testu_client.dart';
 import 'testu_i18n.dart';
 import 'testu_question_source.dart';
 
-/// Live mode: `flutter run --dart-define=TESTU_LIVE=true`. Default false =
-/// the offline demo, byte-for-byte. Single home for the flag; the session
-/// and topics screens both read it from here.
-const bool testuLive = bool.fromEnvironment('TESTU_LIVE');
+/// Live mode: on for the minsur client (the default), off for vueling =
+/// the offline demo, byte-for-byte. `--dart-define=TESTU_LIVE=true|false`
+/// overrides either way. Single home for the flag; the session and topics
+/// screens both read it from here.
+const bool testuLive = bool.fromEnvironment('TESTU_LIVE',
+    defaultValue: testuClientId == 'minsur');
 
 /// The eMe server live mode talks to: the local eme-server-minsur checkout
 /// (`eme-server-minsur/`, Tomcat on :8080). Point a build elsewhere with

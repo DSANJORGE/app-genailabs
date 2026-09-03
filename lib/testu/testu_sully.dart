@@ -5,8 +5,9 @@ import 'package:flutter/material.dart';
 import 'testu_i18n.dart';
 import 'testu_pdf.dart';
 import 'testu_theme.dart';
+import 'testu_client.dart';
 
-/// Sully chat bubble, shared by every screen: 26px avatar, mono 'SULLY'
+/// Sully chat bubble, shared by every screen: 26px avatar, mono client.tutor.toUpperCase()
 /// label, 13.5px body. Shows typing dots for [delay] ms before revealing the
 /// message (0 = immediate), with optional [extra] widget and [sourceLine]
 /// citation below the text.
@@ -97,7 +98,7 @@ class _SullyMessageState extends State<SullyMessage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'SULLY',
+                  client.tutor.toUpperCase(),
                   style: TextStyle(
                     fontFamily: 'GeistMono',
                     fontSize: 9,

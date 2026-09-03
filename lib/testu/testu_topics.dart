@@ -10,6 +10,7 @@ import 'testu_session.dart';
 import 'testu_social.dart';
 import 'testu_theme.dart';
 import 'testu_widgets.dart';
+import 'testu_client.dart';
 
 // ---------------------------------------------------------------------------
 // Topics tab — role topic list (spec: prototype v6 scr-topics).
@@ -46,16 +47,16 @@ class TestuTopicsScreen extends StatelessWidget {
     (img: 'radio.jpg',
      title: L('Radio Communication & Phraseology',
          'Comunicación por Radio y Fraseología'),
-     sub: L('Sully recommends 10 min today',
-         'Sully recomienda 10 min hoy'),
+     sub: L('${client.tutor} recommends 10 min today',
+         '${client.tutor} recomienda 10 min hoy'),
      pill: L('Competent · At risk', 'Competente · En riesgo'),
      pillColor: const Color(0xFFD9A23F),
      pillBorder: const Color(0xFF7A5C1E), opens: false, id: null),
     (img: 'marshal.jpg',
      title: L('Ground Guidance & Marshalling',
          'Guiado en Tierra y Señalización'),
-     sub: L('Sully suggests Learn Mode this week',
-         'Sully sugiere Modo Aprender esta semana'),
+     sub: L('${client.tutor} suggests Learn Mode this week',
+         '${client.tutor} sugiere Modo Aprender esta semana'),
      pill: L('Beginner · Needs practice', 'Principiante · Necesita práctica'),
      pillColor: const Color(0xFFD08B8B),
      pillBorder: const Color(0xFF6E3535), opens: false, id: null),
@@ -684,7 +685,7 @@ List<TestuComment> _mockReviews() {
           'Sugiero añadir una variante nocturna para el posicionamiento de GSE.'),
       reacts: {TestuReaction.like: 1, TestuReaction.idea: 1});
   karsten.replies.add(TestuComment(
-      'Sully',
+      client.tutor,
       L('AI TUTOR', 'TUTOR IA'),
       'assets/img/sully.png',
       L('Logged — I passed the night-operations suggestion to the content team.',
@@ -793,8 +794,8 @@ class _TopicHero extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                      L('With Sully · 36 questions · 5 subtopics',
-                          'Con Sully · 36 preguntas · 5 subtemas'),
+                      L('With ${client.tutor} · 36 questions · 5 subtopics',
+                          'Con ${client.tutor} · 36 preguntas · 5 subtemas'),
                       style: const TextStyle(
                           fontFamily: 'Geist',
                           fontSize: 12,
@@ -941,9 +942,9 @@ class _CompetenciesCard extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
             child: Text(
               L('Every question here also records evidence against the '
-                      'behaviors Vueling expects from your role.',
+                      'behaviors ${client.name} expects from your role.',
                   'Cada pregunta también registra evidencia sobre las '
-                      'conductas que Vueling espera de tu rol.'),
+                      'conductas que ${client.name} espera de tu rol.'),
               style: TextStyle(
                   fontFamily: 'Geist',
                   fontSize: 10.5,

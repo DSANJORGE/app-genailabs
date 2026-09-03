@@ -6,6 +6,7 @@ import 'testu_icons.dart';
 import 'testu_sully.dart';
 import 'testu_theme.dart';
 import 'testu_widgets.dart';
+import 'testu_client.dart';
 
 const _pages = 11; // assets/docs/pages/p-NN.jpg — rendered FAA AC 00-34A
 const _pageAspect = 1284 / 1667;
@@ -262,8 +263,8 @@ class _PdfSheetState extends State<_PdfSheet> {
   // Sully rides along inside the open source too (app-wide
   // continuous-tutor rule) — live input, see _send.
   Widget _composer() => TestuComposer(
-        hint: L('Ask Sully about this document…',
-            'Pregunta a Sully sobre este documento…'),
+        hint: L('Ask ${client.tutor} about this document…',
+            'Pregunta a ${client.tutor} sobre este documento…'),
         onSend: _send,
       );
 }

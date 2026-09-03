@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'testu_i18n.dart';
 import 'testu_theme.dart';
 import 'testu_widgets.dart';
+import 'testu_client.dart';
 
 /// Dashboard tab — "Your readiness". Mastery as labels, never bare numbers;
 /// every signal explainable. No white CTA here: the dashboard reports, the
@@ -52,7 +53,7 @@ class TestuDashboardScreen extends StatelessWidget {
                       L('Competent · Review soon', 'Competente · Repasar pronto'),
                       color: t.gold, borderColor: const Color(0xFF8A7A3A))),
               _MastRow(L('Radio Communication', 'Comunicación por Radio'),
-                  L('Sully recommends 10 min today', 'Sully recomienda 10 min hoy'),
+                  L('${client.tutor} recommends 10 min today', '${client.tutor} recomienda 10 min hoy'),
                   TestuPill(L('Competent · At risk', 'Competente · En riesgo'),
                       color: t.amber, borderColor: const Color(0xFF7A5C1E))),
             ],
@@ -83,8 +84,8 @@ class TestuDashboardScreen extends StatelessWidget {
                       borderColor: const Color(0xFF6E3535))),
             ],
             note: L(
-                'Behaviors are what Vueling expects from your role. Every benchmark answer records evidence toward them.',
-                'Las conductas son lo que Vueling espera de tu rol. Cada respuesta de referencia registra evidencia hacia ellas.'),
+                'Behaviors are what ${client.name} expects from your role. Every benchmark answer records evidence toward them.',
+                'Las conductas son lo que ${client.name} espera de tu rol. Cada respuesta de referencia registra evidencia hacia ellas.'),
           ),
           const SizedBox(height: 12),
           const _CertCard(),

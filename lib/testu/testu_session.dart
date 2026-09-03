@@ -18,6 +18,7 @@ import 'testu_shell.dart';
 import 'testu_sully.dart';
 import 'testu_theme.dart';
 import 'testu_widgets.dart';
+import 'testu_client.dart';
 
 /// Every "start a session" CTA in the app lands here. [topicId] is the live
 /// topic to draw questions from; null means the first one.
@@ -191,12 +192,12 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
       _sullyTimeout?.cancel();
       _sullyTimeout = Timer(const Duration(seconds: 90), () {
         if (_waitingSully) {
-          sullySays(L('Sully is taking longer than usual. Try again in a moment.',
-              'Sully está tardando más de lo normal. Inténtalo de nuevo en un momento.'));
+          sullySays(L('${client.tutor} is taking longer than usual. Try again in a moment.',
+              '${client.tutor} está tardando más de lo normal. Inténtalo de nuevo en un momento.'));
         }
       });
       askSully(q, text).catchError((_) => sullySays(
-          L('Sully could not be reached.', 'No se pudo contactar a Sully.')));
+          L('${client.tutor} could not be reached.', 'No se pudo contactar a ${client.tutor}.')));
     } else {
       setState(() => _chat.add((
         _controller.transcript.length,
@@ -637,8 +638,8 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
                     // the tutor ask bar.
                     child: TestuComposer(
                       controller: _input,
-                      hint: L('Ask Sully anything\u2026',
-                          'Pregunta a Sully lo que quieras\u2026'),
+                      hint: L('Ask ${client.tutor} anything\u2026',
+                          'Pregunta a ${client.tutor} lo que quieras\u2026'),
                       onSend: (_) => _sendTyped(),
                     ),
                   ),
@@ -1532,7 +1533,7 @@ Future<void> _showConfAck(BuildContext context,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'SULLY',
+                        client.tutor.toUpperCase(),
                         style: TextStyle(
                           fontFamily: 'GeistMono',
                           fontSize: 9,
@@ -1641,8 +1642,8 @@ class TestuDebriefScreen extends StatelessWidget {
                 color: t.orange),
             const SizedBox(height: 10),
             Text(
-              L('Here’s what today’s session means, Ana.',
-                  'Esto es lo que significa la sesión de hoy, Ana.'),
+              L('Here’s what today’s session means, ${client.persona}.',
+                  'Esto es lo que significa la sesión de hoy, ${client.persona}.'),
               style: kH1,
             ),
             const SizedBox(height: 20),

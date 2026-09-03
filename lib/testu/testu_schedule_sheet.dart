@@ -5,6 +5,7 @@ import 'testu_i18n.dart';
 import 'testu_sully.dart';
 import 'testu_theme.dart';
 import 'testu_widgets.dart';
+import 'testu_client.dart';
 
 /// Schedule-evaluation bottom sheet (spec: overlays table — Sully roster
 /// message, 2-week mini calendar, slot chips, canned Q&A, white CONFIRM
@@ -116,13 +117,13 @@ class _ScheduleSheetBodyState extends State<_ScheduleSheetBody> {
                 'CERTIFICACIÓN · EVALUACIÓN DE RENOVACIÓN'),
             color: t.amber),
         const SizedBox(height: 6),
-        _SheetTitle(L('Schedule with Sully', 'Programa con Sully')),
+        _SheetTitle(L('Schedule with ${client.tutor}', 'Programa con ${client.tutor}')),
         const SizedBox(height: 14),
         SullyMessage.text(L(
-            'I checked your roster and calendar, Ana. The evaluation takes '
+            'I checked your roster and calendar, ${client.persona}. The evaluation takes '
                 'about 25 minutes and needs a quiet slot. Here’s where you’re '
                 'clear before the deadline:',
-            'He revisado tu turno y tu calendario, Ana. La evaluación dura '
+            'He revisado tu turno y tu calendario, ${client.persona}. La evaluación dura '
                 'unos 25 minutos y necesita un hueco tranquilo. Aquí es donde '
                 'estás libre antes de la fecha límite:')),
         const SizedBox(height: 14),
@@ -186,8 +187,8 @@ class _ScheduleSheetBodyState extends State<_ScheduleSheetBody> {
             borderRadius: BorderRadius.circular(999),
           ),
           child: Text(
-            L('Ask Sully for a different time…',
-                'Pide a Sully otra hora…'),
+            L('Ask ${client.tutor} for a different time…',
+                'Pide a ${client.tutor} otra hora…'),
             style: TextStyle(
                 fontFamily: 'Geist', fontSize: 12.5, color: t.faint),
           ),
@@ -424,8 +425,8 @@ class _SuccessView extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 18),
-          _SheetTitle(L('Locked in. Quiet high-five, Ana.',
-              'Apuntado. Choca esos cinco en silencio, Ana.')),
+          _SheetTitle(L('Locked in. Quiet high-five, ${client.persona}.',
+              'Apuntado. Choca esos cinco en silencio, ${client.persona}.')),
           const SizedBox(height: 8),
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 290),
