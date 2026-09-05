@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'testu_i18n.dart';
 import 'testu_icons.dart';
+import 'testu_live.dart';
 import 'testu_sully.dart';
 import 'testu_theme.dart';
 import 'testu_widgets.dart';
@@ -10,29 +13,46 @@ import 'testu_client.dart';
 
 const _pages = 11; // assets/docs/pages/p-NN.jpg — rendered FAA AC 00-34A
 const _pageAspect = 1284 / 1667;
+const _a4 = 1 / 1.414; // live documents: server-rendered PDF pages
 
-/// In-app source viewer: bottom sheet of pre-rendered PDF pages, opened
-/// scrolled to the cited page. Blue "Open source" links land here.
-void showTestuPdf(BuildContext context, {int page = 1, String? cite}) {
+/// In-app source viewer: bottom sheet of rendered PDF pages, opened scrolled
+/// to the cited page. Blue "Open source" links land here. [doc] = a live
+/// reference document from the server; null = the offline demo's FAA manual.
+void showTestuPdf(BuildContext context,
+    {int page = 1, String? cite, LiveDoc? doc}) {
   HapticFeedback.selectionClick();
-  final sub = (cite ??
-          L('Aircraft Ground Handling and Servicing',
-              'Manipulación y Servicio de Aeronaves en Tierra'))
-      .replaceFirst(RegExp(r'^FAA AC 00-34A\s*·\s*'), '');
+  // Live: a citation whose title matches no loaded document still opens a
+  // server document, not the offline demo's aviation manual.
+  doc ??= testuLive ? liveDocs.values.firstOrNull : null;
+  final sub = doc != null
+      ? L('Reference document', 'Documento de referencia')
+      : (cite ??
+              CL('Human Rights Policy', 'Política de Derechos Humanos',
+                  'Aircraft Ground Handling and Servicing',
+                  'Manipulación y Servicio de Aeronaves en Tierra'))
+          .replaceFirst(RegExp(r'^FAA AC 00-34A\s*·\s*'), '');
   showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     barrierColor: const Color(0xA8000000),
-    builder: (_) => _PdfSheet(page: page, sub: '$sub · p. $page'),
+    builder: (_) => _PdfSheet(page: page, sub: '$sub · p. $page', doc: doc),
   );
 }
 
 class _PdfSheet extends StatefulWidget {
-  const _PdfSheet({required this.page, required this.sub});
+  const _PdfSheet({required this.page, required this.sub, this.doc});
 
   final int page;
   final String sub;
+  final LiveDoc? doc;
+
+  String get title => doc?.title ?? 'FAA AC 00-34A';
+  int get pages => doc?.pages ?? _pages;
+  double get aspect => doc == null ? _pageAspect : _a4;
+  String src(int page) =>
+      doc?.pageUrl(page) ??
+      'assets/docs/pages/p-${page.toString().padLeft(2, '0')}.jpg';
 
   @override
   State<_PdfSheet> createState() => _PdfSheetState();
@@ -42,6 +62,9 @@ class _PdfSheetState extends State<_PdfSheet> {
   final _scroll = ScrollController();
   final _chat = <Widget>[];
   final _chatScroll = ScrollController();
+  StreamSubscription<String>? _sub;
+  bool _waiting = false;
+  Timer? _timeout;
 
   // Real rendered width of the page column (set by _pageList's
   // LayoutBuilder during the first build) — the sheet is width-capped and
@@ -54,25 +77,51 @@ class _PdfSheetState extends State<_PdfSheet> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scroll.hasClients) return;
       final pageW = _pageListW - 24;
-      final off = (widget.page - 1) * (pageW / _pageAspect + 10);
+      final off = (widget.page - 1) * (pageW / widget.aspect + 10);
       _scroll.jumpTo(off.clamp(0, _scroll.position.maxScrollExtent));
     });
   }
 
   @override
   void dispose() {
+    _sub?.cancel();
+    _timeout?.cancel();
     _scroll.dispose();
     _chatScroll.dispose();
     super.dispose();
   }
 
   /// Free text lands in a chat strip above the composer — the document
-  /// never leaves view (continuous-tutor rule). ponytail: canned reply
-  /// until the topic-expert backend answers with page context for real.
+  /// never leaves view (continuous-tutor rule). Live: the tutor answers
+  /// over the socket, citing this document's pages. Offline: canned reply.
   void _send(String text) {
-    setState(() {
-      _chat.add(TestuYouMsg(text: text));
-      _chat.add(SullyMessage.text(
+    setState(() => _chat.add(TestuYouMsg(text: text)));
+    if (widget.doc != null) {
+      // One reply per question: the tutor's answer, the agent error the
+      // server posts instead (already worded as "not available"), the
+      // send failure, or the 90 s timeout — whichever comes first.
+      void says(String s) {
+        if (!mounted || !_waiting) return;
+        _timeout?.cancel();
+        setState(() {
+          _waiting = false;
+          _chat.add(SullyMessage.reply(s,
+              bottomPadding: 12,
+              fallbackTitle: widget.doc!.title,
+              fallbackPage: widget.page));
+        });
+        _down();
+      }
+
+      _sub ??= sullyReplies().listen(says);
+      setState(() => _waiting = true);
+      _timeout?.cancel();
+      _timeout = Timer(const Duration(seconds: 90), () {
+        if (_waiting) says(sullySlowReply());
+      });
+      askSullyFree(text).catchError((_) => says(sullyUnavailable()));
+    } else {
+      setState(() => _chat.add(SullyMessage.text(
           L(
               "I'm on p. ${widget.page} with you — the section your question "
                   'cited. The rule on this page: chocks only after engines '
@@ -82,8 +131,12 @@ class _PdfSheetState extends State<_PdfSheet> {
                   'motores apagados y luces anticolisión apagadas.'),
           delay: 850,
           sourceLine: 'FAA AC 00-34A',
-          bottomPadding: 12));
-    });
+          bottomPadding: 12)));
+    }
+    _down();
+  }
+
+  void _down() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_chatScroll.hasClients) {
         _chatScroll.animateTo(_chatScroll.position.maxScrollExtent,
@@ -147,7 +200,9 @@ class _PdfSheetState extends State<_PdfSheet> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'FAA AC 00-34A',
+                        widget.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontFamily: 'Sora',
                           fontWeight: FontWeight.w700,
@@ -247,8 +302,13 @@ class _PdfSheetState extends State<_PdfSheet> {
           child: ListView.builder(
             controller: _scroll,
             padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-            itemCount: _pages,
-            itemBuilder: (context, i) => _Page(index: i + 1),
+            itemCount: widget.pages,
+            itemBuilder: (context, i) => _Page(
+                index: i + 1,
+                pages: widget.pages,
+                aspect: widget.aspect,
+                title: widget.title,
+                src: widget.src(i + 1)),
           ),
         );
       });
@@ -270,12 +330,18 @@ class _PdfSheetState extends State<_PdfSheet> {
 }
 
 class _Page extends StatelessWidget {
-  const _Page({required this.index});
+  const _Page(
+      {required this.index,
+      required this.pages,
+      required this.aspect,
+      required this.title,
+      required this.src});
 
   final int index;
-
-  String get _asset =>
-      'assets/docs/pages/p-${index.toString().padLeft(2, '0')}.jpg';
+  final int pages;
+  final double aspect;
+  final String title;
+  final String src;
 
   @override
   Widget build(BuildContext context) {
@@ -294,10 +360,10 @@ class _Page extends StatelessWidget {
         child: Stack(
           children: [
             AspectRatio(
-              aspectRatio: _pageAspect,
+              aspectRatio: aspect,
               child: Container(
                 color: const Color(0xFFF2F1EC),
-                child: Image.asset(_asset, fit: BoxFit.cover),
+                child: Image(image: testuImage(src), fit: BoxFit.contain),
               ),
             ),
             Positioned(
@@ -314,7 +380,7 @@ class _Page extends StatelessWidget {
                 // taps to zoom, but a hidden gesture isn't an "option").
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
                   Text(
-                    'p. $index / $_pages',
+                    'p. $index / $pages',
                     style: const TextStyle(
                       fontFamily: 'GeistMono',
                       fontSize: 9,
@@ -334,7 +400,7 @@ class _Page extends StatelessWidget {
   }
 
   void _zoom(BuildContext context) =>
-      showTestuZoom(context, asset: _asset, label: 'FAA AC 00-34A · p. $index');
+      showTestuZoom(context, asset: src, label: '$title · p. $index');
 }
 
 /// Full-screen pinch-zoom lightbox — PDF pages and question media share it.

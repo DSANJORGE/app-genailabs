@@ -163,10 +163,10 @@ class _TestuProfileScreenState extends State<TestuProfileScreen> {
               _Note(
                   L('${client.name} allows personal photos on internal apps. Your '
                           'photo is visible to your team — never outside the '
-                          'airline. Removing one here leaves it on your phone.',
+                          'company. Removing one here leaves it on your phone.',
                       '${client.name} permite fotos personales en apps internas. Tu '
                           'foto es visible para tu equipo — nunca fuera de la '
-                          'aerolínea. Quitar una aquí no la borra de tu '
+                          'empresa. Quitar una aquí no la borra de tu '
                           'teléfono.'),
                   t: t),
             ]),
@@ -357,7 +357,7 @@ class _TestuProfileScreenState extends State<TestuProfileScreen> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'TESTU LEARN · VUELING · DEMO BUILD',
+                    'TESTU LEARN · ${client.name.toUpperCase()} · DEMO BUILD',
                     style: TextStyle(
                       fontFamily: 'GeistMono',
                       fontSize: 9.5,

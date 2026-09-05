@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 
 import 'testu_i18n.dart';
 import 'testu_icons.dart';
+import 'testu_live.dart';
 import 'testu_pdf.dart';
 import 'testu_sully.dart';
 import 'testu_theme.dart';
@@ -210,10 +213,46 @@ void showTestuResource(BuildContext context, String key) {
   );
 }
 
+/// A live reference video (server document with an mp4 and authored
+/// chapters): the same sheet as the demo's video resource, player cued at
+/// the start, the tutor answering free text over the socket.
+void showTestuVideo(BuildContext context, LiveDoc doc) {
+  HapticFeedback.selectionClick();
+  final n = doc.chapters.length;
+  showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    barrierColor: const Color(0xA8000000),
+    builder: (_) => _ResSheet(
+      doc: doc,
+      res: _Res(
+        ic: 'VID',
+        title: doc.title,
+        meta: L('$n chapters · reference video',
+            '$n capítulos · video de referencia'),
+        sully: L(
+            'This is the reference video for the topic, in $n chapters. Jump '
+                'to any chapter with the timestamps, or ask me about what you '
+                'watched.',
+            'Este es el video de referencia del tema, en $n capítulos. Salta '
+                'a cualquier capítulo con los tiempos, o pregúntame sobre lo '
+                'que viste.'),
+        live: '',
+        chips: const [],
+        video: true,
+      ),
+    ),
+  );
+}
+
 class _ResSheet extends StatefulWidget {
-  const _ResSheet({required this.res});
+  const _ResSheet({required this.res, this.doc});
 
   final _Res res;
+
+  /// Live document behind the sheet (null = prototype resource).
+  final LiveDoc? doc;
 
   @override
   State<_ResSheet> createState() => _ResSheetState();
@@ -223,6 +262,7 @@ class _ResSheetState extends State<_ResSheet> {
   final List<Widget> _chat = [];
   final Set<int> _used = {};
   final _scroll = ScrollController();
+  StreamSubscription<String>? _sub;
 
   @override
   void initState() {
@@ -232,6 +272,7 @@ class _ResSheetState extends State<_ResSheet> {
 
   @override
   void dispose() {
+    _sub?.cancel();
     _scroll.dispose();
     super.dispose();
   }
@@ -262,11 +303,25 @@ class _ResSheetState extends State<_ResSheet> {
   }
 
   void _send(String text) {
-    setState(() {
-      _chat.add(TestuYouMsg(text: text));
-      _chat.add(SullyMessage.text(widget.res.live,
-          delay: 850, sourceLine: widget.res.title, bottomPadding: 12));
-    });
+    setState(() => _chat.add(TestuYouMsg(text: text)));
+    if (widget.doc != null) {
+      // Live: the tutor answers over the socket (same path as the PDF sheet).
+      _sub ??= sullyReplies().listen((s) {
+        if (!mounted) return;
+        setState(() => _chat.add(SullyMessage.reply(s,
+            bottomPadding: 12, fallbackTitle: widget.doc!.title)));
+        _autoScroll();
+      });
+      askSullyFree(text).catchError((_) {
+        if (mounted) {
+          setState(() => _chat.add(
+              SullyMessage.text(sullyUnavailable(), bottomPadding: 12)));
+        }
+      });
+    } else {
+      setState(() => _chat.add(SullyMessage.text(widget.res.live,
+          delay: 850, sourceLine: widget.res.title, bottomPadding: 12)));
+    }
     _autoScroll();
   }
 
@@ -396,9 +451,9 @@ class _ResSheetState extends State<_ResSheet> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Player pinned; only its chapter list scrolls.
-                    const Expanded(
+                    Expanded(
                       flex: 5,
-                      child: _MiniPlayer(pinned: true),
+                      child: _MiniPlayer(pinned: true, doc: widget.doc),
                     ),
                     const SizedBox(width: 16),
                     Expanded(
@@ -416,9 +471,9 @@ class _ResSheetState extends State<_ResSheet> {
             )
           else ...[
             if (res.video)
-              const Padding(
-                padding: EdgeInsets.fromLTRB(18, 14, 18, 0),
-                child: _MiniPlayer(),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 14, 18, 0),
+                child: _MiniPlayer(doc: widget.doc),
               ),
             Flexible(
                 child: _chatList(const EdgeInsets.fromLTRB(18, 14, 18, 0))),
@@ -468,7 +523,11 @@ class _ChipBtn extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _MiniPlayer extends StatefulWidget {
-  const _MiniPlayer({this.pinned = false});
+  const _MiniPlayer({this.pinned = false, this.doc});
+
+  /// Live reference video (server mp4 + authored chapters); null = the
+  /// prototype's turnaround clip.
+  final LiveDoc? doc;
 
   /// Landscape pane: the card is height-bounded — video, progress and
   /// footer stay put while the chapter list scrolls on its own. Unpinned
@@ -491,7 +550,7 @@ class _MiniPlayerState extends State<_MiniPlayer> {
 
   /// Index of the chapter the playhead is in (pre-ready: the cue point).
   int get _currentCh {
-    final pos = _ready ? _ctrl.value.position : _chapters[2].at;
+    final pos = _ready ? _ctrl.value.position : _cue;
     var idx = 0;
     for (final (i, c) in _chapters.indexed) {
       if (pos >= c.at) idx = i;
@@ -502,11 +561,13 @@ class _MiniPlayerState extends State<_MiniPlayer> {
   @override
   void initState() {
     super.initState();
-    _ctrl = VideoPlayerController.asset('assets/video/turnaround.mp4')
+    _ctrl = (widget.doc != null
+        ? VideoPlayerController.networkUrl(Uri.parse(widget.doc!.videoUrl))
+        : VideoPlayerController.asset('assets/video/turnaround.mp4'))
       ..initialize().then((_) async {
-        // Sully's copy promises the player is cued to where Ana stopped —
-        // Arrival & stand check watched → start of Hold preparation (0:32).
-        await _ctrl.seekTo(_chapters[2].at);
+        // Sully's copy promises the demo player is cued to where Ana stopped
+        // — Arrival & stand check watched → start of Hold preparation (0:32).
+        await _ctrl.seekTo(_cue);
         if (mounted) setState(() => _ready = true);
       });
     _ctrl.addListener(_onTick);
@@ -514,7 +575,10 @@ class _MiniPlayerState extends State<_MiniPlayer> {
 
   /// The approved v6 chapter list, verbatim — timestamps are real seek
   /// targets, matching Sully's "jump to any chapter with the timestamps".
-  List<({Duration at, String name})> get _chapters => [
+  Duration get _cue => widget.doc == null ? _chapters[2].at : Duration.zero;
+
+  List<({Duration at, String name})> get _chapters => widget.doc?.chapters ??
+      [
         (at: Duration.zero, name: L('Intro', 'Introducción')),
         (at: const Duration(seconds: 15),
          name: L('Arrival & stand check', 'Llegada y revisión del stand')),
@@ -849,8 +913,9 @@ class _MiniPlayerState extends State<_MiniPlayer> {
               border: Border(top: BorderSide(color: t.line)),
             ),
             child: Text(
-              L('Turnaround groundhandling, Frankfurt — demo footage · CC BY-SA Lufthansa Cargo',
-                  'Handling de turnaround, Fráncfort — metraje de demo · CC BY-SA Lufthansa Cargo'),
+              widget.doc?.credit ??
+                  L('Turnaround groundhandling, Frankfurt — demo footage · CC BY-SA Lufthansa Cargo',
+                      'Handling de turnaround, Fráncfort — metraje de demo · CC BY-SA Lufthansa Cargo'),
               style: kCaption,
             ),
           ),

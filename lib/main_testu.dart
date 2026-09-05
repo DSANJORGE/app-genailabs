@@ -60,6 +60,10 @@ class _TestuAppState extends State<TestuApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     TestuAuth.onSessionEnded = () {
       if (mounted) {
+        // A session can end under a pushed screen (Topic Home, a session
+        // sheet) when the server rejects the token; those must not stay
+        // stacked over the sign-in screen.
+        _nav.currentState?.popUntil((r) => r.isFirst);
         setState(() {
           _signedIn = false;
           _locked = false;

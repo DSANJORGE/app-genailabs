@@ -274,6 +274,9 @@ class TestuHairline extends StatelessWidget {
         alignment: Alignment.centerLeft,
         child: FractionallySizedBox(
           widthFactor: fraction.clamp(0.0, 1.0),
+          // heightFactor: the fill has no child, so without a tight height
+          // it collapses to 0px and the track shows empty.
+          heightFactor: 1,
           child: ColoredBox(color: t.orange),
         ),
       ),

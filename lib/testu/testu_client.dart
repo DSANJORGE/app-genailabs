@@ -25,6 +25,8 @@ class TestuClient {
     required this.gender,
     required this.orgEn,
     required this.orgEs,
+    required this.askEn,
+    required this.askEs,
   });
 
   /// "Vueling" — the company as written in copy.
@@ -58,6 +60,12 @@ class TestuClient {
   /// Organisation line under the persona ("Vueling Ground Operations · BCN").
   final String orgEn;
   final String orgEs;
+
+  /// Canned question on the tutor tab, sent to the tutor as if typed. Must be
+  /// something the client's live tutorial actually covers, or the model
+  /// rightly says it has nothing on it.
+  final String askEn;
+  final String askEs;
 }
 
 const _vueling = TestuClient(
@@ -73,16 +81,19 @@ const _vueling = TestuClient(
   gender: 'm',
   orgEn: 'Vueling Ground Operations · BCN',
   orgEs: 'Vueling Operaciones en Tierra · BCN',
+  askEn: 'Explain the FOD walk again',
+  askEs: 'Explícame otra vez la inspección FOD',
 );
 
-// Iris: Integrity, Respect, Innovation, Sustainability. Her personality text
+// IRIS: Integrity, Respect, Innovation, Sustainability — an acronym, so the
+// name is uppercase everywhere (Diego, 2026-09-03). Her personality text
 // lives on the server (tutorpersona record), not in the app.
 const _minsur = TestuClient(
   name: 'Minsur',
   wordmark: 'minsur',
   logo: 'assets/img/minsur_logo.png',
   brand: Color(0xFF7291B0),
-  tutor: 'Iris',
+  tutor: 'IRIS',
   tutorAvatar: 'assets/img/iris.png',
   lang: 'es',
   persona: 'Diego',
@@ -91,4 +102,7 @@ const _minsur = TestuClient(
   gender: 'm',
   orgEn: 'Minsur · Lima',
   orgEs: 'Minsur · Lima',
+  // Section 1.1 of the DDHH tutorial (universality, inalienability, dignity).
+  askEn: 'Explain again why human rights are inalienable',
+  askEs: 'Explícame otra vez por qué los derechos humanos son inalienables',
 );

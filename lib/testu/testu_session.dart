@@ -21,10 +21,16 @@ import 'testu_widgets.dart';
 import 'testu_client.dart';
 
 /// Every "start a session" CTA in the app lands here. [topicId] is the live
-/// topic to draw questions from; null means the first one.
-void showTestuSession(BuildContext context, {String? topicId}) {
-  Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => TestuSessionScreen(topicId: topicId)));
+/// topic to draw questions from; null means the first one. [sectionId]
+/// starts the session on that section's questions (the tutor tab's
+/// "Review it now" on the weakest section); the rest follow in order.
+/// Completes when the session screen is popped, so a caller can refresh
+/// what the answers changed.
+Future<void> showTestuSession(BuildContext context,
+    {String? topicId, String? sectionId}) {
+  return Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) =>
+          TestuSessionScreen(topicId: topicId, sectionId: sectionId)));
 }
 
 // Show-once-ever: the first confidence tap explains that tapping submits.
@@ -59,9 +65,10 @@ const _bold = TextStyle(fontWeight: FontWeight.w700);
 /// Learn Mode session — a chat with Sully. Confidence tap IS the submit;
 /// the debrief follows the last question.
 class TestuSessionScreen extends StatefulWidget {
-  const TestuSessionScreen({super.key, this.topicId});
+  const TestuSessionScreen({super.key, this.topicId, this.sectionId});
 
   final String? topicId;
+  final String? sectionId;
 
   @override
   State<TestuSessionScreen> createState() => _TestuSessionScreenState();
@@ -88,7 +95,7 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
   /// Adapter picked by the compile-time flag; falls back to local if the
   /// live load fails, so it is not final.
   late TestuQuestionSource _source = testuLive
-      ? EmeQuestionSource(topicId: widget.topicId)
+      ? EmeQuestionSource(topicId: widget.topicId, sectionId: widget.sectionId)
       : LocalQuestionSource();
   List<TestuQ> _qs = const [];
   bool _loading = true;
@@ -152,6 +159,81 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
     super.dispose();
   }
 
+  /// Bottom dock: the composer once the current question is answered, and
+  /// "Continuar →" beside it while the end-of-question offer is pending.
+  /// Before the confidence tap there is nothing to ask yet, so no composer;
+  /// leaving early is the header ✕ only (approved 2026-09-03). Null = no
+  /// dock. Continue appends the next Framing synchronously, so the pill
+  /// vanishes on its own — no local "taken" flag.
+  Widget? _dock() {
+    final last = _controller.transcript.lastOrNull;
+    if (last == null || last is Framing || last is Prompt || last is HintNote) {
+      return null;
+    }
+    final t = TestuTokens.of(context);
+    return Row(
+      children: [
+        Expanded(
+          // House composer — same module as thread replies and the tutor
+          // ask bar.
+          child: TestuComposer(
+            controller: _input,
+            hint: L('Ask ${client.tutor} anything\u2026',
+                'Pregunta a ${client.tutor} lo que quieras\u2026'),
+            onSend: (_) => _sendTyped(),
+          ),
+        ),
+        if (last is ContinueOffer) ...[
+          const SizedBox(width: 8),
+          TestuPressable(
+            onTap: _controller.continueSession,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(vertical: 12, horizontal: 18),
+              decoration: BoxDecoration(
+                color: t.primaryAction,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                L('Continue →', 'Continuar →'),
+                style: TextStyle(
+                  fontFamily: 'Geist',
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  letterSpacing: 0.65,
+                  color: t.onPrimaryAction,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// The learner's submitted attempt on [q], if any — Sully gets it with a
+  /// follow-up so it can answer with the chosen option and confidence.
+  Attempt? _attemptFor(TestuQ q) {
+    final qi = _qs.indexOf(q);
+    for (final e in _controller.transcript.reversed) {
+      if (e is Verdict && e.attempt.qi == qi) return e.attempt;
+    }
+    return null;
+  }
+
+  /// Hint: authored copy when the question has one; live questions carry
+  /// none, so Sully is asked for one instead (still marks the attempt
+  /// assisted).
+  void _hint(TestuQ q) {
+    _controller.markHintUsed();
+    if (q.hint == null) {
+      _sendChat(
+          L('Give me a hint without revealing the answer.',
+              'Dame una pista sin revelar la respuesta.'),
+          q: q);
+    }
+  }
+
   /// The question the free-text chat is about — the latest one on screen.
   TestuQ? get _chatQ {
     for (final e in _controller.transcript.reversed) {
@@ -173,10 +255,16 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
   void _sendChat(String text, {TestuQ? q, String? offlineAnswer}) {
     q ??= _chatQ;
     setState(() => _chat.add((_controller.transcript.length, true, text)));
+    // Chatting wins over "keep the framing in view": otherwise a hint
+    // reply lands below the fold and the auto-scroll snaps back up.
+    _anchor = null;
     _scrollDown();
     if (q != null && canAskSully(q)) {
       void sullySays(String s) {
-        if (!mounted) return;
+        // Only the reply to an open question: the server also posts its
+        // own feedback after `chat_tutor_answer`, and the local verdict
+        // already covers that.
+        if (!mounted || !_waitingSully) return;
         _sullyTimeout?.cancel();
         setState(() {
           _waitingSully = false;
@@ -191,20 +279,15 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
       // the answer may never come (minsur, 2026-09-02) — don't spin forever.
       _sullyTimeout?.cancel();
       _sullyTimeout = Timer(const Duration(seconds: 90), () {
-        if (_waitingSully) {
-          sullySays(L('${client.tutor} is taking longer than usual. Try again in a moment.',
-              '${client.tutor} está tardando más de lo normal. Inténtalo de nuevo en un momento.'));
-        }
+        if (_waitingSully) sullySays(sullySlowReply());
       });
-      askSully(q, text).catchError((_) => sullySays(
-          L('${client.tutor} could not be reached.', 'No se pudo contactar a ${client.tutor}.')));
+      askSully(q, text, attempt: _attemptFor(q))
+          .catchError((_) => sullySays(sullyUnavailable()));
     } else {
       setState(() => _chat.add((
         _controller.transcript.length,
         false,
-        offlineAnswer ??
-            L('In this demo I can only answer the suggested questions — in the live app, ask me anything about the material.',
-                'En esta demo solo puedo responder las preguntas sugeridas — en la app real, pregúntame lo que quieras sobre el material.')
+        offlineAnswer ?? sullyDemoReply()
       )));
       _scrollDown();
     }
@@ -319,11 +402,10 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
       Prompt p => _questionCard(qs[p.qi]),
       HintNote h => _hintBubble(qs[h.qi]),
       Verdict v => _verdictBubble(qs[v.attempt.qi], v.attempt),
-      ContinueOffer o => _ContinueWrap(
-          last: o.last,
-          onContinue: _controller.continueSession,
-          onStop: _controller.requestStop,
-        ),
+      // Rendered in the dock (bottom of screen), not at its transcript
+      // position: a chat with Sully after the verdict must never scroll
+      // "Continuar" out of reach (approved 2026-09-03).
+      ContinueOffer _ => const SizedBox.shrink(),
       StopChallenge s => _stopChallengeBubble(s.remaining),
       StopFarewell _ => _farewellBubble(),
     };
@@ -372,7 +454,7 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
   Widget _questionCard(TestuQ q) => _QuestionCard(
         q: q,
         onGrew: _scrollDown,
-        onHint: _controller.markHintUsed,
+        onHint: () => _hint(q),
         needsConfAck: () => _controller.needsConfAck,
         onConfGate: _confGate,
         onSubmit: (chosen, conf) {
@@ -417,7 +499,9 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
               text: L(
                   'I can give you a hint. This will mark the attempt as assisted, so it will count less toward mastery.\n\n',
                   'Puedo darte una pista. Esto marcará el intento como asistido, así que contará menos para tu dominio.\n\n')),
-          TextSpan(text: q.hint, style: _ital),
+          // Live questions carry no authored hint: Sully's reply follows as a
+          // chat bubble instead.
+          if (q.hint != null) TextSpan(text: q.hint, style: _ital),
         ],
       );
 
@@ -496,7 +580,8 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
                 'Are you sure you want to stop here? You have only $qword to go in this block — finishing it is what moves ',
                 '¿${G('Seguro', 'Segura')} que quieres parar aquí? Te quedan solo $qword en este bloque — terminarlo es lo que saca ')),
         TextSpan(
-            text: L('Aircraft arrival & chocking', 'Llegada y calzado'),
+            text: CL('Due diligence', 'Debida diligencia',
+                'Aircraft arrival & chocking', 'Llegada y calzado'),
             style: _ital),
         TextSpan(
             text: L(
@@ -531,6 +616,7 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
   Widget build(BuildContext context) {
     final t = TestuTokens.of(context);
     final bottomInset = MediaQuery.paddingOf(context).bottom;
+    final dock = _dock();
     return Scaffold(
       backgroundColor: t.bg,
       body: Column(
@@ -595,7 +681,8 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
               children: [
                 ListView(
                   controller: _scroll,
-                  padding: const EdgeInsets.fromLTRB(18, 14, 18, 130),
+                  padding:
+                      EdgeInsets.fromLTRB(18, 14, 18, dock == null ? 40 : 130),
                   children: [
                     // ponytail: the loading state is Sully typing — a delay
                     // longer than any fetch, so the dots never resolve; the
@@ -620,30 +707,25 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
                           delay: 600000),
                   ],
                 ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: Container(
-                    padding: EdgeInsets.fromLTRB(16, 26, 16, bottomInset + 22),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        stops: const [0.0, 0.45],
-                        colors: [t.bg.withValues(alpha: 0), t.bg],
+                if (dock != null)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      padding:
+                          EdgeInsets.fromLTRB(16, 26, 16, bottomInset + 22),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          stops: const [0.0, 0.35],
+                          colors: [t.bg.withValues(alpha: 0), t.bg],
+                        ),
                       ),
-                    ),
-                    // House composer — same module as thread replies and
-                    // the tutor ask bar.
-                    child: TestuComposer(
-                      controller: _input,
-                      hint: L('Ask ${client.tutor} anything\u2026',
-                          'Pregunta a ${client.tutor} lo que quieras\u2026'),
-                      onSend: (_) => _sendTyped(),
+                      child: dock,
                     ),
                   ),
-                ),
               ],
             ),
           ),
@@ -973,8 +1055,8 @@ class _QuestionCardState extends State<_QuestionCard> {
                       onTap: () => _pickOption(i),
                     ),
                   ),
-                // No hint authored (live questions carry none) — don't offer one.
-                if (!_locked && q.hint != null)
+                // Authored hint, or a live question Sully can be asked for one.
+                if (!_locked && (q.hint != null || canAskSully(q)))
                   TestuPressable(
                     onTap: widget.onHint,
                     child: Padding(
@@ -1387,8 +1469,8 @@ class _VerdictExtrasState extends State<_VerdictExtras> {
                   alignment: PlaceholderAlignment.baseline,
                   baseline: TextBaseline.alphabetic,
                   child: GestureDetector(
-                    onTap: () =>
-                        showTestuPdf(context, page: q.page!, cite: q.cite),
+                    onTap: () => showTestuPdf(context,
+                        page: q.page!, cite: q.cite, doc: liveDocs[q.cite]),
                     child: Text(
                       L('Open source', 'Abrir fuente'),
                       style: TextStyle(
@@ -1441,62 +1523,6 @@ class _VerdictExtrasState extends State<_VerdictExtras> {
 
   TextStyle _evBold(TestuTokens t) =>
       TextStyle(fontWeight: FontWeight.w600, color: t.mut);
-}
-
-/// Continue / Stop here — vanishes once a choice is made.
-class _ContinueWrap extends StatefulWidget {
-  const _ContinueWrap({
-    required this.last,
-    required this.onContinue,
-    required this.onStop,
-  });
-
-  final bool last;
-  final VoidCallback onContinue;
-  final VoidCallback onStop;
-
-  @override
-  State<_ContinueWrap> createState() => _ContinueWrapState();
-}
-
-class _ContinueWrapState extends State<_ContinueWrap> {
-  bool _gone = false;
-
-  void _pick(VoidCallback next) {
-    setState(() => _gone = true);
-    next();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_gone) return const SizedBox.shrink();
-    return _Rise(
-      child: Padding(
-        padding: const EdgeInsets.only(top: 6, bottom: 18),
-        // IntrinsicHeight: keeps both button outlines the same height if a
-        // label ever wraps (same failure the confidence bar had).
-        child: IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                child: TestuButton(L('Continue', 'Continuar'),
-                    variant: TestuButtonVariant.primary,
-                    onTap: () => _pick(widget.onContinue)),
-              ),
-              if (!widget.last) ...[
-                const SizedBox(width: 9),
-                Expanded(
-                  child: TestuButton(L('Stop here', 'Parar aquí'),
-                      onTap: () => _pick(widget.onStop)),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 /// First confidence tap: the tap-submits rule, from Sully, once ever.
@@ -1554,7 +1580,9 @@ Future<void> _showConfAck(BuildContext context,
                                   'en cuanto toques un nivel, tu respuesta queda enviada'),
                               style: _bold),
                           TextSpan(
-                              text: L(
+                              text: CL(
+                                  ' — there’s no changing it afterwards. Your confidence is part of the answer, so decide it like you would on site.',
+                                  ' — no se puede cambiar después. Tu confianza es parte de la respuesta, así que decídela como lo harías en la mina.',
                                   ' — there’s no changing it afterwards. Your confidence is part of the answer, so decide it like you would on the ramp.',
                                   ' — no se puede cambiar después. Tu confianza es parte de la respuesta, así que decídela como lo harías en la rampa.')),
                         ]),

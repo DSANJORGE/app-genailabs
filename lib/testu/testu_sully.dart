@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'testu_i18n.dart';
+import 'testu_live.dart';
 import 'testu_pdf.dart';
 import 'testu_theme.dart';
 import 'testu_client.dart';
@@ -19,7 +20,9 @@ class SullyMessage extends StatefulWidget {
     this.delay = 850,
     this.onGrew,
     this.sourceLine,
+    this.sourcePage = 1,
     this.bottomPadding = 0,
+    this.avatar = true,
   });
 
   /// Plain-string convenience; no typing delay unless asked for.
@@ -29,9 +32,49 @@ class SullyMessage extends StatefulWidget {
     this.delay = 0,
     this.sourceLine,
     this.bottomPadding = 0,
+    this.avatar = true,
   })  : spans = [TextSpan(text: text)],
+        sourcePage = 1,
         extra = null,
         onGrew = null;
+
+  /// A live tutor reply: its trailing `[Title, p. N]` citation (the
+  /// server's reference-excerpt format) becomes the source line, opening
+  /// that document at that page. Inside a document, an uncited reply still
+  /// names that document ([fallbackTitle], at [fallbackPage]): the tutor
+  /// always shows its source, as in the session.
+  SullyMessage.reply(String reply,
+      {Key? key,
+      double bottomPadding = 0,
+      bool avatar = true,
+      String? fallbackTitle,
+      int fallbackPage = 1})
+      : this._cite(_withFallback(splitCite(reply), fallbackTitle, fallbackPage),
+            key: key, bottomPadding: bottomPadding, avatar: avatar);
+
+  static ({String text, String? title, int page}) _withFallback(
+          ({String text, String? title, int page}) c,
+          String? title,
+          int page) =>
+      c.title != null || title == null
+          ? c
+          : (text: c.text, title: title, page: page);
+
+  SullyMessage._cite(({String text, String? title, int page}) c,
+      {super.key, this.bottomPadding = 0, this.avatar = true})
+      : spans = [TextSpan(text: c.text)],
+        sourceLine = c.title,
+        sourcePage = c.page,
+        delay = 0,
+        extra = null,
+        onGrew = null;
+
+  /// Page the source link opens (live citations only).
+  final int sourcePage;
+
+  /// False = name kicker only, no face — for screens whose header already
+  /// carries the tutor's avatar (the tutor tab).
+  final bool avatar;
 
   final List<InlineSpan> spans;
   final Widget? extra;
@@ -82,11 +125,13 @@ class _SullyMessageState extends State<SullyMessage> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ClipOval(
-            child: Image.asset(client.tutorAvatar,
-                width: 26, height: 26, fit: BoxFit.cover),
-          ),
-          const SizedBox(width: 10),
+          if (widget.avatar) ...[
+            ClipOval(
+              child: Image.asset(client.tutorAvatar,
+                  width: 26, height: 26, fit: BoxFit.cover),
+            ),
+            const SizedBox(width: 10),
+          ],
           Expanded(
             // Readable measure: on a landscape phone an unbounded bubble runs
             // 120+ characters per line; every Sully surface shares this cap.
@@ -131,7 +176,9 @@ class _SullyMessageState extends State<SullyMessage> {
                           baseline: TextBaseline.alphabetic,
                           child: GestureDetector(
                             onTap: () => showTestuPdf(context,
-                                page: 1, cite: widget.sourceLine),
+                                page: widget.sourcePage,
+                                cite: widget.sourceLine,
+                                doc: liveDocs[widget.sourceLine]),
                             child: Text(
                               L('Open source', 'Abrir fuente'),
                               style: TextStyle(
@@ -161,6 +208,27 @@ class _SullyMessageState extends State<SullyMessage> {
     );
   }
 }
+
+/// Fallback lines every live chat surface (session, tutor tab) says in the
+/// tutor's voice when the backend is off, slow, or unreachable.
+String sullyDemoReply() => L(
+    'In this demo I can only answer the suggested questions — in the live app, ask me anything about the material.',
+    'En esta demo solo puedo responder las preguntas sugeridas — en la app real, pregúntame lo que quieras sobre el material.');
+String sullySlowReply() => L(
+    '${client.tutor} is taking longer than usual. Try again in a moment.',
+    '${client.tutor} está tardando más de lo normal. Inténtalo de nuevo en un momento.');
+String sullyUnavailable() => L(
+    '${client.tutor} is not available right now.',
+    '${client.tutor} no está disponible ahora mismo.');
+
+/// True for what the server posts on the channel when the agent fails
+/// instead of answering: the exception text (`org.openedit.OpenEditException:
+/// OpenAI error: HTTP/1.1 502 Bad Gateway`) or its rendered
+/// "Error on AI Agent" notice. Every chat surface shows [sullyUnavailable]
+/// for these rather than the raw error.
+bool isSullyError(String reply) => _sullyError.hasMatch(reply);
+final _sullyError =
+    RegExp(r'Error on AI Agent|OpenEditException|OpenAI error|Exception: ');
 
 /// Typing indicator shown while a message is pending.
 class _TypingDots extends StatefulWidget {

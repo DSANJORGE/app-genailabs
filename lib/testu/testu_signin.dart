@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'testu_auth.dart';
+import 'testu_client.dart';
 import 'testu_i18n.dart';
 import 'testu_lock.dart';
 import 'testu_theme.dart';
@@ -271,7 +272,8 @@ class _EmailStage extends StatelessWidget {
                   controller: s._email,
                   style: _fieldStyle,
                   decoration:
-                      _fieldDecoration(t, hint: 'ana.ruiz@vueling.com'),
+                      _fieldDecoration(t,
+                          hint: 'ana.ruiz@${client.wordmark}.com'),
                   keyboardType: TextInputType.emailAddress,
                   autocorrect: false,
                   textInputAction: TextInputAction.done,

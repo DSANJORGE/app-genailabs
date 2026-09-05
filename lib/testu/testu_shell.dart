@@ -84,7 +84,7 @@ class _TestuShellState extends State<TestuShell> {
                   active: _tab == 2,
                   onCalibration: () => setState(() => _tab = 3),
                 ),
-                const TestuDashboardScreen(),
+                TestuDashboardScreen(active: _tab == 3),
               ],
             ),
           ),
@@ -537,10 +537,11 @@ class _ContinueHeroState extends State<_ContinueHero> {
                         color: t.orange),
                     const SizedBox(height: 8),
                     Text(
-                      CL('Human Rights & Due Diligence',
-                          'Derechos Humanos y Debida Diligencia',
-                          'Ramp Safety & Aircraft Turnaround',
-                          'Seguridad en Rampa y Turnaround'),
+                      head?.title ??
+                          CL('Human Rights & Due Diligence',
+                              'Derechos Humanos y Debida Diligencia',
+                              'Ramp Safety & Aircraft Turnaround',
+                              'Seguridad en Rampa y Turnaround'),
                       style: TextStyle(
                         fontFamily: 'Sora',
                         fontWeight: FontWeight.w700,
@@ -553,16 +554,23 @@ class _ContinueHeroState extends State<_ContinueHero> {
                     const SizedBox(height: 8),
                     Row(
                       children: [
+                        // Live: the learner's own tally, same as the Topics
+                        // row; the prototype's numbers until it loads.
                         TestuPill(
-                            L('Competent · Review soon',
-                                'Competente · Repasar pronto'),
-                            color: t.gold,
-                            borderColor: const Color(0xFF8A7A3A)),
+                            head?.pill ??
+                                L('Competent · Review soon',
+                                    'Competente · Repasar pronto'),
+                            color: head?.pillColor ?? t.gold,
+                            borderColor:
+                                head?.pillBorder ?? const Color(0xFF8A7A3A)),
                         const SizedBox(width: 10),
                         // Flexible: overflows at 360dp otherwise (Spanish).
                         Flexible(
                           child: Text(
-                            L('21 of 36 questions', '21 de 36 preguntas'),
+                            head == null
+                                ? L('21 of 36 questions', '21 de 36 preguntas')
+                                : L('${head.answered} of ${head.questions} questions',
+                                    '${head.answered} de ${head.questions} preguntas'),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -575,7 +583,11 @@ class _ContinueHeroState extends State<_ContinueHero> {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    const TestuHairline(0.58, trackColor: Color(0x28FFFFFF)),
+                    TestuHairline(
+                        head == null || head.questions == 0
+                            ? 0.58
+                            : head.answered / head.questions,
+                        trackColor: const Color(0x28FFFFFF)),
                     const SizedBox(height: 14),
                     // Quiet until the evaluation is scheduled, then promoted
                     // to white (one white CTA per screen).
@@ -584,7 +596,8 @@ class _ContinueHeroState extends State<_ContinueHero> {
                         variant: widget.promoted
                             ? TestuButtonVariant.primary
                             : TestuButtonVariant.onimg,
-                        onTap: () => showTestuSession(context)),
+                        onTap: () =>
+                            showTestuSession(context, topicId: head?.id)),
                   ],
                 ),
               ),

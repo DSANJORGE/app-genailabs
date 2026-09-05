@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'testu_i18n.dart';
 import 'testu_live.dart';
+import 'testu_pdf.dart';
 import 'testu_resources.dart';
 import 'testu_session.dart';
 import 'testu_social.dart';
@@ -32,20 +33,25 @@ class TestuTopicsScreen extends StatelessWidget {
 
   static List<_Topic> get _topics => [
     (img: 'ramp.jpg',
-     title: L('Ramp Safety & Aircraft Turnaround',
+     title: CL('Human Rights & Due Diligence',
+         'Derechos Humanos y Debida Diligencia',
+         'Ramp Safety & Aircraft Turnaround',
          'Seguridad en Rampa y Turnaround'),
      sub: L('Learn Mode · 21 of 36 questions',
          'Modo Aprender · 21 de 36 preguntas'),
      pill: L('Competent · Review soon', 'Competente · Repasar pronto'),
      pillColor: const Color(0xFFCDB96A),
      pillBorder: const Color(0xFF8A7A3A), opens: true, id: null),
-    (img: 'chocks.jpg', title: L('FOD Prevention', 'Prevención de FOD'),
+    (img: 'chocks.jpg',
+     title: CL('Hazard Prevention', 'Prevención de Riesgos',
+         'FOD Prevention', 'Prevención de FOD'),
      sub: L('Improve Mode available', 'Modo Mejorar disponible'),
      pill: L('Expert · Stable', 'Experto · Estable'),
      pillColor: const Color(0xFF7DBB9C),
      pillBorder: const Color(0xFF2F6A4C), opens: false, id: null),
     (img: 'radio.jpg',
-     title: L('Radio Communication & Phraseology',
+     title: CL('Cybersecurity', 'Ciberseguridad',
+         'Radio Communication & Phraseology',
          'Comunicación por Radio y Fraseología'),
      sub: L('${client.tutor} recommends 10 min today',
          '${client.tutor} recomienda 10 min hoy'),
@@ -53,7 +59,9 @@ class TestuTopicsScreen extends StatelessWidget {
      pillColor: const Color(0xFFD9A23F),
      pillBorder: const Color(0xFF7A5C1E), opens: false, id: null),
     (img: 'marshal.jpg',
-     title: L('Ground Guidance & Marshalling',
+     title: CL('Mine Road Safety & Signalling',
+         'Seguridad Vial en Mina y Señalización',
+         'Ground Guidance & Marshalling',
          'Guiado en Tierra y Señalización'),
      sub: L('${client.tutor} suggests Learn Mode this week',
          '${client.tutor} sugiere Modo Aprender esta semana'),
@@ -61,7 +69,9 @@ class TestuTopicsScreen extends StatelessWidget {
      pillColor: const Color(0xFFD08B8B),
      pillBorder: const Color(0xFF6E3535), opens: false, id: null),
     (img: 'cargo.jpg',
-     title: L('Dangerous Goods Awareness',
+     title: CL('Hazardous Materials Handling',
+         'Manejo de Materiales Peligrosos',
+         'Dangerous Goods Awareness',
          'Conciencia de Mercancías Peligrosas'),
      sub: L('Recertification due Nov 2026',
          'Recertificación antes de nov 2026'),
@@ -69,7 +79,9 @@ class TestuTopicsScreen extends StatelessWidget {
      pillColor: const Color(0xFF7DBB9C),
      pillBorder: const Color(0xFF2F6A4C), opens: false, id: null),
     (img: 'winter.jpg',
-     title: L('Aircraft De-icing Procedures',
+     title: CL('Rainy Season Operations',
+         'Operación en Temporada de Lluvias',
+         'Aircraft De-icing Procedures',
          'Procedimientos de Deshielo'),
      sub: L('Seasonal · opens Oct 1', 'Estacional · abre el 1 oct'),
      pill: L('Not started', 'Sin empezar'),
@@ -100,16 +112,16 @@ class _LiveTopics extends StatefulWidget {
 
 class _LiveTopicsState extends State<_LiveTopics> {
   // Built once — inline in build() would refetch on every rebuild.
-  final Future<List<Topic>> _future = loadLiveTopics();
+  final Future<List<TopicProgress>> _future = loadAllTopicProgress();
 
   @override
-  Widget build(BuildContext context) => FutureBuilder<List<Topic>>(
+  Widget build(BuildContext context) => FutureBuilder<List<TopicProgress>>(
         future: _future,
         builder: (context, snap) {
           if (snap.connectionState != ConnectionState.done) {
             return _topicsBody(context, const []);
           }
-          final live = snap.data ?? const <Topic>[];
+          final live = snap.data ?? const <TopicProgress>[];
           if (snap.hasError || live.isEmpty) {
             debugPrint('TestU: live topics unavailable (${snap.error})');
             return _topicsBody(context, TestuTopicsScreen._topics);
@@ -141,6 +153,8 @@ typedef LiveTopicHead = ({
   String pill,
   Color pillColor,
   Color pillBorder,
+  int answered,
+  int questions,
 });
 
 /// The primary live topic — the first that opens (has tutorials). Null when
@@ -148,41 +162,86 @@ typedef LiveTopicHead = ({
 /// placeholder. Its own fetch: the Topics list keeps a per-visit fetch so
 /// progress there stays fresh after a session.
 Future<LiveTopicHead?> primaryLiveTopic() async {
-  final live = await loadLiveTopics();
-  for (var i = 0; i < live.length; i++) {
-    final r = _mapTopic(live[i], i);
-    if (r.opens) {
-      return (
-        img: r.img,
-        id: r.id,
-        title: r.title,
-        pill: r.pill,
-        pillColor: r.pillColor,
-        pillBorder: r.pillBorder,
-      );
-    }
-  }
-  return null;
+  final p = await loadTopicProgress();
+  if (p == null || p.sections.isEmpty) return null;
+  final r = _mapTopic(p, 0);
+  return (
+    img: r.img,
+    id: r.id,
+    title: r.title,
+    pill: r.pill,
+    pillColor: r.pillColor,
+    pillBorder: r.pillBorder,
+    answered: p.answered,
+    questions: p.questions,
+  );
 }
 
-_Topic _mapTopic(Topic t, int i) {
-  final (pill, color, border) = switch (t.progress.getEfficiency()) {
-    Efficiency.beginner => (
-        L('Beginner', 'Principiante'),
-        const Color(0xFFD08B8B),
-        const Color(0xFF6E3535)
-      ),
-    Efficiency.competent => (
-        L('Competent', 'Competente'),
-        const Color(0xFFCDB96A),
-        const Color(0xFF8A7A3A)
-      ),
-    Efficiency.expert => (
-        L('Expert', 'Experto'),
-        const Color(0xFF7DBB9C),
-        const Color(0xFF2F6A4C)
-      ),
-  };
+/// Mastery label, status line and palette for a tally, on the Topic model's
+/// thresholds (under half right = beginner, under 90% = competent). No
+/// answers = not started, in the idle grey.
+typedef TestuMastery = ({
+  String label,
+  String status,
+  Color color,
+  Color border,
+  Color dot,
+  bool expert,
+});
+
+TestuMastery masteryOf(int right, int total) {
+  if (total == 0) {
+    return (
+      label: L('Not started', 'Sin empezar'),
+      status: '',
+      color: const Color(0xFF8B8F98),
+      border: const Color(0xFF2C2C33),
+      dot: const Color(0xFF3A3A40),
+      expert: false,
+    );
+  }
+  final share = right / total;
+  final level = share < 0.5
+      ? Efficiency.beginner
+      : share < 0.9
+          ? Efficiency.competent
+          : Efficiency.expert;
+  return _masteryStyle(level);
+}
+
+TestuMastery _masteryStyle(Efficiency level) => switch (level) {
+      Efficiency.beginner => (
+          label: L('Beginner', 'Principiante'),
+          status: L('Needs practice', 'Necesita práctica'),
+          color: const Color(0xFFD08B8B),
+          border: const Color(0xFF6E3535),
+          dot: const Color(0xFFC25555), // TestuTokens.red
+          expert: false,
+        ),
+      Efficiency.competent => (
+          label: L('Competent', 'Competente'),
+          status: L('Review soon', 'Repasar pronto'),
+          color: const Color(0xFFCDB96A),
+          border: const Color(0xFF8A7A3A),
+          dot: const Color(0xFFE8703A), // TestuTokens.orange
+          expert: false,
+        ),
+      Efficiency.expert => (
+          label: L('Expert', 'Experto'),
+          status: L('Stable', 'Estable'),
+          color: const Color(0xFF7DBB9C),
+          border: const Color(0xFF2F6A4C),
+          dot: const Color(0xFF4CA97A), // TestuTokens.green
+          expert: true,
+        ),
+    };
+
+/// Mastery and the status line come from the learner's own answers (same
+/// tally as the Topic Home and the dashboard), not the server's progress
+/// fractions, which nothing feeds yet.
+_Topic _mapTopic(TopicProgress p, int i) {
+  final t = p.topic;
+  final m = masteryOf(p.mastered, p.answered);
   return (
     // The server hands out the 200x200 rendition; the hero wants the large
     // one, which the same generated path serves.
@@ -191,15 +250,17 @@ _Topic _mapTopic(Topic t, int i) {
         : liveAssetUrl(
             t.thumbnail.replaceFirst('image200x200', 'image3000x3000')),
     title: t.title,
-    sub: L(
-        '${t.totalTutorials} tutorials · ${t.completedSections} of ${t.totalSections} sections',
-        '${t.totalTutorials} tutoriales · ${t.completedSections} de ${t.totalSections} secciones'),
-    pill: pill,
-    pillColor: color,
-    pillBorder: border,
+    sub: p.sections.isEmpty
+        ? L('No content yet', 'Sin contenido todavía')
+        : L(
+            '${p.answered} of ${p.questions} questions · ${p.sections.length} subtopics',
+            '${p.answered} de ${p.questions} preguntas · ${p.sections.length} subtemas'),
+    pill: m.status.isEmpty ? m.label : '${m.label} · ${m.status}',
+    pillColor: m.color,
+    pillBorder: m.border,
     // A topic with no tutorials has no questions; opening it would drop the
     // session into the offline demo under this topic's name.
-    opens: t.totalTutorials > 0,
+    opens: p.sections.isNotEmpty,
     id: t.id,
   );
 }
@@ -228,7 +289,9 @@ Widget _topicsBody(BuildContext context, List<_Topic> topics) {
                     )),
                 const SizedBox(height: 4),
                 Text(
-                  L('Ramp Agent, Safety Lead · 6 required for your role · 1 seasonal',
+                  CL('Operations, Safety Lead · 6 required for your role · 1 seasonal',
+                      'Operaciones, Líder de Seguridad · 6 obligatorios para tu rol · 1 estacional',
+                      'Ramp Agent, Safety Lead · 6 required for your role · 1 seasonal',
                       'Agente de Rampa, Líder de Seguridad · 6 obligatorios para tu rol · 1 estacional'),
                   style: TextStyle(
                       fontFamily: 'Geist', fontSize: 11.5, color: t.mut),
@@ -364,6 +427,45 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
   final Set<int> _openSub = {};
   late final List<TestuComment> _reviews = _mockReviews();
 
+  /// The learner's record in this topic (live only); null until loaded, and
+  /// in the offline demo, where the prototype's Ramp Safety content stands.
+  TopicProgress? _live;
+
+  @override
+  void initState() {
+    super.initState();
+    if (testuLive) _reload();
+  }
+
+  void _reload() {
+    loadTopicProgress(topicId: widget.topicId).then((p) {
+      if (mounted && p != null) setState(() => _live = p);
+    }).catchError((Object e) {
+      debugPrint('TestU: topic progress ($e)');
+    });
+  }
+
+  /// Opens the session — on [sectionId] when given — and refreshes the
+  /// tally when it comes back.
+  void _open([String? sectionId]) {
+    showTestuSession(context, topicId: widget.topicId, sectionId: sectionId)
+        .then((_) {
+      if (testuLive) _reload();
+    });
+  }
+
+  String get _meta {
+    final p = _live;
+    if (!testuLive) {
+      return L('With ${client.tutor} · 36 questions · 5 subtopics',
+          'Con ${client.tutor} · 36 preguntas · 5 subtemas');
+    }
+    if (p == null) return L('With ${client.tutor}', 'Con ${client.tutor}');
+    return L(
+        'With ${client.tutor} · ${p.questions} questions · ${p.sections.length} subtopics',
+        'Con ${client.tutor} · ${p.questions} preguntas · ${p.sections.length} subtemas');
+  }
+
   List<String> get _tabsL => [
         L('Overview', 'Resumen'),
         L('Subtopics', 'Subtemas'),
@@ -379,7 +481,7 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
       // Hero + tabs stay pinned; only the active pane scrolls under the
       // tab bar's hairline (the "cutoff line").
       body: Column(children: [
-        const _TopicHero(),
+        _TopicHero(meta: _meta, mastery: _live == null ? null : _mastery),
         // Tabs — instant pane swap, like the prototype.
         Container(
             // Full width so the tab row hugs the left edge — shrink-wrapped
@@ -451,7 +553,17 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 640),
               child: Text(
-            L('Safe aircraft turnaround on stand: preparation, FOD inspection, '
+            // Live: the topic's own description from the server.
+            _live?.topic.description ??
+            CL('Human rights in mining operations: universality, due '
+                    'diligence, contractors, communities and the grievance '
+                    "channel. Required for your role because it is Minsur's "
+                    'largest social-compliance exposure.',
+                'Derechos humanos en la operación minera: universalidad, '
+                    'debida diligencia, contratistas, comunidades y el canal '
+                    'de reclamos. Obligatorio para tu rol porque es la mayor '
+                    'exposición de cumplimiento social de Minsur.',
+                'Safe aircraft turnaround on stand: preparation, FOD inspection, '
                     'arrival, GSE positioning and departure. Required for your '
                     "role because ramp incidents are the airline's largest "
                     'ground-safety exposure.',
@@ -480,10 +592,18 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Expanded(
-                        child: _Fact(L('CURRENT MASTERY', 'DOMINIO ACTUAL'),
-                            L('Competent · Strong', 'Competente · Sólido'),
-                            sub: L('Review soon', 'Repasar pronto'),
-                            valueColor: t.gold)),
+                        child: _live == null
+                            ? _Fact(L('CURRENT MASTERY', 'DOMINIO ACTUAL'),
+                                L('Competent · Strong', 'Competente · Sólido'),
+                                sub: L('Review soon', 'Repasar pronto'),
+                                valueColor: t.gold)
+                            : _Fact(L('CURRENT MASTERY', 'DOMINIO ACTUAL'),
+                                _mastery.label,
+                                sub: _mastery.status.isEmpty
+                                    ? L('Answer to find out',
+                                        'Responde para saberlo')
+                                    : _mastery.status,
+                                valueColor: _mastery.color)),
                     const SizedBox(width: 9),
                     Expanded(
                         child: _Fact(L('REQUIRED LEVEL', 'NIVEL REQUERIDO'),
@@ -500,10 +620,17 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Expanded(
-                        child: _Fact(L('PROGRESS', 'PROGRESO'),
-                            L('21 of 36', '21 de 36'),
-                            sub: L('15 questions left in Learn Mode',
-                                '15 preguntas restantes en Modo Aprender'))),
+                        child: _live == null
+                            ? _Fact(L('PROGRESS', 'PROGRESO'),
+                                L('21 of 36', '21 de 36'),
+                                sub: L('15 questions left in Learn Mode',
+                                    '15 preguntas restantes en Modo Aprender'))
+                            : _Fact(L('PROGRESS', 'PROGRESO'),
+                                L('${_live!.answered} of ${_live!.questions}',
+                                    '${_live!.answered} de ${_live!.questions}'),
+                                sub: L(
+                                    '${_live!.questions - _live!.answered} questions left in Learn Mode',
+                                    '${_live!.questions - _live!.answered} preguntas restantes en Modo Aprender'))),
                     const SizedBox(width: 9),
                     Expanded(
                         child: _Fact(
@@ -547,8 +674,7 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
           child: TestuButton(
               L('CONTINUE WITH YOUR TUTOR', 'CONTINUAR CON TU TUTOR'),
               variant: TestuButtonVariant.primary,
-              onTap: () =>
-                  showTestuSession(context, topicId: widget.topicId)),
+              onTap: _open),
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(18, 10, 18, 0),
@@ -568,7 +694,7 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
       (dot: _Dot.green,
        title: L('Stand preparation', 'Preparación del stand'),
        sub: '$expertStable · ${L('8 of 8 questions', '8 de 8 preguntas')}',
-       mode: improve, primary: false, critical: false,
+       mode: improve, primary: false, critical: false, sectionId: null,
        kids: [
          (dot: _Dot.green,
           title: L('Cone & barrier placement',
@@ -588,7 +714,7 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
        ]),
       (dot: _Dot.green, title: L('FOD inspection', 'Inspección FOD'),
        sub: '$expertStable · ${L('7 of 7 questions', '7 de 7 preguntas')}',
-       mode: improve, primary: false, critical: false,
+       mode: improve, primary: false, critical: false, sectionId: null,
        kids: [
          (dot: _Dot.green,
           title: L('FOD walk pattern', 'Patrón de inspección FOD'),
@@ -604,7 +730,7 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
        title: L('Aircraft arrival & chocking', 'Llegada y calzado'),
        sub: L('Competent · Review soon · 5 of 8 questions',
            'Competente · Repasar pronto · 5 de 8 preguntas'),
-       mode: learn, primary: false, critical: false,
+       mode: learn, primary: false, critical: false, sectionId: null,
        kids: [
          (dot: _Dot.orange,
           title: L('Approach & anti-collision lights',
@@ -623,7 +749,7 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
        title: L('GSE positioning', 'Posicionamiento de GSE'),
        sub: L('Beginner · Needs practice · 1 of 7 questions',
            'Principiante · Necesita práctica · 1 de 7 preguntas'),
-       mode: learn, primary: true, critical: false,
+       mode: learn, primary: true, critical: false, sectionId: null,
        kids: [
          (dot: _Dot.red,
           title: L('Belt loader approach', 'Aproximación de cinta cargadora'),
@@ -643,7 +769,7 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
       (dot: _Dot.idle,
        title: L('Pushback & departure', 'Pushback y salida'),
        sub: '$notStarted · ${L('0 of 6 questions', '0 de 6 preguntas')}',
-       mode: learn, primary: false, critical: false,
+       mode: learn, primary: false, critical: false, sectionId: null,
        kids: [
          (dot: _Dot.idle,
           title: L('Towbar & bypass pin', 'Barra de remolque y bypass pin'),
@@ -657,19 +783,92 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
     ];
   }
 
-  List<Widget> _subtopics(TestuTokens t) => [
-        for (var i = 0; i < _groups.length; i++)
-          _SubGroupWidget(
-            group: _groups[i],
-            open: _openSub.contains(i),
-            onToggle: () => setState(() =>
-                _openSub.contains(i) ? _openSub.remove(i) : _openSub.add(i)),
-          ),
-      ];
+  /// Whole-topic mastery: questions whose latest attempt is right, over the
+  /// questions answered.
+  TestuMastery get _mastery => masteryOf(_live!.mastered, _live!.answered);
+
+  /// Live: one row per tutorial section — mastery from the learner's own
+  /// answers, "n of m questions" = distinct questions answered, mode button
+  /// "Improve" once the section is expert, "Learn" otherwise. The white
+  /// button marks the section to work on next: the weakest (same rule as
+  /// the tutor tab), else the first not started. No skill sub-rows: the
+  /// tutorial has none.
+  List<_SubGroup> get _liveGroups {
+    final p = _live!;
+    final next = p.weakest?.id ??
+        p.sections.where((s) => s.total == 0).firstOrNull?.id;
+    return [
+      for (final s in p.sections)
+        () {
+          final m = masteryOf(s.mastered, s.answered);
+          final qs = L('${s.answered} of ${s.questions} questions',
+              '${s.answered} de ${s.questions} preguntas');
+          return (
+            dot: m.dot,
+            title: s.title,
+            sub: m.status.isEmpty ? '${m.label} · $qs' : '${m.label} · ${m.status} · $qs',
+            mode: m.expert ? L('Improve', 'Mejorar') : L('Learn', 'Aprender'),
+            primary: s.id == next,
+            critical: false,
+            sectionId: s.id,
+            kids: const <_SubKid>[],
+          );
+        }(),
+    ];
+  }
+
+  List<Widget> _subtopics(TestuTokens t) {
+    if (testuLive && _live == null) return const [];
+    final groups = testuLive ? _liveGroups : _groups;
+    return [
+      for (var i = 0; i < groups.length; i++)
+        _SubGroupWidget(
+          group: groups[i],
+          open: _openSub.contains(i),
+          onToggle: () => setState(() =>
+              _openSub.contains(i) ? _openSub.remove(i) : _openSub.add(i)),
+          onOpen: _open,
+        ),
+    ];
+  }
 
   // ---- Resources ----
 
-  List<Widget> _resources(TestuTokens t) => [
+  List<Widget> _resources(TestuTokens t) => testuLive
+      ? [
+          // The tutorial's reference documents from the server — the same
+          // sources the tutor cites. Nothing until they load.
+          FutureBuilder<List<LiveDoc>>(
+            future: _docs ??= loadDocuments(topicId: widget.topicId),
+            builder: (context, snap) => Column(children: [
+              for (final d in snap.data ?? const <LiveDoc>[])
+                _ResRow(
+                    icon: d.isVideo ? 'VID' : 'PDF',
+                    title: d.title,
+                    sub: d.isVideo
+                        ? L('${d.chapters.length} chapters · reference video',
+                            '${d.chapters.length} capítulos · video de referencia')
+                        : L('${d.pages} pages · reference document',
+                            '${d.pages} páginas · documento de referencia'),
+                    required: true,
+                    onTap: () => d.isVideo
+                        ? showTestuVideo(context, d)
+                        : showTestuPdf(context, doc: d)),
+              if (snap.hasData && snap.data!.isEmpty)
+                Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Text(
+                        L('No reference documents yet.',
+                            'Aún no hay documentos de referencia.'),
+                        style: kMeta)),
+            ]),
+          ),
+        ]
+      : _demoResources(t);
+
+  Future<List<LiveDoc>>? _docs;
+
+  List<Widget> _demoResources(TestuTokens t) => [
         _ResRow(icon: 'PDF',
             title: CL('Human Rights Policy', 'Política de Derechos Humanos',
                 'Ground Operations Manual', 'Manual de Operaciones en Tierra'),
@@ -713,34 +912,50 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
       ];
 }
 
+/// Sample reviews; Minsur reads them in the DDHH context, Vueling in Ramp
+/// Safety — the same thread shape either way.
 List<TestuComment> _mockReviews() {
-  final karsten = TestuComment(
-      'Karsten B.',
+  final minsur = client.name == 'Minsur';
+  final second = TestuComment(
+      minsur ? 'Carlos V.' : 'Karsten B.',
       L('COORDINATOR', 'COORDINADOR'),
       'assets/img/p_karsten.jpg',
-      L('Suggest adding a night-operations variant for GSE positioning.',
+      CL('Suggest adding a case on contractors working inside the mine unit.',
+          'Sugiero añadir un caso sobre contratistas dentro de la unidad minera.',
+          'Suggest adding a night-operations variant for GSE positioning.',
           'Sugiero añadir una variante nocturna para el posicionamiento de GSE.'),
       reacts: {TestuReaction.like: 1, TestuReaction.idea: 1});
-  karsten.replies.add(TestuComment(
+  second.replies.add(TestuComment(
       client.tutor,
       L('AI TUTOR', 'TUTOR IA'),
       client.tutorAvatar,
-      L('Logged — I passed the night-operations suggestion to the content team.',
+      CL('Logged — I passed the contractors suggestion to the content team.',
+          'Anotado — he pasado la sugerencia sobre contratistas al equipo de contenido.',
+          'Logged — I passed the night-operations suggestion to the content team.',
           'Anotado — he pasado la sugerencia de operaciones nocturnas al equipo de contenido.')));
   return [
     TestuComment(
-        'Miranda J.',
+        minsur ? 'Rosa J.' : 'Miranda J.',
         L('SHIFT LEAD', 'JEFA DE TURNO'),
         'assets/img/p_miranda.jpg',
-        L('The arrival & chocking questions match the new station notice — good update since July.',
+        CL('The due diligence questions match the new grievance-channel policy — good update since July.',
+            'Las preguntas de debida diligencia coinciden con la nueva política del canal de reclamos — buena actualización desde julio.',
+            'The arrival & chocking questions match the new station notice — good update since July.',
             'Las preguntas de llegada y calzado coinciden con el nuevo aviso de estación — buena actualización desde julio.'),
         reacts: {TestuReaction.like: 4, TestuReaction.applause: 1}),
-    karsten,
+    second,
   ];
 }
 
 class _TopicHero extends StatelessWidget {
-  const _TopicHero();
+  const _TopicHero({required this.meta, this.mastery});
+
+  /// "With IRIS · n questions · m subtopics" line under the title.
+  final String meta;
+
+  /// Live: the pill follows the tally, which a session just changed; the
+  /// row that opened this screen is stale by then.
+  final TestuMastery? mastery;
 
   @override
   Widget build(BuildContext context) {
@@ -805,15 +1020,21 @@ class _TopicHero extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 TestuPill(
-                    home.pill ??
-                        L('Competent · Review soon',
-                            'Competente · Repasar pronto'),
-                    color: home.pillColor,
-                    borderColor: home.pillBorder),
+                    mastery != null
+                        ? (mastery!.status.isEmpty
+                            ? mastery!.label
+                            : '${mastery!.label} · ${mastery!.status}')
+                        : home.pill ??
+                            L('Competent · Review soon',
+                                'Competente · Repasar pronto'),
+                    color: mastery?.color ?? home.pillColor,
+                    borderColor: mastery?.border ?? home.pillBorder),
                 const SizedBox(height: 12),
                 Text(
                     home.title ??
-                        L('Ramp Safety & Aircraft Turnaround',
+                        CL('Human Rights & Due Diligence',
+                            'Derechos Humanos y Debida Diligencia',
+                            'Ramp Safety & Aircraft Turnaround',
                             'Seguridad en Rampa y Turnaround'),
                     style: TextStyle(
                       fontFamily: 'Sora',
@@ -830,9 +1051,7 @@ class _TopicHero extends StatelessWidget {
                         width: 22, height: 22, fit: BoxFit.cover),
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                      L('With ${client.tutor} · 36 questions · 5 subtopics',
-                          'Con ${client.tutor} · 36 preguntas · 5 subtemas'),
+                  Text(meta,
                       style: const TextStyle(
                           fontFamily: 'Geist',
                           fontSize: 12,
@@ -909,54 +1128,80 @@ class _CompetenciesCard extends StatelessWidget {
   static List<
       ({String title, String sub, String pill, bool strong,
         List<_Behavior> kids})> get _cmp => [
-    (title: L('Safe aircraft handling', 'Manejo seguro de la aeronave'),
+    (title: CL('Respectful conduct in operations',
+         'Conducta respetuosa en operaciones',
+         'Safe aircraft handling', 'Manejo seguro de la aeronave'),
      sub: L('Evidence strong · 3 of 4 behaviors evidenced',
          'Evidencia sólida · 3 de 4 conductas evidenciadas'),
      pill: L('Strong', 'Sólido'), strong: true,
      kids: [
        (st: _Evidence.ok,
-        text: L('Positions chocks only after engines are shut down and '
+        text: CL('Applies human rights to everyone on site: employees, '
+                'contractors, visitors and communities',
+            'Aplica los derechos humanos a toda persona en la unidad: '
+                'propios, contratistas, visitantes y comunidades',
+            'Positions chocks only after engines are shut down and '
                 'anti-collision lights are off',
             'Coloca los calzos solo con motores apagados y luces '
                 'anticolisión apagadas'),
         sub: L('Evidenced · 12 attempts, certain & correct',
             'Evidenciado · 12 intentos, seguro y correcto')),
        (st: _Evidence.ok,
-        text: L('Performs a FOD walk before every aircraft arrival',
+        text: CL('Checks contractor working conditions before every shift',
+            'Verifica las condiciones laborales de contratistas antes de '
+                'cada guardia',
+            'Performs a FOD walk before every aircraft arrival',
             'Realiza una inspección FOD antes de cada llegada'),
         sub: L('Evidenced · 9 attempts', 'Evidenciado · 9 intentos')),
        (st: _Evidence.ok,
-        text: L('Follows main-gear-first chocking sequence per station '
+        text: CL('Follows the due diligence steps per compliance notice '
+                '2026-14',
+            'Sigue los pasos de debida diligencia según el aviso de '
+                'cumplimiento 2026-14',
+            'Follows main-gear-first chocking sequence per station '
                 'notice 2026-14',
             'Sigue la secuencia de calzado tren-principal-primero según el '
                 'aviso 2026-14'),
         sub: L('Evidenced · 5 attempts', 'Evidenciado · 5 intentos')),
        (st: _Evidence.mid,
-        text: L('Reports FOD findings through the correct chain',
+        text: CL('Reports concerns through the grievance channel',
+            'Notifica las inquietudes por el canal de reclamos',
+            'Reports FOD findings through the correct chain',
             'Notifica los hallazgos FOD por la cadena correcta'),
         sub: L('Evidence building · marked "Unsure" last session',
             'Evidencia en desarrollo · marcado "${G('Inseguro', 'Insegura')}" en la última sesión')),
      ]),
-    (title: L('Situational awareness on stand',
+    (title: CL('Awareness of community impact',
+        'Conciencia del impacto en la comunidad',
+        'Situational awareness on stand',
         'Conciencia situacional en el stand'),
      sub: L('Evidence building · 1 of 3 behaviors evidenced',
          'Evidencia en desarrollo · 1 de 3 conductas evidenciadas'),
      pill: L('Building', 'En desarrollo'), strong: false,
      kids: [
        (st: _Evidence.ok,
-        text: L('Monitors anti-collision lights before approaching the aircraft',
+        text: CL('Identifies rights holders affected by an operation',
+            'Identifica a los titulares de derechos afectados por una '
+                'operación',
+            'Monitors anti-collision lights before approaching the aircraft',
             'Vigila las luces anticolisión antes de aproximarse a la aeronave'),
         sub: L('Evidenced · 7 attempts', 'Evidenciado · 7 intentos')),
        (st: _Evidence.mid,
-        text: L('Reads standard marshalling signals correctly from any position',
+        text: CL('Distinguishes a rights impact from a general complaint',
+            'Distingue un impacto en derechos de una queja general',
+            'Reads standard marshalling signals correctly from any position',
             'Lee correctamente las señales estándar desde cualquier posición'),
         sub: L('Evidence building · 1 misconception flagged',
             'Evidencia en desarrollo · 1 concepto erróneo detectado')),
        (st: _Evidence.no,
-        text: L('Keeps clear of the fuselage line until the aircraft settles',
+        text: CL('Escalates community incidents within the set deadlines',
+            'Escala los incidentes con la comunidad dentro de los plazos',
+            'Keeps clear of the fuselage line until the aircraft settles',
             'Se mantiene fuera de la línea del fuselaje hasta que la aeronave '
                 'se asienta'),
-        sub: L('No evidence yet · covered in GSE positioning',
+        sub: CL('No evidence yet · covered in Due diligence',
+            'Sin evidencia aún · se cubre en Debida diligencia',
+            'No evidence yet · covered in GSE positioning',
             'Sin evidencia aún · se cubre en posicionamiento de GSE')),
      ]),
   ];
@@ -1128,34 +1373,46 @@ enum _Dot { green, orange, red, idle }
 
 typedef _SubKid = ({_Dot dot, String title, String sub, String mode,
     bool critical});
-typedef _SubGroup = ({_Dot dot, String title, String sub, String mode,
-    bool primary, bool critical, List<_SubKid> kids});
+/// `dot` is a demo `_Dot` or, for live rows, a [TestuMastery] colour;
+/// `sectionId` is set on live rows only and `kids` is empty there.
+typedef _SubGroup = ({Object dot, String title, String sub, String mode,
+    bool primary, bool critical, String? sectionId, List<_SubKid> kids});
 
-Color _dotColor(_Dot d, TestuTokens t) => switch (d) {
+Color _dotColor(Object d, TestuTokens t) => switch (d) {
       _Dot.green => t.green,
       _Dot.orange => t.orange,
       _Dot.red => t.red,
       _Dot.idle => const Color(0xFF3A3A40),
+      final Color c => c,
+      _ => t.faint,
     };
 
 class _SubGroupWidget extends StatelessWidget {
   const _SubGroupWidget(
-      {required this.group, required this.open, required this.onToggle});
+      {required this.group,
+      required this.open,
+      required this.onToggle,
+      required this.onOpen});
 
   final _SubGroup group;
   final bool open;
   final VoidCallback onToggle;
 
+  /// Opens the session on a section (null = the topic's first).
+  final ValueChanged<String?> onOpen;
+
   @override
   Widget build(BuildContext context) {
     final t = TestuTokens.of(context);
+    // A row with nothing to expand opens its section instead.
+    final expandable = group.kids.isNotEmpty;
     return Column(
       children: [
         Container(
           decoration: const BoxDecoration(
               border: Border(bottom: BorderSide(color: Color(0xFF17171A)))),
           child: TestuPressable(
-            onTap: onToggle,
+            onTap: expandable ? onToggle : () => onOpen(group.sectionId),
             child: Padding(
               padding:
                   const EdgeInsets.symmetric(vertical: 14, horizontal: 18),
@@ -1166,10 +1423,12 @@ class _SubGroupWidget extends StatelessWidget {
                     child: _subText(group.title, group.sub, 13,
                         critical: group.critical)),
                 const SizedBox(width: 10),
-                _ModeButton(group.mode, primary: group.primary),
+                _ModeButton(group.mode,
+                    primary: group.primary,
+                    onTap: () => onOpen(group.sectionId)),
                 const SizedBox(width: 10),
                 AnimatedRotation(
-                  turns: open ? 0.25 : 0,
+                  turns: open && expandable ? 0.25 : 0,
                   duration: const Duration(milliseconds: 250),
                   child: Text('›',
                       style: TextStyle(fontSize: 13, color: t.faint)),
@@ -1178,7 +1437,7 @@ class _SubGroupWidget extends StatelessWidget {
             ),
           ),
         ),
-        if (open)
+        if (open && expandable)
           Container(
             width: double.infinity,
             decoration: const BoxDecoration(
@@ -1215,7 +1474,8 @@ class _SubGroupWidget extends StatelessWidget {
                           child: _subText(k.title, k.sub, 12,
                               critical: k.critical)),
                       const SizedBox(width: 10),
-                      _ModeButton(k.mode, small: true),
+                      _ModeButton(k.mode,
+                          small: true, onTap: () => onOpen(null)),
                     ]),
                   ),
               ],
@@ -1279,22 +1539,19 @@ class _SubGroupWidget extends StatelessWidget {
 }
 
 class _ModeButton extends StatelessWidget {
-  const _ModeButton(this.label, {this.primary = false, this.small = false});
+  const _ModeButton(this.label,
+      {this.primary = false, this.small = false, required this.onTap});
 
   final String label;
   final bool primary;
   final bool small;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final t = TestuTokens.of(context);
     return TestuPressable(
-      // The subtopic tree is prototype content, so the topic id is read off
-      // the Topic Home above instead of being threaded through it.
-      onTap: () => showTestuSession(context,
-          topicId: context
-              .findAncestorWidgetOfExactType<TestuTopicHomeScreen>()
-              ?.topicId),
+      onTap: onTap,
       child: Container(
         padding: small
             ? const EdgeInsets.symmetric(vertical: 6, horizontal: 9)
