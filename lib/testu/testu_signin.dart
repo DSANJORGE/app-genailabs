@@ -14,6 +14,7 @@ import 'testu_widgets.dart';
 /// one screen — work email → 6-digit code — restyled from eme_app_package's
 /// LoginScreen contract. No client branding, no Sully: the org isn't known
 /// until the code verifies; the Vueling reveal plays after `onSignedIn`.
+/// No signup: accounts are provisioned by the client organisation.
 class TestuSignin extends StatefulWidget {
   const TestuSignin({super.key, required this.onSignedIn});
 
@@ -25,13 +26,10 @@ class TestuSignin extends StatefulWidget {
 
 class _TestuSigninState extends State<TestuSignin> {
   final _email = TextEditingController();
-  final _firstName = TextEditingController();
-  final _lastName = TextEditingController();
   final _otp = TextEditingController();
   final _otpFocus = FocusNode();
 
   bool _otpStage = false;
-  bool _registration = false;
   bool _busy = false;
   String? _error;
   int _resendIn = 0;
@@ -41,8 +39,6 @@ class _TestuSigninState extends State<TestuSignin> {
   void initState() {
     super.initState();
     _email.addListener(() => setState(() {}));
-    _firstName.addListener(() => setState(() {}));
-    _lastName.addListener(() => setState(() {}));
     _otp.addListener(_onOtpChanged);
   }
 
@@ -50,8 +46,6 @@ class _TestuSigninState extends State<TestuSignin> {
   void dispose() {
     _resendTimer?.cancel();
     _email.dispose();
-    _firstName.dispose();
-    _lastName.dispose();
     _otp.dispose();
     _otpFocus.dispose();
     super.dispose();
@@ -78,17 +72,12 @@ class _TestuSigninState extends State<TestuSignin> {
       _busy = true;
       _error = null;
     });
-    final status = await TestuAuth.sendUserCode(
-      _email.text.trim(),
-      firstName: _registration ? _firstName.text.trim() : null,
-      lastName: _registration ? _lastName.text.trim() : null,
-    );
+    final status = await TestuAuth.sendUserCode(_email.text.trim());
     if (!mounted) return;
     if (status == 'ok') {
       setState(() {
         _busy = false;
         _otpStage = true;
-        _registration = false;
         _otp.clear();
       });
       _startResendTimer();
@@ -99,7 +88,8 @@ class _TestuSigninState extends State<TestuSignin> {
     } else if (status == 'nouser') {
       setState(() {
         _busy = false;
-        _registration = true;
+        _error = L("We couldn't find that email. Check it, or contact your supervisor.",
+            'No encontramos ese correo. Revísalo o habla con tu supervisor.');
       });
     } else {
       setState(() {
@@ -235,11 +225,7 @@ class _EmailStage extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = tokens;
     final s = state;
-    final canContinue = s._emailValid &&
-        !s._busy &&
-        (!s._registration ||
-            (s._firstName.text.trim().isNotEmpty &&
-                s._lastName.text.trim().isNotEmpty));
+    final canContinue = s._emailValid && !s._busy;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -281,38 +267,6 @@ class _EmailStage extends StatelessWidget {
                     if (canContinue) s._sendCode();
                   },
                 ),
-                if (s._registration) ...[
-                  const SizedBox(height: 18),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 300),
-                    child: Text(
-                      L("You're new here — tell us your name and we'll set you up.",
-                          'Eres ${G('nuevo', 'nueva')} aquí: dinos tu nombre y creamos tu cuenta.'),
-                      style: TextStyle(
-                        fontFamily: 'Geist',
-                        fontSize: 13,
-                        height: 1.5,
-                        color: t.mut,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  TestuEyebrow.h4(L('FIRST NAME', 'NOMBRE')),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: s._firstName,
-                    style: _fieldStyle,
-                    decoration: _fieldDecoration(t),
-                  ),
-                  const SizedBox(height: 14),
-                  TestuEyebrow.h4(L('LAST NAME', 'APELLIDOS')),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: s._lastName,
-                    style: _fieldStyle,
-                    decoration: _fieldDecoration(t),
-                  ),
-                ],
                 if (s._error != null) ...[
                   const SizedBox(height: 12),
                   Text(

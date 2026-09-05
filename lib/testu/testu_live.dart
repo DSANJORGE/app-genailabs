@@ -70,12 +70,10 @@ Future<bool> liveRestoreSession() async {
 
 /// 'ok' | 'nouser' | 'error' — the server's own status word, or 'error'
 /// when it could not be reached.
-Future<String> liveSendUserCode(String email,
-    {String? firstName, String? lastName}) async {
+Future<String> liveSendUserCode(String email) async {
   await _init();
   try {
-    final r = await AuthService.sendUserCode(
-        email: email, firstName: firstName, lastName: lastName);
+    final r = await AuthService.sendUserCode(email: email);
     return r['status']?.toString() ?? 'error';
   } catch (_) {
     return 'error';

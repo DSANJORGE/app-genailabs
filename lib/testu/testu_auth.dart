@@ -23,17 +23,13 @@ class TestuAuth {
 
   /// 'ok' (code sent), 'nouser' (unknown email, guest registration allowed —
   /// resend with names) or 'error'.
-  static Future<String> sendUserCode(
-    String email, {
-    String? firstName,
-    String? lastName,
-  }) async {
-    if (testuLive) {
-      return liveSendUserCode(email, firstName: firstName, lastName: lastName);
-    }
+  /// 'ok' | 'nouser' | 'error'. Accounts are provisioned by the client
+  /// organisation, never from the app — 'nouser' is a dead end, not a signup.
+  static Future<String> sendUserCode(String email) async {
+    if (testuLive) return liveSendUserCode(email);
     await Future<void>.delayed(const Duration(milliseconds: 450));
     final unknown = email.split('@').first.toLowerCase().startsWith('new');
-    return unknown && firstName == null ? 'nouser' : 'ok';
+    return unknown ? 'nouser' : 'ok';
   }
 
   static Future<bool> loginWithOtp(String email, String code) async {
