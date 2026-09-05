@@ -374,16 +374,34 @@ class _PeerCard extends StatelessWidget {
           _PeerMetric(L('Training days this week', 'Días de práctica esta semana'),
               L('5 of 7 · you', '5 de 7 · tú'), 0.71, 0.43),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              _LegendDot(t.orange, L('You', 'Tú')),
-              const SizedBox(width: 14),
-              _LegendDot(t.mut, L('Peer median', 'Mediana del grupo')),
-              const Spacer(),
-              TestuPill(L('Top quartile · calibration', 'Cuartil superior · calibración'),
-                  color: t.greenText, borderColor: const Color(0xFF2F6A4C)),
-            ],
-          ),
+          // The dots and the pill overflow this Row by 57px at XXXL, so past
+          // XXL they wrap instead. The Spacer holding the pill flush right is
+          // the approved v6 layout and stays put at the shipping sizes.
+          if (testuBigText(context))
+            Wrap(
+              spacing: 14,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                _LegendDot(t.orange, L('You', 'Tú')),
+                _LegendDot(t.mut, L('Peer median', 'Mediana del grupo')),
+                TestuPill(
+                    L('Top quartile · calibration', 'Cuartil superior · calibración'),
+                    color: t.greenText,
+                    borderColor: const Color(0xFF2F6A4C)),
+              ],
+            )
+          else
+            Row(
+              children: [
+                _LegendDot(t.orange, L('You', 'Tú')),
+                const SizedBox(width: 14),
+                _LegendDot(t.mut, L('Peer median', 'Mediana del grupo')),
+                const Spacer(),
+                TestuPill(L('Top quartile · calibration', 'Cuartil superior · calibración'),
+                    color: t.greenText, borderColor: const Color(0xFF2F6A4C)),
+              ],
+            ),
           const SizedBox(height: 12),
           Text(
             CL('Anonymised comparison with operators at your site. Your peers never see your individual results.',
@@ -759,6 +777,26 @@ class _MastRow {
   final Widget pill;
 }
 
+Widget _mastText(_MastRow r) => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          r.title,
+          style: const TextStyle(
+            fontFamily: 'Geist',
+            fontWeight: FontWeight.w600,
+            fontSize: 12.5,
+            color: Color(0xFFE9E8E4),
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          r.sub,
+          style: kMeta,
+        ),
+      ],
+    );
+
 class _MastRowsCard extends StatelessWidget {
   const _MastRowsCard({required this.title, required this.rows, this.note});
 
@@ -783,33 +821,25 @@ class _MastRowsCard extends StatelessWidget {
                   : const BoxDecoration(
                       border: Border(
                           bottom: BorderSide(color: Color(0xFF17171A)))),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
+              // The pill takes its intrinsic width, so past XXL it starves
+              // the title column until "Derechos Humanos" breaks mid-word.
+              // Give the title the full row and drop the pill below it.
+              child: testuBigText(context)
+                  ? Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          r.title,
-                          style: const TextStyle(
-                            fontFamily: 'Geist',
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12.5,
-                            color: Color(0xFFE9E8E4),
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          r.sub,
-                          style: kMeta,
-                        ),
+                        _mastText(r),
+                        const SizedBox(height: 8),
+                        r.pill,
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        Expanded(child: _mastText(r)),
+                        const SizedBox(width: 14),
+                        r.pill,
                       ],
                     ),
-                  ),
-                  const SizedBox(width: 14),
-                  r.pill,
-                ],
-              ),
             ),
           if (note != null) ...[
             const SizedBox(height: 8),

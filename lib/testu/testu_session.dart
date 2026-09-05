@@ -92,6 +92,12 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
   final _anchors = <int, GlobalKey>{};
   GlobalKey? _anchor;
 
+  /// Whether the list still follows new content. A finger that drags away
+  /// from the bottom takes it back: a tutor message fires onGrew on every
+  /// step of its reveal, and following that yanks the reader mid-sentence.
+  bool _stick = true;
+  static const _stickSlack = 80.0;
+
   /// Adapter picked by the compile-time flag; falls back to local if the
   /// live load fails, so it is not final.
   late TestuQuestionSource _source = testuLive
@@ -258,7 +264,7 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
     // Chatting wins over "keep the framing in view": otherwise a hint
     // reply lands below the fold and the auto-scroll snaps back up.
     _anchor = null;
-    _scrollDown();
+    _scrollDownForced();
     if (q != null && canAskSully(q)) {
       void sullySays(String s) {
         // Only the reply to an open question: the server also posts its
@@ -364,13 +370,20 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
         // otherwise Sully's verdict/challenge lands below the fold unseen.
         _anchor = null;
       }
-      _scrollDown();
+      _scrollDownForced();
     }
+  }
+
+  /// Re-arms the auto-scroll for content the user asked for — a new question,
+  /// their own message — as opposed to content that merely grew.
+  void _scrollDownForced() {
+    _stick = true;
+    _scrollDown();
   }
 
   void _scrollDown() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_scroll.hasClients) return;
+      if (!mounted || !_scroll.hasClients || !_stick) return;
       var target = _scroll.position.maxScrollExtent;
       // Bottom-aligning a tall question card pushes the framing bubble and
       // the question text off the top. Never scroll past the current
@@ -679,33 +692,51 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
           Expanded(
             child: Stack(
               children: [
-                ListView(
-                  controller: _scroll,
-                  padding:
-                      EdgeInsets.fromLTRB(18, 14, 18, dock == null ? 40 : 130),
-                  children: [
-                    // ponytail: the loading state is Sully typing — a delay
-                    // longer than any fetch, so the dots never resolve; the
-                    // bubble is replaced by the transcript when _boot lands.
-                    if (_loading)
-                      const _SullyBubble(
-                          key: ValueKey('sully-loading'),
-                          spans: [],
-                          delay: 600000),
-                    for (final (i, e) in _controller.transcript.indexed) ...[
-                      _entryWidget(e),
-                      for (final c in _chat)
-                        if (c.$1 == i + 1) _chatBubble(c),
+                NotificationListener<ScrollNotification>(
+                  // Only a finger unsticks the list, never the auto-scroll's
+                  // own animation — that one ends above the bottom whenever
+                  // the anchor clamp holds a question's framing in view.
+                  onNotification: (n) {
+                    if (n is ScrollStartNotification && n.dragDetails != null) {
+                      _stick = false;
+                    } else if (n is ScrollUpdateNotification &&
+                        n.dragDetails != null) {
+                      _stick = n.metrics.extentAfter < _stickSlack;
+                    } else if (n is ScrollEndNotification &&
+                        n.metrics.extentAfter < _stickSlack) {
+                      // A fling that coasted back to the bottom re-arms it.
+                      _stick = true;
+                    }
+                    return false;
+                  },
+                  child: ListView(
+                    controller: _scroll,
+                    padding: EdgeInsets.fromLTRB(
+                        18, 14, 18, dock == null ? 40 : 130),
+                    children: [
+                      // ponytail: the loading state is Sully typing — a delay
+                      // longer than any fetch, so the dots never resolve; the
+                      // bubble is replaced by the transcript when _boot lands.
+                      if (_loading)
+                        const _SullyBubble(
+                            key: ValueKey('sully-loading'),
+                            spans: [],
+                            delay: 600000),
+                      for (final (i, e) in _controller.transcript.indexed) ...[
+                        _entryWidget(e),
+                        for (final c in _chat)
+                          if (c.$1 == i + 1) _chatBubble(c),
+                      ],
+                      // Live reply pending: Sully's typing indicator. Keyed so
+                      // the reply bubble that takes its slot gets a fresh State
+                      // (otherwise it inherits these never-ending dots).
+                      if (_waitingSully)
+                        const _SullyBubble(
+                            key: ValueKey('sully-typing'),
+                            spans: [],
+                            delay: 600000),
                     ],
-                    // Live reply pending: Sully's typing indicator. Keyed so
-                    // the reply bubble that takes its slot gets a fresh State
-                    // (otherwise it inherits these never-ending dots).
-                    if (_waitingSully)
-                      const _SullyBubble(
-                          key: ValueKey('sully-typing'),
-                          spans: [],
-                          delay: 600000),
-                  ],
+                  ),
                 ),
                 if (dock != null)
                   Positioned(
@@ -1703,18 +1734,11 @@ class TestuDebriefScreen extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 2),
-            // IntrinsicHeight: the mastery label wraps to 2 lines, the mono
-            // stats don't — cards must still share one height.
-            IntrinsicHeight(
-              child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
+            _StatBand([
                 _Stat(L('CORRECT', 'CORRECTAS'),
                     child: _statMono('$correct / $total', t.ink)),
-                const SizedBox(width: 9),
                 _Stat(L('CALIBRATION', 'CALIBRACIÓN'),
                     child: _statMono(calPct, t.ink)),
-                const SizedBox(width: 9),
                 // ponytail: mastery band is illustrative — a real band needs
                 // the backend's mastery model, not 3 questions of evidence.
                 _Stat(L('MASTERY', 'DOMINIO'),
@@ -1727,9 +1751,7 @@ class TestuDebriefScreen extends StatelessWidget {
                         color: Color(0xFF7DBB9C),
                       ),
                     )),
-              ],
-              ),
-            ),
+            ]),
             const SizedBox(height: 18),
             TestuCard(
               padding: EdgeInsets.zero,
@@ -1835,6 +1857,43 @@ class TestuDebriefScreen extends StatelessWidget {
       );
 }
 
+/// The three debrief stat cards. Side by side as approved — but a third of a
+/// phone's width is narrower than the word "Competente" past XXL, where it
+/// broke mid-word, so at those sizes they stack full width instead.
+class _StatBand extends StatelessWidget {
+  const _StatBand(this.stats);
+
+  final List<Widget> stats;
+
+  @override
+  Widget build(BuildContext context) {
+    if (testuBigText(context)) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final (i, s) in stats.indexed) ...[
+            if (i > 0) const SizedBox(height: 9),
+            s,
+          ],
+        ],
+      );
+    }
+    // IntrinsicHeight: the mastery label wraps to 2 lines, the mono stats
+    // don't — cards must still share one height.
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final (i, s) in stats.indexed) ...[
+            if (i > 0) const SizedBox(width: 9),
+            Expanded(child: s),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _Stat extends StatelessWidget {
   const _Stat(this.label, {required this.child});
 
@@ -1844,25 +1903,23 @@ class _Stat extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TestuTokens.of(context);
-    return Expanded(
-      child: TestuCard(
-        padding: const EdgeInsets.fromLTRB(12, 13, 12, 13),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontFamily: 'GeistMono',
-                fontSize: 8.5,
-                letterSpacing: 1.02, // +0.12em
-                color: t.faint,
-              ),
+    return TestuCard(
+      padding: const EdgeInsets.fromLTRB(12, 13, 12, 13),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontFamily: 'GeistMono',
+              fontSize: 8.5,
+              letterSpacing: 1.02, // +0.12em
+              color: t.faint,
             ),
-            const SizedBox(height: 6),
-            child,
-          ],
-        ),
+          ),
+          const SizedBox(height: 6),
+          child,
+        ],
       ),
     );
   }

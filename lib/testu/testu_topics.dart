@@ -975,13 +975,18 @@ class _TopicHero extends StatelessWidget {
           Image(image: _topicImage(home.img),
               fit: BoxFit.cover,
               alignment: const Alignment(0, 0.24)), // center 62%
-          const DecoratedBox(
+          // The hero height is pinned, so the pill/title/meta stack grows
+          // upward with Dynamic Type. Past XXL it climbed clear of the
+          // approved scrim into bright artwork, so the ramp starts higher.
+          DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                stops: [0.0, 0.34, 0.94],
-                colors: [
+                stops: testuBigText(context)
+                    ? const [0.0, 0.16, 0.66]
+                    : const [0.0, 0.34, 0.94],
+                colors: const [
                   Color(0x3D0A0A0B),
                   Color(0x100A0A0B),
                   Color(0xFB0A0A0B),

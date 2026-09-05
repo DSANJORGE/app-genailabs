@@ -489,14 +489,12 @@ class _ContinueHeroState extends State<_ContinueHero> {
                       pillColor: head.pillColor,
                       pillBorder: head.pillBorder,
                     ))),
-          child: SizedBox(
-            height: 340,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  head == null
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: head == null
                       ? Image.asset(
                           client.name == 'Minsur'
                               ? 'assets/img/mine_hero.jpg'
@@ -509,100 +507,111 @@ class _ContinueHeroState extends State<_ContinueHero> {
                           fit: BoxFit.cover,
                           alignment: const Alignment(0, 0.44),
                         ),
-              // Scrim length: "Actual" kept deliberately (variant test
-              // 2026-08-31 — Corta/Mínima rejected).
-              const DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    stops: [0.25, 0.72, 1.0],
-                    colors: [
-                      Color(0x080A0A0B),
-                      Color(0xD80A0A0B),
-                      Color(0xF80A0A0B),
-                    ],
-                  ),
                 ),
-              ),
-              Positioned(
-                left: 18,
-                right: 18,
-                bottom: 18,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    TestuEyebrow(
-                        L('CONTINUE LEARN MODE', 'CONTINUAR MODO APRENDER'),
-                        color: t.orange),
-                    const SizedBox(height: 8),
-                    Text(
-                      head?.title ??
-                          CL('Human Rights & Due Diligence',
-                              'Derechos Humanos y Debida Diligencia',
-                              'Ramp Safety & Aircraft Turnaround',
-                              'Seguridad en Rampa y Turnaround'),
-                      style: TextStyle(
-                        fontFamily: 'Sora',
-                        fontWeight: FontWeight.w700,
-                        fontSize: 20,
-                        letterSpacing: -0.2,
-                        height: 1.2,
-                        color: t.ink,
+                // Scrim length: "Actual" kept deliberately (variant test
+                // 2026-08-31 — Corta/Mínima rejected). Past XXL the copy
+                // block is over half the card, so the ramp starts higher —
+                // otherwise the eyebrow lands on bright artwork.
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        stops: testuBigText(context)
+                            ? const [0.10, 0.40, 1.0]
+                            : const [0.25, 0.72, 1.0],
+                        colors: const [
+                          Color(0x080A0A0B),
+                          Color(0xD80A0A0B),
+                          Color(0xF80A0A0B),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Row(
+                  ),
+                ),
+                // 340 as approved, and taller when Dynamic Type makes the
+                // copy taller — the old fixed box clipped the eyebrow off.
+                ConstrainedBox(
+                  constraints: const BoxConstraints(
+                      minWidth: double.infinity, minHeight: 340),
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Live: the learner's own tally, same as the Topics
-                        // row; the prototype's numbers until it loads.
-                        TestuPill(
-                            head?.pill ??
-                                L('Competent · Review soon',
-                                    'Competente · Repasar pronto'),
-                            color: head?.pillColor ?? t.gold,
-                            borderColor:
-                                head?.pillBorder ?? const Color(0xFF8A7A3A)),
-                        const SizedBox(width: 10),
-                        // Flexible: overflows at 360dp otherwise (Spanish).
-                        Flexible(
-                          child: Text(
-                            head == null
-                                ? L('21 of 36 questions', '21 de 36 preguntas')
-                                : L('${head.answered} of ${head.questions} questions',
-                                    '${head.answered} de ${head.questions} preguntas'),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontFamily: 'Geist',
-                              fontSize: 11.5,
-                              color: Color(0xFFB5B4B0),
-                            ),
+                        TestuEyebrow(
+                            L('CONTINUE LEARN MODE', 'CONTINUAR MODO APRENDER'),
+                            color: t.orange),
+                        const SizedBox(height: 8),
+                        Text(
+                          head?.title ??
+                              CL('Human Rights & Due Diligence',
+                                  'Derechos Humanos y Debida Diligencia',
+                                  'Ramp Safety & Aircraft Turnaround',
+                                  'Seguridad en Rampa y Turnaround'),
+                          style: TextStyle(
+                            fontFamily: 'Sora',
+                            fontWeight: FontWeight.w700,
+                            fontSize: 20,
+                            letterSpacing: -0.2,
+                            height: 1.2,
+                            color: t.ink,
                           ),
                         ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            // Live: the learner's own tally, same as the Topics
+                            // row; the prototype's numbers until it loads.
+                            TestuPill(
+                                head?.pill ??
+                                    L('Competent · Review soon',
+                                        'Competente · Repasar pronto'),
+                                color: head?.pillColor ?? t.gold,
+                                borderColor:
+                                    head?.pillBorder ?? const Color(0xFF8A7A3A)),
+                            const SizedBox(width: 10),
+                            // Flexible: overflows at 360dp otherwise (Spanish).
+                            Flexible(
+                              child: Text(
+                                head == null
+                                    ? L('21 of 36 questions', '21 de 36 preguntas')
+                                    : L('${head.answered} of ${head.questions} questions',
+                                        '${head.answered} de ${head.questions} preguntas'),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontFamily: 'Geist',
+                                  fontSize: 11.5,
+                                  color: Color(0xFFB5B4B0),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        TestuHairline(
+                            head == null || head.questions == 0
+                                ? 0.58
+                                : head.answered / head.questions,
+                            trackColor: const Color(0x28FFFFFF)),
+                        const SizedBox(height: 14),
+                        // Quiet until the evaluation is scheduled, then promoted
+                        // to white (one white CTA per screen).
+                        TestuButton(
+                            L('CONTINUE WITH YOUR TUTOR', 'CONTINUAR CON TU TUTOR'),
+                            variant: widget.promoted
+                                ? TestuButtonVariant.primary
+                                : TestuButtonVariant.onimg,
+                            onTap: () =>
+                                showTestuSession(context, topicId: head?.id)),
                       ],
                     ),
-                    const SizedBox(height: 12),
-                    TestuHairline(
-                        head == null || head.questions == 0
-                            ? 0.58
-                            : head.answered / head.questions,
-                        trackColor: const Color(0x28FFFFFF)),
-                    const SizedBox(height: 14),
-                    // Quiet until the evaluation is scheduled, then promoted
-                    // to white (one white CTA per screen).
-                    TestuButton(
-                        L('CONTINUE WITH YOUR TUTOR', 'CONTINUAR CON TU TUTOR'),
-                        variant: widget.promoted
-                            ? TestuButtonVariant.primary
-                            : TestuButtonVariant.onimg,
-                        onTap: () =>
-                            showTestuSession(context, topicId: head?.id)),
-                  ],
+                  ),
                 ),
-              ),
-                ],
-              ),
+              ],
             ),
           ),
         );

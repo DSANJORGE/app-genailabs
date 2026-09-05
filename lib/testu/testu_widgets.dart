@@ -11,6 +11,13 @@ import 'testu_theme.dart';
 ImageProvider testuImage(String src) =>
     src.startsWith('http') ? NetworkImage(src) : AssetImage(src);
 
+/// True past the Dynamic Type size where a label and a pill stop fitting on
+/// one line — iOS XXL and up. Below it the approved v6 layout is untouched;
+/// above it, rows built for a phone-width line stack instead of overflowing
+/// or breaking a word in half.
+bool testuBigText(BuildContext context) =>
+    MediaQuery.textScalerOf(context).scale(100) > 120;
+
 /// Press feedback per spec: opacity .75 + scale .985 + selectionClick haptic.
 class TestuPressable extends StatefulWidget {
   const TestuPressable({super.key, required this.child, this.onTap});
