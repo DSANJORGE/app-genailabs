@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:eme_app_package/eme_http.dart';
-import 'package:eme_app_package/models/chat_message.dart';
 import 'package:eme_app_package/models/topic.dart';
 import 'package:eme_app_package/models/tutor_channel.dart';
 import 'package:eme_app_package/services/chat_socket_service.dart';
@@ -224,8 +223,9 @@ Stream<String> sullyReplies() => ChatSocketService()
         m.isAI &&
         !m.isKeepAlive &&
         !m.isMessageRemoved &&
-        (m.messageType == MessageType.agentcomment ||
-            m.messageType == MessageType.text))
+        // Upstream renamed the enum to MessageRenderType (2026-09-03);
+        // ChatMessage.messageType is now the raw string field.
+        (m.messageRenderType.isAgentComment || m.messageRenderType.isText))
     .map((m) => _plainText(m.text))
     .where((s) => s.isNotEmpty)
     .map((s) => isSullyError(s) ? sullyUnavailable() : s);
