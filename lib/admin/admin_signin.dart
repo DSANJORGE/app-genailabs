@@ -19,12 +19,20 @@ class _AdminSigninState extends State<AdminSignin> {
   bool _codeStage = false, _busy = false;
   String? _error;
 
+  @override
+  void dispose() {
+    _email.dispose();
+    _code.dispose();
+    super.dispose();
+  }
+
   Future<void> _send() async {
     setState(() {
       _busy = true;
       _error = null;
     });
     final s = await AdminSession.sendCode(_email.text.trim());
+    if (!mounted) return;
     setState(() {
       _busy = false;
       _codeStage = s == 'ok';
@@ -43,6 +51,7 @@ class _AdminSigninState extends State<AdminSignin> {
       _error = null;
     });
     final ok = await AdminSession.login(_email.text.trim(), _code.text.trim());
+    if (!mounted) return;
     if (ok) {
       widget.onSignedIn();
       return;
