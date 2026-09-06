@@ -24,6 +24,7 @@ dependencies:
   shared_preferences: ^2.5.5
   video_player: ^2.14.0
   local_auth: ^3.0.2
+  web: ^1.1.1
 
 dev_dependencies:
   flutter_test:
