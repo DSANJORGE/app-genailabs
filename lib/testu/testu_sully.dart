@@ -5,8 +5,190 @@ import 'package:flutter/material.dart';
 import 'testu_i18n.dart';
 import 'testu_live.dart';
 import 'testu_pdf.dart';
+import 'testu_resources.dart';
 import 'testu_theme.dart';
 import 'testu_client.dart';
+import 'testu_widgets.dart';
+
+/// Opens the source a citation names: a live video at its time, else the
+/// PDF at its page. Viewers that already show that source pass their own
+/// [SullyMessage.onOpenSource] and move instead of stacking a second sheet.
+void openTestuSource(BuildContext context, Cite c) {
+  final doc = liveDocs[c.title];
+  if (doc != null && doc.isVideo) {
+    showTestuVideo(context, doc, at: c.at ?? Duration.zero);
+  } else {
+    showTestuPdf(context,
+        page: c.page, cite: c.title, doc: doc, rects: c.rects);
+  }
+}
+
+/// " · p. N" for a page, " · m:ss" for a time; nothing for a video cited
+/// without a time (the server's page label means nothing there).
+String whereOf(Ref r) => r.at != null
+    ? ' · ${fmtClock(r.at!)}'
+    : liveDocs[r.title]?.isVideo == true
+        ? ''
+        : ' · p. ${r.page}';
+
+/// The reply cited several places: pick one. Primary source first, then
+/// the others, each "PDF/VIDEO  Title · p. N | m:ss".
+void showTestuSources(
+    BuildContext context, Cite c, void Function(Cite) open) {
+  final t = TestuTokens.of(context);
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: t.card,
+    shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+    builder: (ctx) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
+            child: Text(L('Sources', 'Fuentes'), style: kLabel),
+          ),
+          for (final r in [c.ref, ...c.others])
+            TestuPressable(
+              onTap: () {
+                Navigator.of(ctx).pop();
+                open(c.to(r));
+              },
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                child: Row(children: [
+                  SizedBox(
+                    width: 44,
+                    child: Text(
+                      liveDocs[r.title]?.isVideo == true ? 'VIDEO' : 'PDF',
+                      style: TextStyle(
+                          fontFamily: 'GeistMono',
+                          fontSize: 9,
+                          letterSpacing: 1.44,
+                          color: t.orange),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      '${r.title}${whereOf(r)}',
+                      style: const TextStyle(
+                          fontFamily: 'Geist',
+                          fontSize: 13,
+                          color: Color(0xFFD6D4D0)),
+                    ),
+                  ),
+                ]),
+              ),
+            ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    ),
+  );
+}
+
+/// The tutor's citation, everywhere the tutor speaks: orange rule, the
+/// quoted passage (when there is one), then "Source · p. N · Open source".
+class TestuSourceBlock extends StatelessWidget {
+  const TestuSourceBlock(
+      {super.key,
+      this.quote,
+      required this.meta,
+      required this.label,
+      required this.onTap});
+
+  final String? quote;
+  final String meta;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TestuTokens.of(context);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(13, 2, 0, 2),
+      decoration: BoxDecoration(
+        border: Border(left: BorderSide(color: t.orange, width: 2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (quote != null) ...[
+            Text(
+              '“$quote”',
+              style: const TextStyle(
+                fontFamily: 'Sora',
+                fontSize: 12.5,
+                height: 1.62,
+                color: Color(0xFFDCDAD6),
+              ),
+            ),
+            const SizedBox(height: 7),
+          ],
+          Text.rich(
+            TextSpan(children: [
+              TextSpan(text: '$meta · '),
+              WidgetSpan(
+                alignment: PlaceholderAlignment.baseline,
+                baseline: TextBaseline.alphabetic,
+                child: GestureDetector(
+                  onTap: onTap,
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontFamily: 'Geist',
+                      fontSize: 10.5,
+                      color: t.blue,
+                      decoration: TextDecoration.underline,
+                      decorationColor: const Color(0xFF3D5C7D),
+                    ),
+                  ),
+                ),
+              ),
+            ]),
+            style: kMeta,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Tutor markdown as spans: `**bold**`, `*italic*`, `` `code` ``, `#`
+/// headings (bold lines), `*`/`-` bullets ("•"). ponytail: no tables,
+/// links or nesting — a markdown package when a reply needs them.
+List<InlineSpan> mdSpans(String md) {
+  final out = <InlineSpan>[];
+  final lines = md.split('\n');
+  for (final (i, raw) in lines.indexed) {
+    var line = raw;
+    final h = RegExp(r'^\s*#{1,6}\s+(.*)$').firstMatch(line);
+    if (h != null) line = '**${h[1]}**';
+    line = line.replaceFirst(RegExp(r'^\s*[*\-•]\s+'), '• ');
+    var last = 0;
+    for (final m in _mdInline.allMatches(line)) {
+      if (m.start > last) out.add(TextSpan(text: line.substring(last, m.start)));
+      out.add(TextSpan(
+        text: m[1] ?? m[2] ?? m[3] ?? m[4] ?? m[5],
+        style: m[1] != null || m[2] != null
+            ? const TextStyle(fontWeight: FontWeight.w700)
+            : m[5] != null
+                ? const TextStyle(fontFamily: 'GeistMono')
+                : const TextStyle(fontStyle: FontStyle.italic),
+      ));
+      last = m.end;
+    }
+    if (last < line.length) out.add(TextSpan(text: line.substring(last)));
+    if (i < lines.length - 1) out.add(const TextSpan(text: '\n'));
+  }
+  return out;
+}
+
+final _mdInline = RegExp(
+    r'\*\*(.+?)\*\*|__(.+?)__|(?<![\w*])\*(?!\s)(.+?)(?<!\s)\*(?![\w*])|(?<!\w)_(.+?)_(?!\w)|`(.+?)`');
 
 /// Sully chat bubble, shared by every screen: 26px avatar, mono client.tutor.toUpperCase()
 /// label, 13.5px body. Shows typing dots for [delay] ms before revealing the
@@ -21,6 +203,12 @@ class SullyMessage extends StatefulWidget {
     this.onGrew,
     this.sourceLine,
     this.sourcePage = 1,
+    this.sourceAt,
+    this.sourceQuote,
+    this.sourceOthers = const [],
+    this.sourceRects = const [],
+    this.inDoc,
+    this.onOpenSource,
     this.bottomPadding = 0,
     this.avatar = true,
   });
@@ -35,6 +223,29 @@ class SullyMessage extends StatefulWidget {
     this.avatar = true,
   })  : spans = [TextSpan(text: text)],
         sourcePage = 1,
+        sourceAt = null,
+        sourceQuote = null,
+        sourceOthers = const [],
+        sourceRects = const [],
+        inDoc = null,
+        onOpenSource = null,
+        extra = null,
+        onGrew = null;
+
+  /// Typing dots while a live reply is pending. Key it so the reply that
+  /// takes its slot gets a fresh State (else it inherits never-ending dots).
+  const SullyMessage.typing(
+      {super.key, this.bottomPadding = 12, this.avatar = true})
+      : spans = const [],
+        delay = 600000,
+        sourceLine = null,
+        sourcePage = 1,
+        sourceAt = null,
+        sourceQuote = null,
+        sourceOthers = const [],
+        sourceRects = const [],
+        inDoc = null,
+        onOpenSource = null,
         extra = null,
         onGrew = null;
 
@@ -48,29 +259,59 @@ class SullyMessage extends StatefulWidget {
       double bottomPadding = 0,
       bool avatar = true,
       String? fallbackTitle,
-      int fallbackPage = 1})
+      int fallbackPage = 1,
+      String? inDoc,
+      void Function(Cite)? onOpenSource})
       : this._cite(_withFallback(splitCite(reply), fallbackTitle, fallbackPage),
-            key: key, bottomPadding: bottomPadding, avatar: avatar);
+            key: key,
+            bottomPadding: bottomPadding,
+            avatar: avatar,
+            inDoc: inDoc,
+            onOpenSource: onOpenSource);
 
-  static ({String text, String? title, int page}) _withFallback(
-          ({String text, String? title, int page}) c,
-          String? title,
-          int page) =>
+  static Cite _withFallback(Cite c, String? title, int page) =>
       c.title != null || title == null
           ? c
-          : (text: c.text, title: title, page: page);
+          : Cite(text: c.text, quote: c.quote, title: title, page: page);
 
-  SullyMessage._cite(({String text, String? title, int page}) c,
-      {super.key, this.bottomPadding = 0, this.avatar = true})
-      : spans = [TextSpan(text: c.text)],
+  SullyMessage._cite(Cite c,
+      {super.key,
+      this.bottomPadding = 0,
+      this.avatar = true,
+      this.inDoc,
+      this.onOpenSource})
+      : spans = mdSpans(c.text),
         sourceLine = c.title,
         sourcePage = c.page,
+        sourceAt = c.at,
+        sourceQuote = c.quote,
+        sourceOthers = c.others,
+        sourceRects = c.rects,
         delay = 0,
         extra = null,
         onGrew = null;
 
   /// Page the source link opens (live citations only).
   final int sourcePage;
+
+  /// Time the source link seeks to (video citations only).
+  final Duration? sourceAt;
+
+  /// Verbatim passage the server quoted from the cited page.
+  final String? sourceQuote;
+
+  /// Further places the reply cited: the link offers them in a sheet.
+  final List<Ref> sourceOthers;
+
+  /// Page-relative boxes of the passage, painted over the PDF page.
+  final List<Rect> sourceRects;
+
+  /// Title of the document this bubble sits in (viewer sheets): a citation
+  /// of it says "View source" (move there); anything else "Open source".
+  final String? inDoc;
+
+  /// Source link handler; null = open the cited document in a new sheet.
+  final void Function(Cite)? onOpenSource;
 
   /// False = name kicker only, no face — for screens whose header already
   /// carries the tutor's avatar (the tutor tab).
@@ -115,6 +356,37 @@ class _SullyMessageState extends State<SullyMessage> {
   void dispose() {
     _reveal?.cancel();
     super.dispose();
+  }
+
+  Cite get _cite => Cite(
+        quote: widget.sourceQuote,
+        title: widget.sourceLine,
+        page: widget.sourcePage,
+        at: widget.sourceAt,
+        others: widget.sourceOthers,
+        rects: widget.sourceRects,
+      );
+
+  String get _where => whereOf(_cite.ref);
+
+  /// One source → open it; several → the sources sheet, then open the pick.
+  void _open(BuildContext context) => widget.sourceOthers.isEmpty
+      ? _go(context, _cite)
+      : showTestuSources(context, _cite, (c) => _go(context, c));
+
+  void _go(BuildContext context, Cite c) => widget.onOpenSource != null
+      ? widget.onOpenSource!(c)
+      : openTestuSource(context, c);
+
+  String get _label {
+    final n = 1 + widget.sourceOthers.length;
+    final inDoc = widget.inDoc == widget.sourceLine;
+    if (n == 1) {
+      return inDoc ? L('View source', 'Ver fuente') : L('Open source', 'Abrir fuente');
+    }
+    return inDoc
+        ? L('View sources ($n)', 'Ver fuentes ($n)')
+        : L('Open sources ($n)', 'Abrir fuentes ($n)');
   }
 
   @override
@@ -165,35 +437,12 @@ class _SullyMessageState extends State<SullyMessage> {
                     ),
                   ),
                   if (widget.sourceLine != null) ...[
-                    const SizedBox(height: 8),
-                    Text.rich(
-                      TextSpan(children: [
-                        TextSpan(
-                            text:
-                                '${L('Source', 'Fuente')}: ${widget.sourceLine} · '),
-                        WidgetSpan(
-                          alignment: PlaceholderAlignment.baseline,
-                          baseline: TextBaseline.alphabetic,
-                          child: GestureDetector(
-                            onTap: () => showTestuPdf(context,
-                                page: widget.sourcePage,
-                                cite: widget.sourceLine,
-                                doc: liveDocs[widget.sourceLine]),
-                            child: Text(
-                              L('Open source', 'Abrir fuente'),
-                              style: TextStyle(
-                                fontFamily: 'Geist',
-                                fontSize: 10.5,
-                                color: t.blue,
-                                decoration: TextDecoration.underline,
-                                decorationColor: const Color(0xFF3D5C7D),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ]),
-                      style: TextStyle(
-                          fontFamily: 'Geist', fontSize: 10.5, color: t.faint),
+                    const SizedBox(height: 10),
+                    TestuSourceBlock(
+                      quote: widget.sourceQuote,
+                      meta: '${widget.sourceLine}$_where',
+                      label: _label,
+                      onTap: () => _open(context),
                     ),
                   ],
                   if (widget.extra != null) widget.extra!,

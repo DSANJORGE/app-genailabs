@@ -19,7 +19,10 @@ const _a4 = 1 / 1.414; // live documents: server-rendered PDF pages
 /// to the cited page. Blue "Open source" links land here. [doc] = a live
 /// reference document from the server; null = the offline demo's FAA manual.
 void showTestuPdf(BuildContext context,
-    {int page = 1, String? cite, LiveDoc? doc}) {
+    {int page = 1,
+    String? cite,
+    LiveDoc? doc,
+    List<Rect> rects = const []}) {
   HapticFeedback.selectionClick();
   // Live: a citation whose title matches no loaded document still opens a
   // server document, not the offline demo's aviation manual.
@@ -36,16 +39,23 @@ void showTestuPdf(BuildContext context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     barrierColor: const Color(0xA8000000),
-    builder: (_) => _PdfSheet(page: page, sub: '$sub · p. $page', doc: doc),
+    builder: (_) => _PdfSheet(page: page, sub: sub, doc: doc, rects: rects),
   );
 }
 
 class _PdfSheet extends StatefulWidget {
-  const _PdfSheet({required this.page, required this.sub, this.doc});
+  const _PdfSheet(
+      {required this.page,
+      required this.sub,
+      this.doc,
+      this.rects = const []});
 
   final int page;
   final String sub;
   final LiveDoc? doc;
+
+  /// Page-relative boxes of the cited passage on [page] (orange wash).
+  final List<Rect> rects;
 
   String get title => doc?.title ?? 'FAA AC 00-34A';
   int get pages => doc?.pages ?? _pages;
@@ -71,15 +81,167 @@ class _PdfSheetState extends State<_PdfSheet> {
   // splits in landscape, so deriving this from the screen guesses wrong.
   double _pageListW = 0;
 
+  /// Page under the middle of the viewport — the header's "p. N / M".
+  late int _cur = widget.page;
+
+  /// The passage currently washed orange: the opening citation, then the
+  /// latest one the tutor made about this document.
+  late ({int page, List<Rect> rects}) _hl =
+      (page: widget.page, rects: widget.rects);
+
+  /// A citation of this document: mark its passage and scroll there.
+  void _mark(Cite c) {
+    setState(() => _hl = (page: c.page, rects: c.rects));
+    _goTo(c.page);
+  }
+
+  /// Quarter turns applied to every page (scanned sideways, landscape
+  /// tables): the header's ↻ button.
+  int _turns = 0;
+
+  /// Aspect of a page as shown — swapped when turned on its side.
+  double get _aspect => _turns.isOdd ? 1 / widget.aspect : widget.aspect;
+
+  void _rotate() {
+    HapticFeedback.selectionClick();
+    final page = _cur;
+    setState(() => _turns = (_turns + 1) % 4);
+    // Row pitch changes with the aspect: keep the same page under the eye.
+    if (_scroll.hasClients) _scroll.jumpTo((page - 1) * _pitch);
+  }
+
+  /// Table of contents (server `chapters` "p. N Title" lines) as a sheet;
+  /// a row scrolls the viewer to its page.
+  void _showToc() {
+    final toc = widget.doc!.toc;
+    final t = TestuTokens.of(context);
+    HapticFeedback.selectionClick();
+    // The entry the current page falls in.
+    var here = -1;
+    for (final (i, e) in toc.indexed) {
+      if (e.page <= _cur) here = i;
+    }
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: t.card,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+      builder: (ctx) => SafeArea(
+        child: SizedBox(
+          height: MediaQuery.sizeOf(ctx).height * 0.7,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
+                child: Text(L('Contents', 'Índice'), style: kLabel),
+              ),
+              Expanded(
+                child: ListView.builder(
+                  controller: ScrollController(
+                      initialScrollOffset: (here - 2).clamp(0, toc.length) * 44.0),
+                  itemCount: toc.length,
+                  itemBuilder: (_, i) {
+                    final e = toc[i];
+                    // ponytail: un-numbered lines are sub-entries → indented.
+                    final sub = !RegExp(r'^(\d|Capítulo|Chapter)').hasMatch(e.name);
+                    return TestuPressable(
+                      onTap: () {
+                        Navigator.of(ctx).pop();
+                        _goTo(e.page);
+                      },
+                      child: Padding(
+                        padding: EdgeInsets.fromLTRB(sub ? 36 : 20, 12, 20, 12),
+                        child: Row(children: [
+                          Expanded(
+                            child: Text(
+                              e.name,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  fontFamily: 'Geist',
+                                  fontSize: 13,
+                                  color: i == here
+                                      ? t.orange
+                                      : const Color(0xFFD6D4D0)),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Text('p. ${e.page}',
+                              style: TextStyle(
+                                  fontFamily: 'GeistMono',
+                                  fontSize: 10,
+                                  color: i == here ? t.orange : t.mut)),
+                        ]),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Row pitch: page height + the 10px gap below it.
+  double get _pitch => (_pageListW - 24) / _aspect + 10;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scroll.hasClients) return;
-      final pageW = _pageListW - 24;
-      final off = (widget.page - 1) * (pageW / widget.aspect + 10);
-      _scroll.jumpTo(off.clamp(0, _scroll.position.maxScrollExtent));
+      _scroll.jumpTo(_offsetOf(widget.page));
     });
+    _scroll.addListener(() {
+      final mid = _scroll.offset + _scroll.position.viewportDimension / 2;
+      final p = (mid / _pitch).floor().clamp(0, widget.pages - 1) + 1;
+      if (p != _cur) setState(() => _cur = p);
+    });
+  }
+
+  double _offsetOf(int page) =>
+      ((page - 1) * _pitch).clamp(0, _scroll.position.maxScrollExtent);
+
+  /// Scrolls to [page]: the header tap, and the tutor's citations.
+  void _goTo(int page) {
+    if (!_scroll.hasClients) return;
+    HapticFeedback.selectionClick();
+    _scroll.animateTo(_offsetOf(page.clamp(1, widget.pages)),
+        duration: const Duration(milliseconds: 350), curve: TestuTokens.curve);
+  }
+
+  // Owned by the sheet: disposing it as the dialog pops (still animating
+  // out) trips the framework's `_dependents.isEmpty` assertion.
+  final _pageField = TextEditingController();
+
+  Future<void> _askPage() async {
+    final field = _pageField..clear();
+    final s = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(L('Go to page', 'Ir a la página'), style: kLabel),
+        content: TextField(
+          controller: field,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(hintText: '1 – ${widget.pages}'),
+          onSubmitted: (v) => Navigator.of(ctx).pop(v),
+        ),
+        // The number pad has no return key; this is its submit.
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(field.text),
+            child: Text(L('Go', 'Ir')),
+          ),
+        ],
+      ),
+    );
+    final page = int.tryParse(s ?? '');
+    if (page != null) _goTo(page);
   }
 
   @override
@@ -88,6 +250,7 @@ class _PdfSheetState extends State<_PdfSheet> {
     _timeout?.cancel();
     _scroll.dispose();
     _chatScroll.dispose();
+    _pageField.dispose();
     super.dispose();
   }
 
@@ -103,18 +266,36 @@ class _PdfSheetState extends State<_PdfSheet> {
       void says(String s) {
         if (!mounted || !_waiting) return;
         _timeout?.cancel();
+        final key = GlobalKey();
         setState(() {
           _waiting = false;
+          _chat.removeWhere((w) => w.key == _typing);
           _chat.add(SullyMessage.reply(s,
+              key: key,
               bottomPadding: 12,
               fallbackTitle: widget.doc!.title,
-              fallbackPage: widget.page));
+              fallbackPage: _cur,
+              inDoc: widget.doc!.title,
+              onOpenSource: _openSource));
         });
-        _down();
+        // Read from the top of the answer, not its tail.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          final ctx = key.currentContext;
+          if (ctx != null) {
+            Scrollable.ensureVisible(ctx,
+                alignment: 0, duration: const Duration(milliseconds: 350));
+          }
+        });
+        // The cited page comes into view on its own; "View source" repeats it.
+        final c = splitCite(s);
+        if (c.title == widget.doc!.title) _mark(c);
       }
 
       _sub ??= sullyReplies().listen(says);
-      setState(() => _waiting = true);
+      setState(() {
+        _waiting = true;
+        _chat.add(const SullyMessage.typing(key: _typing));
+      });
       _timeout?.cancel();
       _timeout = Timer(const Duration(seconds: 90), () {
         if (_waiting) says(sullySlowReply());
@@ -135,6 +316,13 @@ class _PdfSheetState extends State<_PdfSheet> {
     }
     _down();
   }
+
+  static const _typing = ValueKey('typing');
+
+  /// This document cited → move here; another → open it on top.
+  void _openSource(Cite c) => c.title == widget.doc!.title
+      ? _mark(c)
+      : openTestuSource(context, c);
 
   void _down() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -212,21 +400,20 @@ class _PdfSheetState extends State<_PdfSheet> {
                         ),
                       ),
                       const SizedBox(height: 1),
-                      Text(
-                        widget.sub,
-                        style: kMeta,
+                      TestuPressable(
+                        onTap: _askPage,
+                        child: Text(
+                          '${widget.sub} · p. $_cur / ${widget.pages}',
+                          style: kMeta,
+                        ),
                       ),
                     ],
                   ),
                 ),
-                TestuPressable(
-                  onTap: () => Navigator.of(context).pop(),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
-                    child: Text('✕',
-                        style: TextStyle(fontSize: 15, color: t.mut)),
-                  ),
-                ),
+                if (widget.doc?.toc.isNotEmpty ?? false)
+                  _tool('☰', _showToc, t),
+                _tool('↻', _rotate, t),
+                _tool('✕', () => Navigator.of(context).pop(), t),
               ],
             ),
           ),
@@ -295,6 +482,16 @@ class _PdfSheetState extends State<_PdfSheet> {
     );
   }
 
+  /// Header tool glyph (index, rotate, close) — same hit size as the ✕.
+  Widget _tool(String glyph, VoidCallback onTap, TestuTokens t) =>
+      TestuPressable(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
+          child: Text(glyph, style: TextStyle(fontSize: 15, color: t.mut)),
+        ),
+      );
+
   Widget _pageList() => LayoutBuilder(builder: (context, bc) {
         _pageListW = bc.maxWidth;
         return Container(
@@ -302,13 +499,18 @@ class _PdfSheetState extends State<_PdfSheet> {
           child: ListView.builder(
             controller: _scroll,
             padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+            // Fixed row height: exact offsets for go-to-page, and no silent
+            // scroll "correction" when ↻ changes every row's height.
+            itemExtent: _pitch,
             itemCount: widget.pages,
             itemBuilder: (context, i) => _Page(
                 index: i + 1,
                 pages: widget.pages,
                 aspect: widget.aspect,
                 title: widget.title,
-                src: widget.src(i + 1)),
+                src: widget.src(i + 1),
+                turns: _turns,
+                rects: i + 1 == _hl.page ? _hl.rects : const []),
           ),
         );
       });
@@ -335,13 +537,21 @@ class _Page extends StatelessWidget {
       required this.pages,
       required this.aspect,
       required this.title,
-      required this.src});
+      required this.src,
+      this.turns = 0,
+      this.rects = const []});
 
   final int index;
   final int pages;
   final double aspect;
   final String title;
   final String src;
+
+  /// Quarter turns (the viewer's rotate button).
+  final int turns;
+
+  /// Page-relative boxes of the cited passage (empty = no wash).
+  final List<Rect> rects;
 
   @override
   Widget build(BuildContext context) {
@@ -359,13 +569,7 @@ class _Page extends StatelessWidget {
         ),
         child: Stack(
           children: [
-            AspectRatio(
-              aspectRatio: aspect,
-              child: Container(
-                color: const Color(0xFFF2F1EC),
-                child: Image(image: testuImage(src), fit: BoxFit.contain),
-              ),
-            ),
+            TestuPageImage(src: src, aspect: aspect, turns: turns, rects: rects),
             Positioned(
               right: 8,
               bottom: 8,
@@ -399,13 +603,65 @@ class _Page extends StatelessWidget {
     );
   }
 
-  void _zoom(BuildContext context) =>
-      showTestuZoom(context, asset: src, label: '$title · p. $index');
+  void _zoom(BuildContext context) => showTestuZoom(context,
+      asset: src,
+      label: '$title · p. $index',
+      aspect: aspect,
+      turns: turns,
+      rects: rects);
+}
+
+/// A rendered page: image at [aspect], turned [turns] quarters, with the
+/// cited passage washed orange. The wash rotates with the page.
+class TestuPageImage extends StatelessWidget {
+  const TestuPageImage(
+      {super.key,
+      required this.src,
+      required this.aspect,
+      this.turns = 0,
+      this.rects = const []});
+
+  final String src;
+  final double aspect;
+  final int turns;
+  final List<Rect> rects;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TestuTokens.of(context);
+    return AspectRatio(
+      aspectRatio: turns.isOdd ? 1 / aspect : aspect,
+      child: RotatedBox(
+        quarterTurns: turns,
+        child: AspectRatio(
+          aspectRatio: aspect,
+          child: Stack(fit: StackFit.expand, children: [
+            Container(
+              color: const Color(0xFFF2F1EC),
+              child: Image(image: testuImage(src), fit: BoxFit.contain),
+            ),
+            if (rects.isNotEmpty)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: CustomPaint(painter: _Wash(rects, t.orange)),
+                ),
+              ),
+          ]),
+        ),
+      ),
+    );
+  }
 }
 
 /// Full-screen pinch-zoom lightbox — PDF pages and question media share it.
+/// With [aspect] the page keeps its wash and rotation (PDF); without, the
+/// raw image (question media). ↻ turns it a quarter each tap.
 void showTestuZoom(BuildContext context,
-    {required String asset, required String label}) {
+    {required String asset,
+    required String label,
+    double? aspect,
+    int turns = 0,
+    List<Rect> rects = const []}) {
   HapticFeedback.selectionClick();
   Navigator.of(context).push(
     PageRouteBuilder<void>(
@@ -413,43 +669,94 @@ void showTestuZoom(BuildContext context,
       barrierColor: const Color(0xF20A0A0B),
       pageBuilder: (context, animation, secondaryAnimation) {
         final t = TestuTokens.of(context);
-        return Scaffold(
-          backgroundColor: Colors.transparent,
-          body: SafeArea(
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: 16),
-                        child: Text(
-                          label,
-                          style: kLabel,
+        var q = turns;
+        return StatefulBuilder(
+          builder: (context, setState) => Scaffold(
+            backgroundColor: Colors.transparent,
+            body: SafeArea(
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 16),
+                          child: Text(
+                            label,
+                            style: kLabel,
+                          ),
                         ),
                       ),
-                    ),
-                    TestuPressable(
-                      onTap: () => Navigator.of(context).pop(),
-                      child: Padding(
-                        padding: const EdgeInsets.all(14),
-                        child: Text('✕',
-                            style: TextStyle(fontSize: 16, color: t.mut)),
+                      TestuPressable(
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          setState(() => q = (q + 1) % 4);
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Text('↻',
+                              style: TextStyle(fontSize: 16, color: t.mut)),
+                        ),
+                      ),
+                      TestuPressable(
+                        onTap: () => Navigator.of(context).pop(),
+                        child: Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Text('✕',
+                              style: TextStyle(fontSize: 16, color: t.mut)),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Expanded(
+                    child: InteractiveViewer(
+                      maxScale: 5,
+                      child: Center(
+                        child: aspect != null
+                            ? TestuPageImage(
+                                src: asset,
+                                aspect: aspect,
+                                turns: q,
+                                rects: rects)
+                            : RotatedBox(
+                                quarterTurns: q,
+                                child: Image(image: testuImage(asset))),
                       ),
                     ),
-                  ],
-                ),
-                Expanded(
-                  child: InteractiveViewer(
-                    maxScale: 5,
-                    child: Center(child: Image(image: testuImage(asset))),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );
       },
     ),
   );
+}
+
+/// Orange wash over the cited passage: one box per text line, in page
+/// fractions (the server's `[[hl …]]`), drawn over the rendered page.
+class _Wash extends CustomPainter {
+  const _Wash(this.rects, this.color);
+
+  final List<Rect> rects;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = color.withValues(alpha: 0.32);
+    for (final r in rects) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(r.left * size.width - 2, r.top * size.height - 1,
+              r.width * size.width + 4, r.height * size.height + 2),
+          const Radius.circular(2),
+        ),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_Wash old) => old.rects != rects || old.color != color;
 }

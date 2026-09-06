@@ -216,7 +216,8 @@ void showTestuResource(BuildContext context, String key) {
 /// A live reference video (server document with an mp4 and authored
 /// chapters): the same sheet as the demo's video resource, player cued at
 /// the start, the tutor answering free text over the socket.
-void showTestuVideo(BuildContext context, LiveDoc doc) {
+void showTestuVideo(BuildContext context, LiveDoc doc,
+    {Duration at = Duration.zero}) {
   HapticFeedback.selectionClick();
   final n = doc.chapters.length;
   showModalBottomSheet<void>(
@@ -226,6 +227,7 @@ void showTestuVideo(BuildContext context, LiveDoc doc) {
     barrierColor: const Color(0xA8000000),
     builder: (_) => _ResSheet(
       doc: doc,
+      at: at,
       res: _Res(
         ic: 'VID',
         title: doc.title,
@@ -247,12 +249,15 @@ void showTestuVideo(BuildContext context, LiveDoc doc) {
 }
 
 class _ResSheet extends StatefulWidget {
-  const _ResSheet({required this.res, this.doc});
+  const _ResSheet({required this.res, this.doc, this.at = Duration.zero});
 
   final _Res res;
 
   /// Live document behind the sheet (null = prototype resource).
   final LiveDoc? doc;
+
+  /// Where the live player starts (a citation's time).
+  final Duration at;
 
   @override
   State<_ResSheet> createState() => _ResSheetState();
@@ -262,7 +267,14 @@ class _ResSheetState extends State<_ResSheet> {
   final List<Widget> _chat = [];
   final Set<int> _used = {};
   final _scroll = ScrollController();
+  final _player = GlobalKey<_MiniPlayerState>();
+  static const _typing = ValueKey('typing');
   StreamSubscription<String>? _sub;
+
+  /// This video cited with a time → seek here; anything else opens on top.
+  void _openSource(Cite c) => c.title == widget.doc!.title
+      ? (c.at != null ? _player.currentState?._jump(c.at!) : null)
+      : openTestuSource(context, c);
 
   @override
   void initState() {
@@ -306,18 +318,32 @@ class _ResSheetState extends State<_ResSheet> {
     setState(() => _chat.add(TestuYouMsg(text: text)));
     if (widget.doc != null) {
       // Live: the tutor answers over the socket (same path as the PDF sheet).
-      _sub ??= sullyReplies().listen((s) {
+      void says(String s) {
         if (!mounted) return;
-        setState(() => _chat.add(SullyMessage.reply(s,
-            bottomPadding: 12, fallbackTitle: widget.doc!.title)));
-        _autoScroll();
-      });
-      askSullyFree(text).catchError((_) {
-        if (mounted) {
-          setState(() => _chat.add(
-              SullyMessage.text(sullyUnavailable(), bottomPadding: 12)));
-        }
-      });
+        final key = GlobalKey();
+        setState(() {
+          _chat.removeWhere((w) => w.key == _typing);
+          _chat.add(SullyMessage.reply(s,
+              key: key,
+              bottomPadding: 12,
+              fallbackTitle: widget.doc!.title,
+              inDoc: widget.doc!.title,
+              onOpenSource: _openSource));
+        });
+        // Read from the top of the answer; a timed cite seeks on its own.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          final ctx = key.currentContext;
+          if (ctx != null) {
+            Scrollable.ensureVisible(ctx,
+                alignment: 0, duration: const Duration(milliseconds: 350));
+          }
+        });
+        _openSource(splitCite(s));
+      }
+
+      _sub ??= sullyReplies().listen(says);
+      _chat.add(const SullyMessage.typing(key: _typing));
+      askSullyFree(text).catchError((_) => says(sullyUnavailable()));
     } else {
       setState(() => _chat.add(SullyMessage.text(widget.res.live,
           delay: 850, sourceLine: widget.res.title, bottomPadding: 12)));
@@ -453,7 +479,11 @@ class _ResSheetState extends State<_ResSheet> {
                     // Player pinned; only its chapter list scrolls.
                     Expanded(
                       flex: 5,
-                      child: _MiniPlayer(pinned: true, doc: widget.doc),
+                      child: _MiniPlayer(
+                          key: _player,
+                          pinned: true,
+                          doc: widget.doc,
+                          at: widget.at),
                     ),
                     const SizedBox(width: 16),
                     Expanded(
@@ -473,7 +503,7 @@ class _ResSheetState extends State<_ResSheet> {
             if (res.video)
               Padding(
                 padding: const EdgeInsets.fromLTRB(18, 14, 18, 0),
-                child: _MiniPlayer(doc: widget.doc),
+                child: _MiniPlayer(key: _player, doc: widget.doc, at: widget.at),
               ),
             Flexible(
                 child: _chatList(const EdgeInsets.fromLTRB(18, 14, 18, 0))),
@@ -523,11 +553,15 @@ class _ChipBtn extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _MiniPlayer extends StatefulWidget {
-  const _MiniPlayer({this.pinned = false, this.doc});
+  const _MiniPlayer(
+      {super.key, this.pinned = false, this.doc, this.at = Duration.zero});
 
   /// Live reference video (server mp4 + authored chapters); null = the
   /// prototype's turnaround clip.
   final LiveDoc? doc;
+
+  /// Live cue point (a citation's time); the demo clip has its own.
+  final Duration at;
 
   /// Landscape pane: the card is height-bounded — video, progress and
   /// footer stay put while the chapter list scrolls on its own. Unpinned
@@ -567,15 +601,19 @@ class _MiniPlayerState extends State<_MiniPlayer> {
       ..initialize().then((_) async {
         // Sully's copy promises the demo player is cued to where Ana stopped
         // — Arrival & stand check watched → start of Hold preparation (0:32).
-        await _ctrl.seekTo(_cue);
+        await _ctrl.seekTo(_pending ?? _cue);
         if (mounted) setState(() => _ready = true);
+        if (_pending != null) _ctrl.play();
       });
     _ctrl.addListener(_onTick);
   }
 
+  /// A jump asked for before the player was ready (a fast tutor reply).
+  Duration? _pending;
+
   /// The approved v6 chapter list, verbatim — timestamps are real seek
   /// targets, matching Sully's "jump to any chapter with the timestamps".
-  Duration get _cue => widget.doc == null ? _chapters[2].at : Duration.zero;
+  Duration get _cue => widget.doc == null ? _chapters[2].at : widget.at;
 
   List<({Duration at, String name})> get _chapters => widget.doc?.chapters ??
       [
@@ -591,7 +629,10 @@ class _MiniPlayerState extends State<_MiniPlayer> {
       ];
 
   void _jump(Duration at) {
-    if (!_ready) return;
+    if (!_ready) {
+      _pending = at;
+      return;
+    }
     HapticFeedback.selectionClick();
     _ctrl.seekTo(at);
     _ctrl.play();
@@ -610,16 +651,32 @@ class _MiniPlayerState extends State<_MiniPlayer> {
     super.dispose();
   }
 
-  String _fmt(Duration d) =>
-      '${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}';
+  String _fmt(Duration d) => fmtClock(d);
+
+  /// Tap or drag along the hairline seeks to that fraction of the video.
+  void _seekFrac(double f) {
+    if (!_ready) return;
+    _ctrl.seekTo(_ctrl.value.duration * f.clamp(0.0, 1.0));
+  }
 
   Widget _progress() => Row(children: [
         Expanded(
-          child: TestuHairline(
-            _ready && _ctrl.value.duration.inMilliseconds > 0
-                ? _ctrl.value.position.inMilliseconds /
-                    _ctrl.value.duration.inMilliseconds
-                : 0,
+          child: LayoutBuilder(
+            builder: (context, bc) => GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapDown: (d) => _seekFrac(d.localPosition.dx / bc.maxWidth),
+              onHorizontalDragUpdate: (d) =>
+                  _seekFrac(d.localPosition.dx / bc.maxWidth),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: TestuHairline(
+                  _ready && _ctrl.value.duration.inMilliseconds > 0
+                      ? _ctrl.value.position.inMilliseconds /
+                          _ctrl.value.duration.inMilliseconds
+                      : 0,
+                ),
+              ),
+            ),
           ),
         ),
         const SizedBox(width: 10),

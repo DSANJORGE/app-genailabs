@@ -228,7 +228,8 @@ Stream<String> sullyReplies() => ChatSocketService()
     .where((s) => s.isNotEmpty)
     .map((s) => isSullyError(s) ? sullyUnavailable() : s);
 
-// ponytail: crude tag strip — the reply HTML is simple tutor prose.
+// ponytail: crude tag strip — the reply HTML is simple tutor prose. Its
+// markdown (the /chat answer) survives here; `mdSpans` renders it.
 String _plainText(String html) => html
     .replaceAll(RegExp(r'<br\s*/?>|</p\s*>|</li\s*>', caseSensitive: false),
         '\n')
@@ -465,7 +466,11 @@ Future<TutorChannel?> _tutorChannelFor(String tutorialId) =>
 /// via the site page `entitytutorial/documents.json`).
 class LiveDoc {
   LiveDoc(this.id, this.title, this.pages, this._preview,
-      {this.video = '', this.chapters = const [], this.credit});
+      {this.video = '',
+      this.chapters = const [],
+      this.toc = const [],
+      this.captions = const [],
+      this.credit});
   final String id;
   final String title;
   final int pages;
@@ -476,16 +481,26 @@ class LiveDoc {
 
   /// Authored chapter marks (server `chapters` field, "m:ss Title" lines).
   final List<({Duration at, String name})> chapters;
+
+  /// Table of contents of a PDF (same `chapters` field, "p. N Title" lines).
+  final List<({int page, String name})> toc;
   final String? credit;
 
   bool get isVideo => video.isNotEmpty;
   String get videoUrl => liveAssetUrl(video);
 
-  /// Rendered page image, 1-based. eMe ignores `?page=`; the page number goes
-  /// in the rendition name (`image3000x3000pageN.webp`, pre-rendered on the
-  /// server for both manuals).
-  String pageUrl(int page) =>
-      liveAssetUrl(_preview.replaceFirst('image1200x628', 'image3000x3000page$page'));
+  /// Transcript lines (server `videotrack.captions`), start-ordered; empty
+  /// until the transcriber has run.
+  final List<({Duration at, String text})> captions;
+
+  /// Rendered page image, 1-based. The page number goes in the rendition
+  /// name (`image3000x3000pageN.webp`). `generated` only serves files that
+  /// exist; `generate/<sourcepath>/<rendition>/<any name>` renders a missing
+  /// one on demand (~2 s, ImageMagick) and caches it there.
+  String pageUrl(int page) => liveAssetUrl(_preview
+      .replaceFirst('/asset/generated/', '/asset/generate/')
+      .replaceFirst(
+          'image1200x628.webp', 'image3000x3000page$page.webp/p$page.webp'));
 }
 
 List<({Duration at, String name})> _parseChapters(String raw) => [
@@ -495,6 +510,12 @@ List<({Duration at, String name})> _parseChapters(String raw) => [
           at: Duration(minutes: int.parse(m[1]!), seconds: int.parse(m[2]!)),
           name: m[3]!.trim()
         ),
+    ];
+
+List<({int page, String name})> _parseToc(String raw) => [
+      for (final m
+          in RegExp(r'^p\.\s*(\d+)\s+(.+)$', multiLine: true).allMatches(raw))
+        (page: int.parse(m[1]!), name: m[2]!.trim()),
     ];
 
 /// Every document loaded so far, by title — how a citation in a reply
@@ -522,23 +543,98 @@ Future<List<LiveDoc>> loadDocuments({String? topicId}) async {
           int.tryParse('${d['pages']}') ?? 1, '${d['preview']}',
           video: '${d['video'] ?? ''}',
           chapters: _parseChapters('${d['chapters'] ?? ''}'),
+          toc: _parseToc('${d['chapters'] ?? ''}'),
+          captions: [
+            for (final c in (d['captions'] as List? ?? const []))
+              (
+                at: Duration(seconds: int.tryParse('${c['start']}') ?? 0),
+                text: '${c['text']}'
+              ),
+          ],
           credit: '${d['credit'] ?? ''}'.isEmpty ? null : '${d['credit']}'),
   ];
   liveDocs.addAll({for (final d in docs) d.title: d});
   return docs;
 }
 
-/// Splits a tutor reply into its text and the last `[Title, p. N]` citation,
-/// which the server's reference-excerpt prompt asks the model to append.
-({String text, String? title, int page}) splitCite(String reply) {
-  final m = RegExp(r'\s*\[([^\[\]]+?),\s*p\.?\s*(\d+)\]').allMatches(reply).lastOrNull;
-  if (m == null) return (text: reply, title: null, page: 1);
-  return (
-    text: reply.replaceAll(RegExp(r'\s*\[[^\[\]]+?,\s*p\.?\s*\d+\]'), '').trim(),
-    title: m[1]!.trim(),
-    page: int.parse(m[2]!),
+/// One cited place: a document title and a page (PDF) or a time (video).
+typedef Ref = ({String title, int page, Duration? at});
+
+/// A tutor reply split from its sources: the text, the verbatim passage the
+/// server quotes (`> …` line), the last `[Title, p. N]` (PDF page) or
+/// `[Title, m:ss]` (video time) citation — the primary source — the other
+/// citations in the reply, and the page-relative boxes of the passage on
+/// the primary page (`[[hl x,y,w,h;…]]`, PDFs only).
+class Cite {
+  const Cite(
+      {this.text = '',
+      this.quote,
+      this.title,
+      this.page = 1,
+      this.at,
+      this.others = const [],
+      this.rects = const []});
+
+  final String text;
+  final String? quote;
+  final String? title;
+  final int page;
+  final Duration? at;
+  final List<Ref> others;
+  final List<Rect> rects;
+
+  Ref get ref => (title: title ?? '', page: page, at: at);
+
+  /// The same citation pointed at [r] (the sources sheet's rows).
+  Cite to(Ref r) => Cite(
+      quote: quote,
+      title: r.title,
+      page: r.page,
+      at: r.at,
+      rects: r == ref ? rects : const []);
+}
+
+final _quoteRe = RegExp(r'^\s*>\s*(.+?)\s*$', multiLine: true);
+final _hlRe = RegExp(r'^\s*\[\[hl ([\d.,;]+)\]\]\s*$', multiLine: true);
+
+/// "m:ss" — citation times and the video player's clock.
+String fmtClock(Duration d) =>
+    '${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}';
+
+final _citeRe = RegExp(r'\s*\[([^\[\]]+?),\s*(?:p\.?\s*(\d+)|(\d+):(\d\d))\]');
+
+Ref _ref(RegExpMatch m) => (
+      title: m[1]!.trim(),
+      page: int.tryParse(m[2] ?? '') ?? 1,
+      at: m[3] == null
+          ? null
+          : Duration(minutes: int.parse(m[3]!), seconds: int.parse(m[4]!)),
+    );
+
+Cite splitCite(String reply) {
+  final ms = _citeRe.allMatches(reply).toList();
+  if (ms.isEmpty) return Cite(text: reply);
+  final main = _ref(ms.last);
+  return Cite(
+    text: reply
+        .replaceAll(_citeRe, '')
+        .replaceAll(_quoteRe, '')
+        .replaceAll(_hlRe, '')
+        .trim(),
+    quote: _quoteRe.allMatches(reply).lastOrNull?[1],
+    title: main.title,
+    page: main.page,
+    at: main.at,
+    others: {for (final m in ms) _ref(m)}.where((r) => r != main).toList(),
+    rects: [
+      for (final r in (_hlRe.firstMatch(reply)?[1] ?? '').split(';'))
+        if (r.split(',').length == 4) _rect(r.split(',')),
+    ],
   );
 }
+
+Rect _rect(List<String> v) => Rect.fromLTWH(double.parse(v[0]),
+    double.parse(v[1]), double.parse(v[2]), double.parse(v[3]));
 
 TestuQ _toTestuQ(SectionQuestion m, int i, int total, Topic topic) {
   final q = m.question;

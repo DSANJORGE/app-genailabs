@@ -309,8 +309,8 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
   Widget _chatBubble((int, bool, String) c) {
     final (_, user, text) = c;
     if (!user) {
-      return _SullyBubble(
-          spans: [TextSpan(text: text)], delay: 500, onGrew: _scrollDown);
+      // Live reply: markdown rendered, citation block, source link.
+      return _Rise(child: SullyMessage.reply(text, bottomPadding: 16));
     }
     final t = TestuTokens.of(context);
     return _Rise(
@@ -1475,50 +1475,12 @@ class _VerdictExtrasState extends State<_VerdictExtras> {
         'El procedimiento completo aún no está adjunto a esta pregunta.');
   }
 
-  Widget _quoteBlock(TestuTokens t, TestuQ q) => Container(
-        padding: const EdgeInsets.fromLTRB(13, 2, 0, 2),
-        decoration: BoxDecoration(
-          border: Border(left: BorderSide(color: t.orange, width: 2)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '“${q.quote}”',
-              style: const TextStyle(
-                fontFamily: 'Sora',
-                fontSize: 12.5,
-                height: 1.62,
-                color: Color(0xFFDCDAD6),
-              ),
-            ),
-            const SizedBox(height: 7),
-            Text.rich(
-              TextSpan(children: [
-                TextSpan(text: '${q.cite} · p. ${q.page} · '),
-                WidgetSpan(
-                  alignment: PlaceholderAlignment.baseline,
-                  baseline: TextBaseline.alphabetic,
-                  child: GestureDetector(
-                    onTap: () => showTestuPdf(context,
-                        page: q.page!, cite: q.cite, doc: liveDocs[q.cite]),
-                    child: Text(
-                      L('Open source', 'Abrir fuente'),
-                      style: TextStyle(
-                        fontFamily: 'Geist',
-                        fontSize: 10.5,
-                        color: t.blue,
-                        decoration: TextDecoration.underline,
-                        decorationColor: const Color(0xFF3D5C7D),
-                      ),
-                    ),
-                  ),
-                ),
-              ]),
-              style: kMeta,
-            ),
-          ],
-        ),
+  Widget _quoteBlock(TestuTokens t, TestuQ q) => TestuSourceBlock(
+        quote: q.quote,
+        meta: '${q.cite} · p. ${q.page}',
+        label: L('Open source', 'Abrir fuente'),
+        onTap: () => openTestuSource(
+            context, Cite(quote: q.quote, title: q.cite, page: q.page!)),
       );
 
   Widget _box(TestuTokens t, Widget child) => Container(
