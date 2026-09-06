@@ -1,6 +1,9 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:genai_labs/admin/admin_api.dart';
 import 'package:genai_labs/admin/admin_models.dart';
 import 'package:genai_labs/admin/admin_shell.dart';
+import 'package:genai_labs/testu/testu_theme.dart';
 
 AdminMe _me(Set<String> perms, {bool personas = true, bool analytics = true}) => AdminMe('m', 'm@x', 'M', 'x', perms,
     [SuiteModule('personas', 'Personas', ['web'], personas), SuiteModule('analytics', 'Analytics', ['web'], analytics)]);
@@ -18,5 +21,16 @@ void main() {
   });
   test('no permissions means no sections', () {
     expect(sectionsFor(_me({})), isEmpty);
+  });
+
+  testWidgets('the no-access screen can sign out', (tester) async {
+    var signOuts = 0;
+    final noAccessMe = AdminMe('m', 'm@x', 'M', 'x', {}, const []);
+    await tester.pumpWidget(MaterialApp(
+      theme: testuTheme(),
+      home: AdminShell(me: noAccessMe, api: AdminApi(), onSignOut: () => signOuts++),
+    ));
+    await tester.tap(find.text('Sign out'));
+    expect(signOuts, 1);
   });
 }

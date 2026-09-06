@@ -43,12 +43,22 @@ class _AdminShellState extends State<AdminShell> {
     final t = TestuTokens.of(context);
     final sections = sectionsFor(widget.me);
     if (sections.isEmpty) {
+      // ponytail: plain message + sign-out; upgrade to a "contact your
+      // administrator" flow (support link, request-access CTA) only if
+      // someone asks -- this account state hasn't come up yet.
       return Scaffold(
         backgroundColor: t.bg,
         body: Center(
-          child: Text(
-            L('Your account has no console access.', 'Tu cuenta no tiene acceso a la consola.'),
-            style: TextStyle(color: t.mut),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                L('Your account has no console access.', 'Tu cuenta no tiene acceso a la consola.'),
+                style: TextStyle(color: t.mut),
+              ),
+              const SizedBox(height: 12),
+              TextButton(onPressed: widget.onSignOut, child: Text(L('Sign out', 'Cerrar sesión'))),
+            ],
           ),
         ),
       );
@@ -68,6 +78,10 @@ class _AdminShellState extends State<AdminShell> {
           trailing: IconButton(icon: Icon(Icons.logout, color: t.mut), onPressed: widget.onSignOut),
           destinations: [for (final s in sections) NavigationRailDestination(icon: const Icon(Icons.circle_outlined), label: Text(s.label))],
         ),
+        // ponytail: rebuilds the section fresh on every rail switch (no
+        // IndexedStack/keep-alive) -- fine for 3 shallow admin sections;
+        // upgrade only if a section must keep an in-progress form alive
+        // across tab switches.
         Expanded(child: sections[_i].build(widget.api, widget.me)),
       ]),
     );
