@@ -3,6 +3,16 @@ import 'package:eme_app_package/eme_http.dart';
 
 import 'admin_models.dart';
 
+/// AdminApi's mutators throw a bare Exception('msg'); strip the toString()
+/// prefix before showing it. EmeHttpException never reaches callers of this
+/// (they rethrow it before calling errText), so this only ever unwraps the
+/// plain-Exception case.
+String errText(Object e) {
+  final s = e.toString();
+  const prefix = 'Exception: ';
+  return s.startsWith(prefix) ? s.substring(prefix.length) : s;
+}
+
 /// Typed client for the plugin's services/testu/* endpoints (admin console
 /// only). Every call rides [EmeHttp] with the default [EmeAuth.token]
 /// (Authorization: Bearer); 401/403 propagate as [EmeHttpException] and are

@@ -17,15 +17,6 @@ String _roleLabel(String role) => switch (role) {
       _ => role,
     };
 
-/// AdminApi's mutators throw a bare Exception('msg'); strip the toString()
-/// prefix before showing it. EmeHttpException never reaches here (see
-/// _mutate below), so this only ever unwraps the plain-Exception case.
-String _errText(Object e) {
-  final s = e.toString();
-  const prefix = 'Exception: ';
-  return s.startsWith(prefix) ? s.substring(prefix.length) : s;
-}
-
 String _fmtDate(DateTime? d) {
   if (d == null) return '—';
   final l = d.toLocal();
@@ -94,7 +85,7 @@ class _AdminPeopleState extends State<AdminPeople> {
       rethrow;
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_errText(e))));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errText(e))));
     }
   }
 
