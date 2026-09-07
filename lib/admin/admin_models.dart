@@ -138,3 +138,26 @@ class AdminReport {
   final ReportSummary summary;
   final Map<String, String> topics;
 }
+
+/// One calendar day of console analytics. The console's charts all read this
+/// one shape (people/answers over time, minutes, sessions, misconceptions,
+/// correct vs incorrect), so a screen never invents a second series type.
+///
+/// Every counter defaults to 0: the daily series is dense (a day with no
+/// activity is still a point on the x axis), and the server only sends the
+/// fields a given endpoint computes.
+class DayPoint {
+  const DayPoint(
+    this.day, {
+    this.people = 0,
+    this.answers = 0,
+    this.minutes = 0,
+    this.sessions = 0,
+    this.certainwrong = 0,
+    this.questions = 0,
+    this.correct = 0,
+  });
+
+  final DateTime day;
+  final int people, answers, minutes, sessions, certainwrong, questions, correct;
+}

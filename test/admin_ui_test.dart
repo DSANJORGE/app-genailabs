@@ -1,0 +1,199 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:genai_labs/admin/admin_charts.dart';
+import 'package:genai_labs/admin/admin_models.dart';
+import 'package:genai_labs/admin/admin_nav.dart';
+import 'package:genai_labs/admin/admin_theme.dart';
+import 'package:genai_labs/admin/admin_ui.dart';
+import 'package:genai_labs/testu/testu_theme.dart';
+
+Widget _app(Widget child) => MaterialApp(
+      theme: testuTheme(),
+      home: Scaffold(body: child),
+    );
+
+void main() {
+  testWidgets('AdminTable sorts numerically when a numeric header is tapped',
+      (tester) async {
+    const rows = [('b', 2), ('a', 10)];
+    await tester.pumpWidget(_app(AdminTable<(String, int)>(
+      columns: [
+        AdminColumn('Name', (r) => Text(r.$1), sortKey: (r) => r.$1),
+        AdminColumn('Count', (r) => Text('${r.$2}'),
+            sortKey: (r) => r.$2, numeric: true),
+      ],
+      rows: rows,
+    )));
+
+    double y(String s) => tester.getTopLeft(find.text(s)).dy;
+    expect(y('2') < y('10'), isTrue, reason: 'unsorted keeps the given order');
+
+    await tester.tap(find.text('Count'));
+    await tester.pumpAndSettle();
+
+    expect(y('10') < y('2'), isTrue,
+        reason: '10 must sort above 2 numerically, not lexicographically');
+  });
+
+  testWidgets('LevelBar sizes each segment by its count', (tester) async {
+    await tester.pumpWidget(_app(const LevelBar(
+      {'beginner': 1, 'competent': 1, 'expert': 2},
+    )));
+
+    Expanded seg(String level) =>
+        tester.widget<Expanded>(find.byKey(ValueKey('level.$level')));
+    expect(seg('expert').flex, 2);
+    expect(seg('competent').flex, 1);
+    expect(seg('beginner').flex, 1);
+  });
+
+  testWidgets('Segmented reports the tapped value', (tester) async {
+    String? got;
+    await tester.pumpWidget(_app(Segmented<String>(
+      value: 'a',
+      items: const [('a', 'A'), ('b', 'B')],
+      onChanged: (v) => got = v,
+    )));
+
+    await tester.tap(find.text('B'));
+    await tester.pump();
+    expect(got, 'b');
+  });
+
+  testWidgets('showToast shows the text and removes it after 4 s',
+      (tester) async {
+    await tester.pumpWidget(_app(Builder(
+      builder: (c) => GestureDetector(
+        onTap: () => showToast(c, 'Exportado'),
+        child: const Text('go'),
+      ),
+    )));
+
+    await tester.tap(find.text('go'));
+    await tester.pump();
+    expect(find.text('Exportado'), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 5));
+    expect(find.text('Exportado'), findsNothing);
+  });
+
+  testWidgets('AdminScaffold lays out nav, title and every component',
+      (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final nav = ConsoleNav();
+    addTearDown(nav.dispose);
+    final filters = AnalyticsFilters();
+    addTearDown(filters.dispose);
+    final series = [
+      for (var i = 0; i < 7; i++)
+        DayPoint(DateTime(2026, 9, 1 + i),
+            people: 3 + i, answers: 20 + i * 4, minutes: 12 + i),
+    ];
+
+    await tester.pumpWidget(MaterialApp(
+      theme: testuTheme(),
+      home: AdminScaffold(
+        org: 'Minsur',
+        me: AdminMe('l1', 'l@minsur.test', 'Lider Norte', 'manager',
+            const {'analytics_view'}, const []),
+        sections: const [('resumen', 'Resumen'), ('actividad', 'Actividad')],
+        nav: nav,
+        title: 'Resumen',
+        onSignOut: () {},
+        contextBar: ContextBar(
+          filters: filters,
+          topics: const {'seguridad': 'Seguridad'},
+          teams: [AdminTeam(id: 'norte', name: 'Norte')],
+        ),
+        endPanel: const Padding(
+          padding: EdgeInsets.all(16),
+          child: Skeleton(lines: 2),
+        ),
+        body: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Reading(
+              personaName: 'Iris',
+              sentences: ['Cuatro personas necesitan apoyo esta semana.'],
+            ),
+            const SizedBox(height: 20),
+            StatRow(const [
+              StatBlock(
+                label: 'Activos',
+                value: '12',
+                delta: '+3 que la semana pasada',
+                deltaPositive: true,
+                spark: [1, 3, 2, 5, 4, 6, 7],
+              ),
+              StatBlock(label: 'Respuestas', value: '240', highlight: true),
+            ]),
+            const SizedBox(height: 20),
+            ChartCard(
+              eyebrow: 'Actividad',
+              legend: [
+                (AdminTokens.focus, 'Personas'),
+                (AdminTokens.compare, 'Periodo anterior'),
+              ],
+              footnote: 'Personas activas por día.',
+              child: activityChart(
+                series: series,
+                previous: series,
+                peopleLabel: 'personas',
+                answersLabel: 'respuestas',
+              ),
+            ),
+            const SizedBox(height: 20),
+            ChartCard(
+              eyebrow: 'Minutos',
+              child: dailyBars(series, value: (d) => d.minutes),
+            ),
+            const SizedBox(height: 20),
+            ChartCard(
+              eyebrow: 'Aciertos',
+              child: correctIncorrectBars(const [
+                (label: 'L', correct: 8, incorrect: 2),
+                (label: 'M', correct: 6, incorrect: 4),
+              ]),
+            ),
+            const SizedBox(height: 20),
+            ChartCard(
+              eyebrow: 'Horas',
+              height: 160,
+              child: hoursHeatmap(const [(1, 9, 4), (3, 15, 9)]),
+            ),
+            const SizedBox(height: 20),
+            const Quad(cc: 14, cu: 4, ic: 3, iu: 1),
+            const SizedBox(height: 20),
+            const Funnel([('Invitados', 40), ('Activos', 12)]),
+            const SizedBox(height: 20),
+            const LevelLegend(),
+            const SizedBox(height: 20),
+            Pulse(active: true, child: crossfade(const Text('contenido'))),
+            const SizedBox(height: 20),
+            const EmptyState(
+              eyebrow: 'Sin datos',
+              text: 'Nadie ha respondido todavía.',
+            ),
+            const SizedBox(height: 20),
+            ConsolePanelError(text: 'No se pudo cargar.', onRetry: () {}),
+          ],
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Minsur'), findsOneWidget);
+    expect(find.text('Resumen'), findsNWidgets(2)); // nav item + page title
+    expect(find.text('Sign out'), findsOneWidget); // flutter_test_config pins EN
+    expect(find.text('contenido'), findsOneWidget);
+
+    // The nav routes without a screen around it.
+    await tester.tap(find.text('Actividad'));
+    await tester.pumpAndSettle();
+    expect(nav.value.section, 'actividad');
+  });
+}
