@@ -72,6 +72,12 @@ class AdminTokens {
   static final muted =
       TextStyle(fontFamily: 'Geist', fontSize: 12, color: _t.mut);
 
+  /// One-line note under a chart. `kNote`'s size and family, but `mut` rather
+  /// than `faint` — `faint` measures 3.7:1 on `card` and this is running copy,
+  /// not a mono micro-label.
+  static final footnote = TextStyle(
+      fontFamily: 'Geist', fontSize: 10, height: 1.55, color: _t.mut);
+
   /// The console's one label style (spec §5): mono uppercase, +0.14em, one
   /// per card. There is deliberately no second small-label style.
   static final eyebrow = TextStyle(

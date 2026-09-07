@@ -1,3 +1,4 @@
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genai_labs/admin/admin_charts.dart';
@@ -195,5 +196,41 @@ void main() {
     await tester.tap(find.text('Actividad'));
     await tester.pumpAndSettle();
     expect(nav.value.section, 'actividad');
+  });
+
+  testWidgets('activityChart aligns its line to its bars and draws from zero',
+      (tester) async {
+    final series = [
+      for (var i = 0; i < 7; i++)
+        DayPoint(DateTime(2026, 9, 1 + i), people: 3 + i, answers: 20 + i),
+    ];
+    await tester.pumpWidget(_app(SizedBox(
+      height: 220,
+      child: activityChart(
+        series: series,
+        peopleLabel: 'personas',
+        answersLabel: 'respuestas',
+      ),
+    )));
+
+    LineChart line() => tester.widget<LineChart>(find.byType(LineChart));
+
+    // BarChartAlignment.spaceAround centres group i at (i + 0.5) / n, so the
+    // line has to carry half a slot of padding at each end or day i's point
+    // sits off day i's bar.
+    expect(line().data.minX, -0.5);
+    expect(line().data.maxX, 6.5);
+
+    // fl_chart tweens on data change, not on mount: the first frame has to be
+    // the flat baseline, or the 300 ms draw never runs.
+    expect(line().data.lineBarsData.last.spots.map((s) => s.y),
+        everyElement(0.0));
+
+    await tester.pump();
+    expect(line().data.lineBarsData.last.spots.first.y, 3.0);
+    expect(line().duration, const Duration(milliseconds: 300));
+
+    await tester.pumpAndSettle();
+    expect(line().duration, Duration.zero);
   });
 }

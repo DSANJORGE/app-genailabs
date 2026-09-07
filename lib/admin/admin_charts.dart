@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
@@ -38,33 +40,58 @@ Widget _axisText(String text) => Padding(
 
 String _dm(DateTime d) => '${d.day}/${d.month}';
 
-/// Runs the 300 ms first draw once, then hands `Duration.zero` to every
-/// rebuild — a filter change redraws instantly, it does not re-animate.
+/// The 300 ms first draw, then instant redraws.
+///
+/// fl_chart's charts are [ImplicitlyAnimatedWidget]s: they tween when the
+/// DATA changes, not when they mount, so handing the first build a 300 ms
+/// duration animates nothing. This mounts a flattened copy of the series
+/// (every value × `scale` = 0) and swaps the real one in on the next frame —
+/// that data change is what the 300 ms curve draws. Once it has run, the
+/// duration drops to zero so a filter change redraws instantly.
+///
+/// Under `MediaQuery.disableAnimations` there is nothing to draw from: the
+/// real data is mounted directly, at zero duration.
 class _FirstDraw extends StatefulWidget {
   const _FirstDraw(this.builder);
 
-  final Widget Function(BuildContext context, Duration duration) builder;
+  final Widget Function(BuildContext context, Duration duration, double scale)
+      builder;
 
   @override
   State<_FirstDraw> createState() => _FirstDrawState();
 }
 
 class _FirstDrawState extends State<_FirstDraw> {
-  bool _drawn = false;
+  static const _ms = 300;
+
+  double _scale = 0;
+  bool _settled = false;
+  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) setState(() => _drawn = true);
+      if (!mounted) return;
+      setState(() => _scale = 1);
+      _timer = Timer(const Duration(milliseconds: _ms), () {
+        if (mounted) setState(() => _settled = true);
+      });
     });
   }
 
   @override
-  Widget build(BuildContext context) => widget.builder(
-        context,
-        _drawn ? Duration.zero : AdminTokens.dur(context, 300),
-      );
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final draw = AdminTokens.dur(context, _ms);
+    if (draw == Duration.zero) return widget.builder(context, draw, 1);
+    return widget.builder(context, _settled ? Duration.zero : draw, _scale);
+  }
 }
 
 /// The 28 px trend line inside a `StatBlock`: no axes, no grid, no touch —
@@ -119,7 +146,9 @@ Widget activityChart({
   double toPeopleScale(int answers) =>
       maxAnswers == 0 ? 0 : answers * topY / (maxAnswers * 1.15);
 
-  return _FirstDraw((context, duration) {
+  final hasPrevious = previous != null && previous.isNotEmpty;
+
+  return _FirstDraw((context, duration, scale) {
     final bars = BarChart(
       BarChartData(
         maxY: topY,
@@ -144,7 +173,7 @@ Widget activityChart({
               x: i,
               barRods: [
                 BarChartRodData(
-                  toY: toPeopleScale(series[i].answers),
+                  toY: toPeopleScale(series[i].answers) * scale,
                   color: _t.mut.withValues(alpha: 0.55),
                   width: 6,
                   borderRadius: BorderRadius.circular(1),
@@ -161,8 +190,11 @@ Widget activityChart({
       LineChartData(
         maxY: topY,
         minY: 0,
-        minX: 0,
-        maxX: (series.length - 1).toDouble(),
+        // `BarChartAlignment.spaceAround` centres group i at (i + 0.5) / n of
+        // the plot width. Half a slot of padding at each end puts the line's
+        // x = i — and the bottom label for day i — over that centre.
+        minX: -0.5,
+        maxX: series.length - 0.5,
         gridData: _grid(),
         borderData: FlBorderData(show: false),
         titlesData: FlTitlesData(
@@ -196,6 +228,9 @@ Widget activityChart({
               showTitles: true,
               reservedSize: 26,
               interval: (series.length / 6).ceilToDouble().clamp(1, 30),
+              // minX/maxX are half-slot padding, not days.
+              minIncluded: false,
+              maxIncluded: false,
               getTitlesWidget: (v, _) {
                 final i = v.round();
                 if (i < 0 || i >= series.length) return const SizedBox.shrink();
@@ -210,21 +245,31 @@ Widget activityChart({
             tooltipBorder: BorderSide(color: _t.line),
             getTooltipItems: (spots) => [
               for (final s in spots)
-                LineTooltipItem(
-                  '${_dm(series[s.x.round()].day)}  '
-                  '${series[s.x.round()].people} $peopleLabel  ·  '
-                  '${series[s.x.round()].answers} $answersLabel',
-                  _tipStyle,
-                ),
+                // barIndex 0 is the previous-period ghost whenever there is
+                // one; reading `series` for it would print this period's
+                // numbers under the compare line.
+                if (hasPrevious && s.barIndex == 0)
+                  LineTooltipItem(
+                    '${previous[s.x.round().clamp(0, previous.length - 1)].people}'
+                    ' $peopleLabel · ${L('previous period', 'periodo anterior')}',
+                    _tipStyle,
+                  )
+                else
+                  LineTooltipItem(
+                    '${_dm(series[s.x.round()].day)}  '
+                    '${series[s.x.round()].people} $peopleLabel  ·  '
+                    '${series[s.x.round()].answers} $answersLabel',
+                    _tipStyle,
+                  ),
             ],
           ),
         ),
         lineBarsData: [
-          if (previous != null && previous.isNotEmpty)
+          if (hasPrevious)
             LineChartBarData(
               spots: [
                 for (var i = 0; i < previous.length && i < series.length; i++)
-                  FlSpot(i.toDouble(), previous[i].people.toDouble()),
+                  FlSpot(i.toDouble(), previous[i].people * scale),
               ],
               color: AdminTokens.compare,
               barWidth: 1.2,
@@ -233,7 +278,7 @@ Widget activityChart({
           LineChartBarData(
             spots: [
               for (var i = 0; i < series.length; i++)
-                FlSpot(i.toDouble(), series[i].people.toDouble()),
+                FlSpot(i.toDouble(), series[i].people * scale),
             ],
             color: AdminTokens.focus,
             barWidth: 1.8,
@@ -275,7 +320,7 @@ Widget dailyBars(
       .map((d) => value(d).toDouble())
       .fold<double>(0, (a, b) => a > b ? a : b);
 
-  return _FirstDraw((context, duration) => BarChart(
+  return _FirstDraw((context, duration, scale) => BarChart(
         BarChartData(
           maxY: top == 0 ? 1 : top * 1.15,
           gridData: _grid(),
@@ -326,7 +371,7 @@ Widget dailyBars(
                 x: i,
                 barRods: [
                   BarChartRodData(
-                    toY: value(series[i]).toDouble(),
+                    toY: value(series[i]) * scale,
                     color: fill,
                     width: 8,
                     borderRadius: BorderRadius.circular(1),
@@ -349,7 +394,7 @@ Widget correctIncorrectBars(
       .map((d) => (d.correct + d.incorrect).toDouble())
       .fold<double>(0, (a, b) => a > b ? a : b);
 
-  return _FirstDraw((context, duration) => BarChart(
+  return _FirstDraw((context, duration, scale) => BarChart(
         BarChartData(
           maxY: top == 0 ? 1 : top * 1.15,
           gridData: _grid(),
@@ -401,19 +446,19 @@ Widget correctIncorrectBars(
                 x: i,
                 barRods: [
                   BarChartRodData(
-                    toY: (days[i].correct + days[i].incorrect).toDouble(),
+                    toY: (days[i].correct + days[i].incorrect) * scale,
                     width: 10,
                     borderRadius: BorderRadius.circular(1),
                     color: AdminTokens.seriesNegative,
                     rodStackItems: [
                       BarChartRodStackItem(
                         0,
-                        days[i].correct.toDouble(),
+                        days[i].correct * scale,
                         AdminTokens.seriesPositive,
                       ),
                       BarChartRodStackItem(
-                        days[i].correct.toDouble(),
-                        (days[i].correct + days[i].incorrect).toDouble(),
+                        days[i].correct * scale,
+                        (days[i].correct + days[i].incorrect) * scale,
                         AdminTokens.seriesNegative,
                       ),
                     ],

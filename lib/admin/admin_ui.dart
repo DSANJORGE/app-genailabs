@@ -665,7 +665,10 @@ class StatBlock extends StatelessWidget {
             SizedBox(
               height: 28,
               width: double.infinity,
-              child: LineChart(sparklineData(spark!)),
+              child: LineChart(
+                sparklineData(spark!),
+                duration: Duration.zero,
+              ),
             ),
           ],
         ],
@@ -757,7 +760,7 @@ class ChartCard extends StatelessWidget {
           SizedBox(height: height, child: child),
           if (footnote != null) ...[
             const SizedBox(height: 10),
-            Text(footnote!, style: kNote),
+            Text(footnote!, style: AdminTokens.footnote),
           ],
         ],
       ),
@@ -1307,7 +1310,9 @@ class Select<T> extends StatelessWidget {
                 style: TextStyle(
                   fontFamily: 'Geist',
                   fontSize: 11.5,
-                  color: enabled ? t.ink : t.faint,
+                  // A locked team is still the manager's own team name:
+                  // readable, not decorative.
+                  color: enabled ? t.ink : t.mut,
                 ),
               ),
               const SizedBox(width: 10),

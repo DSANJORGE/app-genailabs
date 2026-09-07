@@ -17,8 +17,31 @@ void main() {
     expect(f.days, 30);
     f.set(period: Period.d90);
     expect(f.days, 90);
+  });
+
+  test('pilot never hands a screen an inverted window', () {
+    final f = AnalyticsFilters();
     f.set(period: Period.pilot);
-    expect(f.from, kPilotStart);
+    expect(f.from.isAfter(f.to), isFalse);
+    expect(f.days, greaterThanOrEqualTo(1));
+    // From launch day on, the window opens on the pilot's first day.
+    if (!kPilotStart.isAfter(f.to)) expect(f.from, kPilotStart);
+  });
+
+  test('set() does not notify when nothing actually changes', () {
+    final f = AnalyticsFilters();
+    f.set(period: Period.d30, topic: 'seguridad');
+    var n = 0;
+    f.addListener(() => n++);
+
+    f.set(period: Period.d30); // re-tapping the active segment
+    f.set(topic: 'seguridad'); // re-picking the current topic
+    f.set(); // nothing at all
+    f.set(clearTeam: true); // clearing an already-empty filter
+    expect(n, 0);
+
+    f.set(period: Period.d7);
+    expect(n, 1);
   });
 
   test('query omits the filters that are not set', () {

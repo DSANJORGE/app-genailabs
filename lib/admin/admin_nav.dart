@@ -43,7 +43,9 @@ class AnalyticsFilters extends ChangeNotifier {
       Period.d7 => DateTime(t.year, t.month, t.day - 6),
       Period.d30 => DateTime(t.year, t.month, t.day - 29),
       Period.d90 => DateTime(t.year, t.month, t.day - 89),
-      Period.pilot => kPilotStart,
+      // Before launch day the pilot has not started: clamp to a one-day
+      // window rather than handing every screen an inverted range.
+      Period.pilot => kPilotStart.isAfter(t) ? t : kPilotStart,
     };
   }
 
@@ -75,17 +77,19 @@ class AnalyticsFilters extends ChangeNotifier {
     String? team,
     bool clearTeam = false,
   }) {
-    if (period != null) _period = period;
-    if (clearTopic) {
-      _topic = null;
-    } else if (topic != null) {
-      _topic = topic;
+    final nextPeriod = period ?? _period;
+    final nextTopic = clearTopic ? null : (topic ?? _topic);
+    final nextTeam = clearTeam ? null : (team ?? _team);
+    // Re-tapping the segment you are already on is not a filter change, and
+    // must not refetch every screen listening here.
+    if (nextPeriod == _period &&
+        nextTopic == _topic &&
+        nextTeam == _team) {
+      return;
     }
-    if (clearTeam) {
-      _team = null;
-    } else if (team != null) {
-      _team = team;
-    }
+    _period = nextPeriod;
+    _topic = nextTopic;
+    _team = nextTeam;
     notifyListeners();
   }
 
