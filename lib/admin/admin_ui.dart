@@ -22,8 +22,13 @@ import 'admin_theme.dart';
 /// the console behaves identically: click, Enter/Space, a 1 px `ink` at 60 %
 /// ring (spec §5), and a pointer cursor. The ring is painted over the child
 /// rather than around it, so focus never moves the layout.
-class _Interactive extends StatefulWidget {
-  const _Interactive({
+///
+/// Public because the heatmap's pinned name column is interactive too, and a
+/// second copy of this over there is how the two drifted apart (that one
+/// painted its focus ring on hover as well).
+class ConsoleInteractive extends StatefulWidget {
+  const ConsoleInteractive({
+    super.key,
     required this.onTap,
     required this.builder,
     this.radius = 7,
@@ -36,10 +41,10 @@ class _Interactive extends StatefulWidget {
   final String? semanticLabel;
 
   @override
-  State<_Interactive> createState() => _InteractiveState();
+  State<ConsoleInteractive> createState() => ConsoleInteractiveState();
 }
 
-class _InteractiveState extends State<_Interactive> {
+class ConsoleInteractiveState extends State<ConsoleInteractive> {
   bool _hovered = false;
   bool _focused = false;
 
@@ -284,6 +289,14 @@ class AdminScaffold extends StatelessWidget {
   final Widget? endPanel;
   final VoidCallback onSignOut;
 
+  /// Panel geometry: 360 px wide, and the narrowest content column it may
+  /// leave behind. Under this the panel stops pushing and floats instead --
+  /// at 1024 a pushed panel leaves 396 px, which is narrower than any table
+  /// in the console can be drawn.
+  static const double _panelW = 360;
+  static const double _navW = 220;
+  static const double _minContent = 640;
+
   @override
   Widget build(BuildContext context) {
     final t = TestuTokens.of(context);
@@ -294,6 +307,18 @@ class AdminScaffold extends StatelessWidget {
           // The console is a laptop surface; below 900 px it says so rather
           // than reflowing into something no one designed.
           if (box.maxWidth < 900) return const _TooNarrow();
+          final float =
+              box.maxWidth - _navW - _panelW < _minContent;
+          final panel = endPanel == null
+              ? const SizedBox.shrink()
+              : Container(
+                  width: _panelW,
+                  decoration: BoxDecoration(
+                    color: t.card,
+                    border: Border(left: BorderSide(color: t.line)),
+                  ),
+                  child: endPanel,
+                );
           return Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -304,21 +329,27 @@ class AdminScaffold extends StatelessWidget {
                 nav: nav,
                 onSignOut: onSignOut,
               ),
-              Expanded(child: _content(context)),
+              Expanded(
+                child: float
+                    // Over the content, not beside it: the panel is a
+                    // companion to the screen, and squeezing the screen to
+                    // fit it is how a table ends up 396 px wide.
+                    ? Stack(
+                        children: [
+                          _content(context),
+                          Positioned(
+                            top: 0,
+                            bottom: 0,
+                            right: 0,
+                            child: crossfade(panel),
+                          ),
+                        ],
+                      )
+                    : _content(context),
+              ),
               // Crossfade rather than a hard cut: the panel is a companion,
               // and it arrives the way every other state change here does.
-              crossfade(
-                endPanel == null
-                    ? const SizedBox.shrink()
-                    : Container(
-                        width: 360,
-                        decoration: BoxDecoration(
-                          color: t.card,
-                          border: Border(left: BorderSide(color: t.line)),
-                        ),
-                        child: endPanel,
-                      ),
-              ),
+              if (!float) crossfade(panel),
             ],
           );
         },
@@ -482,7 +513,7 @@ class _NavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TestuTokens.of(context);
-    return _Interactive(
+    return ConsoleInteractive(
       onTap: onTap,
       radius: 4,
       builder: (context, hovered) => Padding(
@@ -523,6 +554,7 @@ class ContextBar extends StatelessWidget {
     required this.topics,
     required this.teams,
     this.lockTeam,
+    this.period = true,
     this.actions = const [],
   });
 
@@ -534,6 +566,11 @@ class ContextBar extends StatelessWidget {
 
   /// A manager sees their own team only: the select shows it and is inert.
   final String? lockTeam;
+
+  /// Whether this screen reads the period at all. Dominio does not -- mastery
+  /// is cumulative -- and a control that changes nothing is worse than no
+  /// control.
+  final bool period;
   final List<Widget> actions;
 
   @override
@@ -548,19 +585,20 @@ class ContextBar extends StatelessWidget {
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Segmented<Period>(
-                value: filters.period,
-                items: [
-                  (Period.d7, Period.d7.label),
-                  (Period.d30, Period.d30.label),
-                  (Period.d90, Period.d90.label),
-                  // Before launch day "Piloto" would be a one-day window
-                  // pretending to be a period: offer it once it exists.
-                  if (!kPilotStart.isAfter(DateTime.now()))
-                    (Period.pilot, Period.pilot.label),
-                ],
-                onChanged: (p) => filters.set(period: p),
-              ),
+              if (period)
+                Segmented<Period>(
+                  value: filters.period,
+                  items: [
+                    (Period.d7, Period.d7.label),
+                    (Period.d30, Period.d30.label),
+                    (Period.d90, Period.d90.label),
+                    // Before launch day "Piloto" would be a one-day window
+                    // pretending to be a period: offer it once it exists.
+                    if (!kPilotStart.isAfter(DateTime.now()))
+                      (Period.pilot, Period.pilot.label),
+                  ],
+                  onChanged: (p) => filters.set(period: p),
+                ),
               Select<String>(
                 value: filters.topic,
                 hint: L('All topics', 'Todos los temas'),
@@ -668,6 +706,9 @@ class Reading extends StatelessWidget {
   }
 }
 
+/// Two lines of [AdminTokens.eyebrow] at line height 1.25.
+const double _eyebrowH = 24;
+
 /// One headline number. Four of these sit hairline-separated in a
 /// [StatRow] — deliberately not four cards.
 class StatBlock extends StatelessWidget {
@@ -702,8 +743,22 @@ class StatBlock extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label.toUpperCase(), style: AdminTokens.eyebrow),
-          const SizedBox(height: 9),
+          // Two lines of eyebrow, always. In Spanish "MINUTOS EN LA APP" and
+          // "CONCEPTOS ERRÓNEOS" wrap at 1024 while "ACTIVOS 7 D" does not,
+          // and a label that changes height drops that block's number half a
+          // line below its neighbours -- five headline figures that no longer
+          // sit on one line.
+          SizedBox(
+            height: _eyebrowH,
+            child: Text(label.toUpperCase(),
+                // An explicit line height, so two lines are exactly
+                // [_eyebrowH] whatever the font's own metrics say -- without
+                // it the second line was cut off ("MINUTOS EN LA AP").
+                style: AdminTokens.eyebrow.copyWith(height: 1.25),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis),
+          ),
+          const SizedBox(height: 7),
           Text(
             value,
             style: AdminTokens.mono(22,
@@ -722,7 +777,10 @@ class StatBlock extends StatelessWidget {
               ),
             ),
           ],
+          // The sparkline sits on the floor of the block, so a delta that
+          // wraps costs the line above it and not the row's rhythm.
           if (spark != null) ...[
+            const Spacer(),
             const SizedBox(height: 12),
             SizedBox(
               height: 28,
@@ -882,6 +940,11 @@ class LevelBar extends StatelessWidget {
           child: present.isEmpty
               ? const ColoredBox(color: AdminTokens.levelNone)
               : Row(
+                  // stretch, not the default centre: a ColoredBox with no
+                  // child takes the SMALLEST size its constraints allow, so a
+                  // loose cross axis paints every segment 0 px high -- the bar
+                  // lays out at its full width and shows nothing at all.
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     for (final k in present)
                       Expanded(
@@ -961,6 +1024,9 @@ class StackedBar extends StatelessWidget {
           child: present.isEmpty
               ? const ColoredBox(color: AdminTokens.levelNone)
               : Row(
+                  // See [LevelBar]: a centred cross axis paints every segment
+                  // 0 px high.
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     for (final (color, _, count) in present)
                       Expanded(flex: count, child: ColoredBox(color: color)),
@@ -996,7 +1062,6 @@ class BarRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = TestuTokens.of(context);
     final row = Padding(
       padding: const EdgeInsets.symmetric(vertical: 7),
       child: Row(
@@ -1042,11 +1107,7 @@ class BarRow extends StatelessWidget {
       message: message,
       waitDuration: Duration.zero,
       textStyle: AdminTokens.mono(11),
-      decoration: BoxDecoration(
-        color: t.card2,
-        border: Border.all(color: t.line),
-        borderRadius: BorderRadius.circular(6),
-      ),
+      decoration: AdminTokens.tip,
       child: row,
     );
   }
@@ -1322,6 +1383,20 @@ class _AdminTableState<T> extends State<AdminTable<T>> {
   /// the gutter would wrap every date onto two lines.
   static const _gutterW = 12.0;
 
+  /// The narrowest a flexed column may be squeezed to before the table stops
+  /// shrinking and starts scrolling. Below this a name column shows one
+  /// letter and a Select shows none -- the Equipos table on Resumen lost its
+  /// team names entirely with the Iris panel open at 1280.
+  static const _minFlexW = 96.0;
+
+  double get _minWidth {
+    var w = 0.0;
+    for (final c in widget.columns) {
+      w += (c.width ?? _minFlexW) + _gutterW;
+    }
+    return w;
+  }
+
   Widget _cells(List<Widget> children) => Row(
         children: [
           for (var i = 0; i < widget.columns.length; i++)
@@ -1344,7 +1419,22 @@ class _AdminTableState<T> extends State<AdminTable<T>> {
       );
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (context, box) {
+          final table = _table(context);
+          if (!box.maxWidth.isFinite || box.maxWidth >= _minWidth) {
+            return table;
+          }
+          // Everything still readable, one gesture away -- the same answer
+          // the heatmap gives when its columns outrun the card.
+          return SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SizedBox(width: _minWidth, child: table),
+          );
+        },
+      );
+
+  Widget _table(BuildContext context) {
     final t = TestuTokens.of(context);
     final rows = _sorted;
     return Column(
@@ -1378,7 +1468,7 @@ class _AdminTableState<T> extends State<AdminTable<T>> {
           )
         else
           for (final row in rows)
-            _Interactive(
+            ConsoleInteractive(
               onTap: widget.onTap == null
                   ? null
                   : () => widget.onTap!(row),
@@ -1425,20 +1515,29 @@ class _HeaderCell<T> extends StatelessWidget {
             // Flexible, so a narrow column ellipsises its header instead of
             // painting the overflow stripes over the row beneath it.
             Flexible(
-              child: Text(
-                column.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: hovered || sorted
-                    ? AdminTokens.tableHead
-                        .copyWith(color: TestuTokens.of(context).ink)
-                    : AdminTokens.tableHead,
+              // A narrow column ellipsises its header ("Última activi…"), and
+              // the full words then exist nowhere on the screen: the tooltip
+              // is where they live.
+              child: Tooltip(
+                message: column.label,
+                waitDuration: Duration.zero,
+                textStyle: AdminTokens.mono(11),
+                decoration: AdminTokens.tip,
+                child: Text(
+                  column.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: hovered || sorted
+                      ? AdminTokens.tableHead
+                          .copyWith(color: TestuTokens.of(context).ink)
+                      : AdminTokens.tableHead,
+                ),
               ),
             ),
             if (sorted) ...[
               const SizedBox(width: 5),
               Text(
-                ascending ? '▲' : '▾',
+                ascending ? '▲' : '▼',
                 style: AdminTokens.mono(8, color: AdminTokens.focus),
               ),
             ],
@@ -1449,7 +1548,7 @@ class _HeaderCell<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (onTap == null) return _label(context, false);
-    return _Interactive(onTap: onTap, radius: 4, builder: _label);
+    return ConsoleInteractive(onTap: onTap, radius: 4, builder: _label);
   }
 }
 
@@ -1521,7 +1620,7 @@ class Select<T> extends StatelessWidget {
             child: Text(text),
           ),
       ],
-      builder: (context, controller, _) => _Interactive(
+      builder: (context, controller, _) => ConsoleInteractive(
         onTap: enabled
             ? () => controller.isOpen ? controller.close() : controller.open()
             : null,
@@ -1557,7 +1656,7 @@ class Select<T> extends StatelessWidget {
                   // to, and a flexible child there is a layout error.
                   box.maxWidth.isFinite ? Flexible(child: text) : text,
                   const SizedBox(width: 10),
-                  Text('▾', style: AdminTokens.mono(8, color: t.mut)),
+                  Text('▼', style: AdminTokens.mono(8, color: t.mut)),
                 ],
               ),
             );
@@ -1600,7 +1699,7 @@ class Segmented<T> extends StatelessWidget {
             children: [
               for (var i = 0; i < items.length; i++) ...[
                 if (i > 0) const _Hairline(vertical: true),
-                _Interactive(
+                ConsoleInteractive(
                   onTap: () => onChanged(items[i].$1),
                   radius: 0,
                   builder: (context, hovered) {
@@ -1771,7 +1870,7 @@ class CitationChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TestuTokens.of(context);
-    return _Interactive(
+    return ConsoleInteractive(
       onTap: onTap,
       radius: 999,
       semanticLabel: '$index · ${citation.label}',
@@ -1820,7 +1919,7 @@ class ConsoleChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TestuTokens.of(context);
-    return _Interactive(
+    return ConsoleInteractive(
       onTap: onTap,
       radius: 999,
       // The question itself is the name. Stated here rather than left to the
@@ -1849,7 +1948,7 @@ class ConsoleChip extends StatelessWidget {
   }
 }
 
-/// A bare glyph button — the Iris panel's ✕ today. `_Interactive` gives it the
+/// A bare glyph button — the Iris panel's ✕ today. `ConsoleInteractive` gives it the
 /// console's hover, Enter/Space and focus ring; the 40 px box is the tap
 /// target, deliberately much larger than the glyph inside it.
 class ConsoleIconButton extends StatelessWidget {
@@ -1867,10 +1966,10 @@ class ConsoleIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TestuTokens.of(context);
-    // The label goes through _Interactive, which is also what carries the tap
+    // The label goes through ConsoleInteractive, which is also what carries the tap
     // action: an outer Semantics would announce a button with nothing to
     // activate. Same wiring as CitationChip.
-    return _Interactive(
+    return ConsoleInteractive(
       onTap: onTap,
       radius: 8,
       semanticLabel: label,

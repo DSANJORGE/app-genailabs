@@ -295,25 +295,27 @@ class _AdminPersonState extends State<AdminPerson>
 
   Widget _usage(PersonReport p) {
     final iris = _irisLine(p);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          L('${p.sessions} sessions · ${p.minutes} min · ${p.activeDays} active days',
-              '${p.sessions} sesiones · ${p.minutes} min · ${p.activeDays} días activos'),
-          style: AdminTokens.body,
-        ),
-        if (iris != null) ...[
-          const SizedBox(height: 6),
-          Text(iris, style: AdminTokens.body),
+    return ChartCard(
+      eyebrow: L('Usage', 'Uso'),
+      height: null,
+      // Same reply as the chart above, so the same 30 days. Worded without a
+      // count: the Iris line is absent when nobody asked anything.
+      footnote:
+          L('Usage over the last 30 days.', 'Uso de los últimos 30 días.'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            L('${p.sessions} sessions · ${p.minutes} min · ${p.activeDays} active days',
+                '${p.sessions} sesiones · ${p.minutes} min · ${p.activeDays} días activos'),
+            style: AdminTokens.body,
+          ),
+          if (iris != null) ...[
+            const SizedBox(height: 6),
+            Text(iris, style: AdminTokens.body),
+          ],
         ],
-        const SizedBox(height: 6),
-        // Same reply as the chart above, so the same 30 days. Worded without
-        // a count: the Iris line above is absent when nobody asked anything.
-        Text(L('Usage over the last 30 days.',
-            'Uso de los últimos 30 días.'),
-            style: AdminTokens.footnote),
-      ],
+      ),
     );
   }
 
@@ -422,7 +424,7 @@ class _TopicRow extends StatelessWidget {
       child: Row(
         children: [
           SizedBox(
-            width: 150,
+            width: 130,
             child: Text(topic.name,
                 style: AdminTokens.table, overflow: TextOverflow.ellipsis),
           ),

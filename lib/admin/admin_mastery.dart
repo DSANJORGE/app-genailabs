@@ -451,7 +451,7 @@ class _Grid {
       final key = r.sectionKey;
       colTopic[key] = topicNames[r.topicId] ?? r.topic;
       colName[key] = sectionName(r.section);
-      colOrder[key] = '${colTopic[key]} ${r.section}';
+      colOrder[key] = sectionOrder(colTopic[key]!, r.section);
     }
     final colKeys = colOrder.keys.toList()
       ..sort((a, b) => colOrder[a]!.compareTo(colOrder[b]!));

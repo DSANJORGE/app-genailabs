@@ -330,7 +330,10 @@ class _IrisPanelState extends State<IrisPanel> {
                     'cites where it comes from.',
                     '$_name solo usa los datos que tú puedes ver en esta '
                     'consola y cita de dónde salen.'),
-                style: kNote,
+                // The one sentence in the panel that has to be believed, at
+                // `kNote`'s size but `mut`'s contrast: `faint` on `card` is
+                // 3.7:1, and the constraints reserve it for mono eyebrows.
+                style: AdminTokens.footnote,
               ),
               const SizedBox(height: 14),
               if (_thread.isEmpty) _opener(),
@@ -383,15 +386,19 @@ class _IrisPanelState extends State<IrisPanel> {
                   ),
                   const SizedBox(height: 2),
                   // Running copy, so `mut` rather than kNote's `faint`
-                  // (3.7:1 on card). The privacy line below keeps kNote: it
-                  // is one pinned sentence, read once.
+                  // (3.7:1 on card) -- the same reason the privacy line above
+                  // moved off kNote.
                   Text(_subtitle, style: AdminTokens.footnote, maxLines: 2),
                 ],
               ),
             ),
             const SizedBox(width: 8),
             ConsoleIconButton(
-              glyph: '✕',
+              // U+00D7, not U+2715: Geist and Sora carry the multiplication
+              // sign, and neither carries the heavy multiplication X -- which
+              // the browser hides behind a system fallback and the goldens
+              // draw as an empty box.
+              glyph: '×',
               label: L('Close', 'Cerrar'),
               onTap: widget.onClose,
             ),

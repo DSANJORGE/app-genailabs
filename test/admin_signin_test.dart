@@ -153,4 +153,22 @@ void main() {
     expect(find.text('Wrong or expired code.'), findsOneWidget);
     expect(signedIn, isFalse);
   });
+
+  // Six digits and two links, with nothing on screen saying which inbox to
+  // look in -- and a typo in the address then looks like a broken code.
+  testWidgets('the code stage says where the code went', (tester) async {
+    final auth = _Auth();
+    await _pump(tester, auth);
+    expect(find.textContaining('Code sent to'), findsNothing);
+
+    await _sendCode(tester, 'diego@minsur.test');
+
+    expect(find.text('Code sent to diego@minsur.test'), findsOneWidget);
+
+    // And it goes away with the stage it belongs to.
+    await tester.tap(find.text('Change email'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Code sent to'), findsNothing);
+  });
+
 }

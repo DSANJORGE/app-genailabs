@@ -148,6 +148,17 @@ class _AdminSigninState extends State<AdminSignin> {
                 // kCaption's size and family; `mut` rather than its `faint`,
                 // which lands at 3.9:1 on `bg`.
                 Text('TestU Learn', style: kCaption.copyWith(color: t.mut)),
+                if (_codeStage) ...[
+                  const SizedBox(height: 10),
+                  // Which address the code went to. Without it the second
+                  // stage is a six-digit field with no context, and a typo in
+                  // the address looks like a broken code.
+                  Text(
+                    L('Code sent to ${_email.text.trim()}',
+                        'Código enviado a ${_email.text.trim()}'),
+                    style: AdminTokens.muted,
+                  ),
+                ],
                 const SizedBox(height: 16),
                 if (!_codeStage)
                   TextField(

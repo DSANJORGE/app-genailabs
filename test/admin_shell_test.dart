@@ -6,6 +6,7 @@ import 'package:genai_labs/admin/admin_api.dart';
 import 'package:genai_labs/admin/admin_iris.dart';
 import 'package:genai_labs/admin/admin_models.dart';
 import 'package:genai_labs/admin/admin_shell.dart';
+import 'package:genai_labs/admin/admin_ui.dart';
 import 'package:genai_labs/testu/testu_theme.dart';
 import 'package:genai_labs/testu/testu_widgets.dart';
 
@@ -149,4 +150,77 @@ void main() {
     await tester.tap(find.text('Sign out'));
     expect(signOuts, 1);
   });
+
+  // Mastery is cumulative: the period control on Dominio was a lever wired to
+  // nothing, and its footnote already says so.
+  testWidgets('Dominio offers no period control, the other two do',
+      (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final http = FakeEmeHttp()
+      ..canned['services/testu/analytics/report.json'] =
+          {'rows': [], 'summary': {}, 'topics': []}
+      ..canned['services/testu/personas/teams.json'] = {'teams': []}
+      ..canned['services/testu/analytics/overview.json'] = {'ok': true};
+    await tester.pumpWidget(MaterialApp(
+      theme: testuTheme(),
+      home: AdminShell(
+        me: _me({'analytics_view'}),
+        api: AdminApi(http: http),
+        onSignOut: () {},
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('7 d'), findsOneWidget, reason: 'Resumen reads a period');
+
+    await tester.tap(find.text('Mastery').first);
+    await tester.pumpAndSettle();
+    expect(find.text('7 d'), findsNothing);
+    // The two filters mastery DOES read are still on the bar.
+    expect(find.text('All topics'), findsOneWidget);
+    expect(find.text('All teams'), findsOneWidget);
+  });
+
+  // At 1024 a pushed panel leaves 396 px of content and every table in the
+  // console overflows it. The panel floats over the column instead.
+  testWidgets('the Iris panel never squeezes the content below its floor',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    Future<double> contentWidth(Size size) async {
+      tester.view.physicalSize = size;
+      final http = FakeEmeHttp()
+        ..canned['services/testu/analytics/report.json'] =
+            {'rows': [], 'summary': {}, 'topics': []}
+        ..canned['services/testu/personas/teams.json'] = {'teams': []}
+        ..canned['services/testu/analytics/overview.json'] = {'ok': true};
+      await tester.pumpWidget(MaterialApp(
+        theme: testuTheme(),
+        home: AdminShell(
+          // A fresh shell per size: without a key the second pump reuses the
+          // first one's state, panel already open.
+          key: ValueKey(size.width),
+          me: _me({'analytics_view'},
+              persona: AdminPersona('Iris', organization: 'Minsur')),
+          api: AdminApi(http: http),
+          onSignOut: () {},
+        ),
+      ));
+      await tester.pumpAndSettle();
+      final before = tester.getSize(find.byType(ContextBar)).width;
+      await tester.tap(find.widgetWithText(TestuPressable, 'Iris'));
+      await tester.pumpAndSettle();
+      expect(find.byType(IrisPanel), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      return tester.getSize(find.byType(ContextBar)).width / before;
+    }
+
+    // 1440: the panel pushes, and the content still clears the floor.
+    expect(await contentWidth(const Size(1440, 900)), lessThan(1));
+    // 1024: it floats, so the screen underneath keeps its width.
+    expect(await contentWidth(const Size(1024, 768)), 1);
+  });
+
 }

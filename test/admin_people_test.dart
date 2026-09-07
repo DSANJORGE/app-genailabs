@@ -181,4 +181,86 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('Ana Quispe Contreras'), findsOneWidget);
   });
+
+  // Every row on this screen drills into a person, and two of its cells are
+  // controls of their own. A tap on the team select must open the menu and
+  // leave the reader where they are -- a row that navigates out from under an
+  // open menu is the worst kind of surprise.
+  testWidgets('a control inside a row does not also open the row',
+      (tester) async {
+    final (http, nav) = await _pump(tester, me: _fullAccess);
+    http.canned['services/testu/personas/setteam.json'] = {'ok': true};
+    http.canned['services/testu/personas/disableuser.json'] = {'ok': true};
+    expect(nav.value.section, 'resumen');
+
+    await tester.tap(find.byType(Select<String>).first);
+    await tester.pumpAndSettle();
+    expect(nav.value.section, 'resumen', reason: 'the row must not navigate');
+    // The menu is open: the team is on screen twice now (the closed box and
+    // the menu entry).
+    expect(find.text('Norte'), findsNWidgets(2));
+
+    // Picking from it is a mutation, still not a navigation.
+    await tester.tap(find.text('Norte').last);
+    await tester.pumpAndSettle();
+    expect(http.posted.single.path, 'services/testu/personas/setteam.json');
+    expect(nav.value.section, 'resumen');
+
+    // Same for the row's own TextButton.
+    await tester.tap(find.text('Disable').first);
+    await tester.pumpAndSettle();
+    expect(http.posted.last.path, 'services/testu/personas/disableuser.json');
+    expect(nav.value.section, 'resumen');
+  });
+
+  group('the CSV import dialog', () {
+    Future<void> paste(WidgetTester tester, String csv) async {
+      await tester.tap(find.text('Import CSV'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).last, csv);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('text it cannot read says what the file must look like',
+        (tester) async {
+      await _pump(tester);
+      await paste(tester, 'pegué cualquier cosa');
+
+      expect(
+        find.textContaining('No rows recognised.'),
+        findsOneWidget,
+      );
+      expect(find.text('Import 0 rows'), findsOneWidget);
+    });
+
+    testWidgets('rows it rejects are counted, not just coloured',
+        (tester) async {
+      await _pump(tester);
+      await paste(
+        tester,
+        'email,firstName,lastName,team\n'
+        'no-arroba,Ana,Quispe,norte\n'
+        'luis@minsur.test,Luis,Huamán,equipo-que-no-existe\n',
+      );
+
+      expect(find.text('Invalid email'), findsOneWidget);
+      expect(find.textContaining('Unknown team'), findsOneWidget);
+      expect(find.textContaining('No row can be imported'), findsOneWidget);
+      expect(find.text('Import 0 rows'), findsOneWidget);
+    });
+
+    testWidgets('a good paste says how many rows are ready', (tester) async {
+      await _pump(tester);
+      await paste(
+        tester,
+        'email,firstName,lastName,team\n'
+        'luis@minsur.test,Luis,Huamán,norte\n'
+        'rosa@minsur.test,Rosa,Cárdenas,norte\n',
+      );
+
+      expect(find.text('2 rows ready to import.'), findsOneWidget);
+      expect(find.text('Import 2 rows'), findsOneWidget);
+    });
+  });
+
 }

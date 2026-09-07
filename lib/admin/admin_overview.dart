@@ -346,20 +346,20 @@ class _AdminOverviewState extends State<AdminOverview>
               (t) => Text(pct(t.members == 0 ? 0 : t.activated / t.members),
                   style: AdminTokens.mono(12.5)),
               sortKey: (t) => t.members == 0 ? 0 : t.activated / t.members,
-              width: 120,
+              width: 110,
               numeric: true,
             ),
             AdminColumn(
               L('Active 7 d', 'Activos 7 d'),
               (t) => Text('${t.active7d}', style: AdminTokens.mono(12.5)),
               sortKey: (t) => t.active7d,
-              width: 110,
+              width: 100,
               numeric: true,
             ),
             AdminColumn(
               L('Levels', 'Niveles'),
               (t) => LevelBar(_bars(t.levels)),
-              width: 220,
+              width: 180,
             ),
             AdminColumn(
               L('Weakest topic', 'Tema más débil'),

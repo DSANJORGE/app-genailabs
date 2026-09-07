@@ -311,4 +311,41 @@ void main() {
     expect(pulsing(tester, find.byType(AdminTable<InactivePerson>)), isTrue);
     expect(pulsing(tester, find.byType(Funnel)), isFalse);
   });
+
+  // Spec §6.8: the reading is "42 questions from 9 people", never 42 alone.
+  testWidgets('Iris usage says how many people are asking', (tester) async {
+    await _pump(tester, canned: _canned());
+
+    expect(find.text('PEOPLE'), findsOneWidget);
+    expect(
+      tester.widget<StatBlock>(find.widgetWithText(StatBlock, 'PEOPLE')).value,
+      '9',
+    );
+  });
+
+  // The card used to render a grey stub of a bar and an empty legend: a
+  // heading with nothing under it, which reads as breakage rather than as
+  // "nobody has asked anything".
+  testWidgets('no questions at all is a sentence, not a bare bar',
+      (tester) async {
+    final canned = _canned();
+    (canned['iris'] as Map)['themes'] = [];
+    (canned['iris'] as Map)['labels'] = [];
+    await _pump(tester, canned: canned);
+
+    expect(find.byType(StackedBar), findsNothing);
+    expect(find.text('NO QUESTIONS YET'), findsOneWidget);
+    expect(find.textContaining('Nobody has asked Iris anything'),
+        findsOneWidget);
+  });
+
+  // The counts are on hover, and the footnote used to promise them in the
+  // cells themselves.
+  testWidgets('the hours footnote says where the counts are', (tester) async {
+    await _pump(tester, canned: _canned());
+
+    expect(find.text('Answers by weekday and hour. Hover a cell for its count.'),
+        findsOneWidget);
+  });
+
 }

@@ -308,4 +308,25 @@ void main() {
         isTrue);
   });
 
+
+  // Section titles carry the course's own ordinal. Sorted as text, "10." lands
+  // between "1." and "2." -- the columns of the one view whose order IS the
+  // course order, scrambled.
+  testWidgets('subtopic columns follow the ordinal, not the string',
+      (tester) async {
+    await _pump(tester, rows: [
+      _row('ana', 'Ana Quispe', 'ops', 't2', 'Ciberseguridad', 'c1',
+          '1. Contraseñas'),
+      _row('ana', 'Ana Quispe', 'ops', 't2', 'Ciberseguridad', 'c10',
+          '10. Datos personales'),
+      _row('ana', 'Ana Quispe', 'ops', 't2', 'Ciberseguridad', 'c2',
+          '2. Phishing'),
+    ]);
+
+    double x(String name) => tester.getTopLeft(find.text(name)).dx;
+    expect(x('Contraseñas') < x('Phishing'), isTrue);
+    expect(x('Phishing') < x('Datos personales'), isTrue,
+        reason: '"10." sorts after "2.", not between "1." and "2."');
+  });
+
 }

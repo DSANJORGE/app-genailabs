@@ -121,7 +121,7 @@ class _AdminTeamsState extends State<AdminTeams> {
           _table(teams, t),
           if (_canViewTeam) ...[
             const SizedBox(height: 10),
-            Text(L('Tap a row to open the team.', 'Toca una fila para ver el equipo.'),
+            Text(L('Click a row to open the team.', 'Haz clic en una fila para ver el equipo.'),
                 style: AdminTokens.footnote),
           ],
         ],

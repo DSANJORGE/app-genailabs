@@ -83,7 +83,9 @@ const double _cellH = 28;
 const double _gap = 4;
 const double _rowH = _cellH + _gap;
 const double _topicH = 20;
-const double _headH = 36;
+/// Two lines of an 11 px column name, with room for a descender: at 36 the
+/// second line of "Contraseñas" was sliced in half.
+const double _headH = 44;
 const double _labelW = 190;
 
 class HeatmapGrid extends StatelessWidget {
@@ -171,7 +173,17 @@ class HeatmapGrid extends StatelessWidget {
     );
     // The summary strip is a reading, not a destination.
     if (r.id.isEmpty) return text;
-    return _Interactive(onTap: () => onRow(r.id), radius: 4, child: text);
+    return ConsoleInteractive(
+      onTap: () => onRow(r.id),
+      radius: 4,
+      builder: (context, hovered) => DecoratedBox(
+        decoration: BoxDecoration(
+          color: hovered ? AdminTokens.hover : null,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: text,
+      ),
+    );
   }
 
   Widget _grid(TestuTokens t) {
@@ -210,7 +222,7 @@ class HeatmapGrid extends StatelessWidget {
                       message: c.name,
                       waitDuration: Duration.zero,
                       textStyle: AdminTokens.mono(11),
-                      decoration: _tipBox(t),
+                      decoration: AdminTokens.tip,
                       child: Text(
                         c.name,
                         maxLines: 2,
@@ -245,12 +257,6 @@ class HeatmapGrid extends StatelessWidget {
     );
   }
 }
-
-BoxDecoration _tipBox(TestuTokens t) => BoxDecoration(
-  color: t.card2,
-  border: Border.all(color: t.line),
-  borderRadius: BorderRadius.circular(8),
-);
 
 /// One cell, with its own hover state: hovering 400 cells must rebuild one of
 /// them, not the grid.
@@ -355,7 +361,7 @@ class _CellState extends State<_Cell> {
       richMessage: WidgetSpan(alignment: PlaceholderAlignment.middle, child: _Tip(cell)),
       waitDuration: Duration.zero,
       padding: const EdgeInsets.fromLTRB(10, 8, 10, 9),
-      decoration: _tipBox(t),
+      decoration: AdminTokens.tip,
       child: out,
     );
     // excludeSemantics: a group cell wraps a LevelBar, which publishes its own
@@ -442,66 +448,6 @@ class _Tip extends StatelessWidget {
             ),
           ],
         ],
-      ),
-    );
-  }
-}
-
-/// Hover, keyboard and a focus ring for the pinned name column — the cells
-/// have their own, because their ring is an inset on the tint rather than a
-/// box around a label.
-class _Interactive extends StatefulWidget {
-  const _Interactive({required this.onTap, required this.child, this.radius = 4});
-
-  final VoidCallback onTap;
-  final Widget child;
-  final double radius;
-
-  @override
-  State<_Interactive> createState() => _InteractiveState();
-}
-
-class _InteractiveState extends State<_Interactive> {
-  bool _on = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = TestuTokens.of(context);
-    return FocusableActionDetector(
-      onShowFocusHighlight: (v) => setState(() => _on = v),
-      actions: {
-        ActivateIntent: CallbackAction<ActivateIntent>(onInvoke: (_) => widget.onTap()),
-        ButtonActivateIntent: CallbackAction<ButtonActivateIntent>(
-          onInvoke: (_) => widget.onTap(),
-        ),
-      },
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter: (_) => setState(() => _on = true),
-        onExit: (_) => setState(() => _on = false),
-        // The Semantics carries the tap as well as the button flag, and the
-        // GestureDetector is excluded -- same wiring as admin_ui's own
-        // _Interactive, so the name (the row label underneath) and the action
-        // are on one node rather than on two that happen to merge.
-        child: Semantics(
-          button: true,
-          onTap: widget.onTap,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: widget.onTap,
-            excludeFromSemantics: true,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: _on ? AdminTokens.hover : null,
-                border: Border.all(
-                  color: _on ? t.ink.withValues(alpha: 0.6) : Colors.transparent,
-                ),
-                borderRadius: BorderRadius.circular(widget.radius),
-              ),
-              child: widget.child,
-            ),
-          ),
-        ),
       ),
     );
   }

@@ -41,6 +41,13 @@ Widget _axisText(String text) => Padding(
 /// `5/9` — the day label every chart axis and tooltip uses.
 String dm(DateTime d) => '${d.day}/${d.month}';
 
+/// What the previous-period ghost says on hover. It carries ITS OWN day:
+/// without one, two tooltips on the same x read as two figures for the same
+/// date, when the whole point of the ghost is that it is another window.
+String compareTip(DayPoint day, String peopleLabel) =>
+    '${dm(day.day)}  ${day.people} $peopleLabel · '
+    '${L('previous period', 'periodo anterior')}';
+
 /// The 300 ms first draw, then instant redraws.
 ///
 /// fl_chart's charts are [ImplicitlyAnimatedWidget]s: they tween when the
@@ -204,6 +211,9 @@ Widget activityChart({
             sideTitles: SideTitles(
               showTitles: true,
               reservedSize: 34,
+              // The axis top is maxPeople x 1.15 -- a number a hair above the
+              // last gridline, so labelling it prints "16" over "15".
+              maxIncluded: false,
               getTitlesWidget: (v, _) => Padding(
                 padding: const EdgeInsets.only(right: 6),
                 child: Text(v.round().toString(),
@@ -215,6 +225,7 @@ Widget activityChart({
             sideTitles: SideTitles(
               showTitles: maxAnswers > 0,
               reservedSize: 38,
+              maxIncluded: false,
               getTitlesWidget: (v, _) => Padding(
                 padding: const EdgeInsets.only(left: 6),
                 child: Text(
@@ -251,8 +262,10 @@ Widget activityChart({
                 // numbers under the compare line.
                 if (hasPrevious && s.barIndex == 0)
                   LineTooltipItem(
-                    '${previous[s.x.round().clamp(0, previous.length - 1)].people}'
-                    ' $peopleLabel · ${L('previous period', 'periodo anterior')}',
+                    compareTip(
+                      previous[s.x.round().clamp(0, previous.length - 1)],
+                      peopleLabel,
+                    ),
                     _tipStyle,
                   )
                 else
@@ -321,7 +334,14 @@ Widget dailyBars(
       .map((d) => value(d).toDouble())
       .fold<double>(0, (a, b) => a > b ? a : b);
 
-  return _FirstDraw((context, duration, scale) => BarChart(
+  return LayoutBuilder(
+    builder: (context, box) {
+      // The rod grows with the card: a fixed 8 px bar reads as a stick on a
+      // week of data across a 950 px card.
+      final width = box.maxWidth.isFinite
+          ? ((box.maxWidth - 34) / series.length * 0.42).clamp(6.0, 22.0)
+          : 8.0;
+      return _FirstDraw((context, duration, scale) => BarChart(
         BarChartData(
           maxY: top == 0 ? 1 : top * 1.15,
           gridData: _grid(),
@@ -334,6 +354,9 @@ Widget dailyBars(
               sideTitles: SideTitles(
                 showTitles: true,
                 reservedSize: 34,
+                // See activityChart: the padded axis top would print over the
+                // last gridline's label.
+                maxIncluded: false,
                 getTitlesWidget: (v, _) => Padding(
                   padding: const EdgeInsets.only(right: 6),
                   child: Text(v.round().toString(), style: _axisStyle),
@@ -374,7 +397,7 @@ Widget dailyBars(
                   BarChartRodData(
                     toY: value(series[i]) * scale,
                     color: fill,
-                    width: 8,
+                    width: width,
                     borderRadius: BorderRadius.circular(1),
                   ),
                 ],
@@ -384,6 +407,8 @@ Widget dailyBars(
         duration: duration,
         curve: TestuTokens.curve,
       ));
+    },
+  );
 }
 
 /// Correct against incorrect per day — the app's own week-card pair, stacked
@@ -408,6 +433,9 @@ Widget correctIncorrectBars(
               sideTitles: SideTitles(
                 showTitles: true,
                 reservedSize: 34,
+                // See activityChart: the padded axis top would print over the
+                // last gridline's label.
+                maxIncluded: false,
                 getTitlesWidget: (v, _) => Padding(
                   padding: const EdgeInsets.only(right: 6),
                   child: Text(v.round().toString(), style: _axisStyle),
@@ -495,55 +523,86 @@ Widget hoursHeatmap(List<(int wd, int h, int n)> cells) {
     L('Sun', 'Dom'),
   ];
 
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Row(
+  // The grid is 24 columns of whatever the card can spare, not a fixed 418 px
+  // block sitting in the left third of a 980 px card. Height follows width so
+  // the cells stay cells rather than turning into ribbons.
+  const labelW = 34.0;
+  const gap = 2.0;
+  return LayoutBuilder(
+    builder: (context, box) {
+      final w = box.maxWidth.isFinite
+          ? ((box.maxWidth - labelW) / 24 - gap).clamp(12.0, 44.0)
+          : 14.0;
+      // 7 rows plus the hour labels, inside whatever height the card allows:
+      // a card with a fixed height must not be overflowed by its own chart.
+      final room = box.maxHeight.isFinite
+          ? ((box.maxHeight - 18) / 7 - gap).clamp(8.0, 20.0)
+          : 20.0;
+      // Not clamp(12, room): a very short card makes `room` smaller than the
+      // floor, and clamp asserts when its bounds cross.
+      final h = w > room ? room : w;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          const SizedBox(width: 34),
-          for (var h = 0; h < 24; h += 3)
-            SizedBox(
-              width: 3 * 16,
-              child: Text('$h', style: _axisStyle),
-            ),
-        ],
-      ),
-      const SizedBox(height: 4),
-      // `wd` is the server's own weekday: Monday = 0 through Sunday = 6
-      // (`(Calendar.DAY_OF_WEEK + 5) % 7` in activity.groovy). Reading it as
-      // 1-7 loses Monday entirely and labels every other day one row early.
-      for (var wd = 0; wd < 7; wd++)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 2),
-          child: Row(
+          Row(
             children: [
-              SizedBox(
-                width: 34,
-                child: Text(dayNames[wd], style: _axisStyle),
-              ),
-              for (var h = 0; h < 24; h++)
-                Padding(
-                  padding: const EdgeInsets.only(right: 2),
-                  child: _HeatCell(
-                    n: counts[wd * 24 + h] ?? 0,
-                    max: max,
-                    label: '${dayNames[wd]} ${h.toString().padLeft(2, '0')}:00',
-                  ),
+              const SizedBox(width: labelW),
+              for (var hour = 0; hour < 24; hour += 3)
+                SizedBox(
+                  width: 3 * (w + gap),
+                  child: Text('$hour', style: _axisStyle),
                 ),
             ],
           ),
-        ),
-    ],
+          const SizedBox(height: 4),
+          // `wd` is the server's own weekday: Monday = 0 through Sunday = 6
+          // (`(Calendar.DAY_OF_WEEK + 5) % 7` in activity.groovy). Reading it
+          // as 1-7 loses Monday entirely and labels every other day one row
+          // early.
+          for (var wd = 0; wd < 7; wd++)
+            Padding(
+              padding: const EdgeInsets.only(bottom: gap),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: labelW,
+                    child: Text(dayNames[wd], style: _axisStyle),
+                  ),
+                  for (var hour = 0; hour < 24; hour++)
+                    Padding(
+                      padding: const EdgeInsets.only(right: gap),
+                      child: _HeatCell(
+                        n: counts[wd * 24 + hour] ?? 0,
+                        max: max,
+                        width: w,
+                        height: h,
+                        label:
+                            '${dayNames[wd]} ${hour.toString().padLeft(2, '0')}:00',
+                      ),
+                    ),
+                ],
+              ),
+            ),
+        ],
+      );
+    },
   );
 }
 
 class _HeatCell extends StatelessWidget {
-  const _HeatCell({required this.n, required this.max, required this.label});
+  const _HeatCell({
+    required this.n,
+    required this.max,
+    required this.label,
+    required this.width,
+    required this.height,
+  });
 
   final int n;
   final int max;
   final String label;
+  final double width, height;
 
   @override
   Widget build(BuildContext context) {
@@ -553,14 +612,10 @@ class _HeatCell extends StatelessWidget {
       message: '$label · $n',
       waitDuration: Duration.zero,
       textStyle: _tipStyle,
-      decoration: BoxDecoration(
-        color: _t.card2,
-        border: Border.all(color: _t.line),
-        borderRadius: BorderRadius.circular(6),
-      ),
+      decoration: AdminTokens.tip,
       child: Container(
-        width: 14,
-        height: 14,
+        width: width,
+        height: height,
         decoration: BoxDecoration(
           color: alpha == 0
               ? AdminTokens.levelTint(null)

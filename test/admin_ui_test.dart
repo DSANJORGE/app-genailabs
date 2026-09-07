@@ -376,4 +376,127 @@ void main() {
     expect(select.label, isNot(contains('None')));
     handle.dispose();
   });
+
+  // A ColoredBox with no child takes the SMALLEST size its constraints allow.
+  // Inside a Row with the default (centred) cross axis that is 0 px high, so
+  // every stacked bar in the console -- the heatmap's summary strip and team
+  // rows, the Niveles column of four tables, the theme split -- laid out at
+  // full width and painted nothing at all.
+  testWidgets('LevelBar paints its segments at the bar height', (tester) async {
+    await tester.pumpWidget(_app(const SizedBox(
+      width: 120,
+      child: LevelBar({'beginner': 1, 'competent': 3}),
+    )));
+
+    final segments = find.descendant(
+        of: find.byType(LevelBar), matching: find.byType(ColoredBox));
+    expect(segments, findsNWidgets(2));
+    for (final e in segments.evaluate()) {
+      final box = e.renderObject! as RenderBox;
+      expect(box.size.height, 6, reason: 'a 0 px segment paints nothing');
+      expect(box.size.width, greaterThan(0));
+    }
+  });
+
+  testWidgets('StackedBar paints its segments at the bar height',
+      (tester) async {
+    await tester.pumpWidget(_app(SizedBox(
+      width: 120,
+      child: StackedBar([
+        (AdminTokens.focus, 'Concepto', 4),
+        (AdminTokens.compare, 'Fuente', 2),
+      ]),
+    )));
+
+    final segments = find.descendant(
+        of: find.byType(StackedBar), matching: find.byType(ColoredBox));
+    expect(segments, findsNWidgets(2));
+    for (final e in segments.evaluate()) {
+      expect((e.renderObject! as RenderBox).size.height, 10);
+    }
+  });
+
+  // Spanish wraps "MINUTOS EN LA APP" at 1024 and leaves "ACTIVOS 7 D" on one
+  // line: without a reserved label box the two numbers below them sit half a
+  // line apart, and the stat row stops being a row.
+  testWidgets('a stat label that wraps still leaves the numbers in line',
+      (tester) async {
+    await tester.pumpWidget(_app(const SizedBox(
+      width: 360,
+      child: StatRow([
+        StatBlock(label: 'Activos 7 d', value: '12'),
+        StatBlock(label: 'Minutos en la aplicación', value: '1 764'),
+      ]),
+    )));
+
+    expect(tester.getTopLeft(find.text('12')).dy,
+        tester.getTopLeft(find.text('1 764')).dy);
+  });
+
+  testWidgets('an ellipsised header keeps its words in a tooltip',
+      (tester) async {
+    await tester.pumpWidget(_app(SizedBox(
+      width: 200,
+      child: AdminTable<int>(
+        columns: [
+          AdminColumn('Última actividad', (r) => Text('$r'), width: 60),
+          AdminColumn('Nombre', (r) => Text('n$r')),
+        ],
+        rows: const [1],
+      ),
+    )));
+
+    // The cell shows "Última acti…"; the words themselves have to exist
+    // somewhere on the screen.
+    expect(find.byTooltip('Última actividad'), findsOneWidget);
+  });
+
+  testWidgets('a screen that ignores the period is not offered one',
+      (tester) async {
+    final filters = AnalyticsFilters();
+    addTearDown(filters.dispose);
+
+    Widget bar({required bool period}) => _app(ContextBar(
+          filters: filters,
+          topics: const {},
+          teams: const [],
+          period: period,
+        ));
+
+    await tester.pumpWidget(bar(period: true));
+    expect(find.byType(Segmented<Period>), findsOneWidget);
+
+    await tester.pumpWidget(bar(period: false));
+    await tester.pumpAndSettle();
+    expect(find.byType(Segmented<Period>), findsNothing);
+    expect(find.text('7 d'), findsNothing);
+    // The filters it DOES read are still there.
+    expect(find.text('All topics'), findsOneWidget);
+    expect(find.text('All teams'), findsOneWidget);
+  });
+
+
+  // With the Iris panel open at 1280 the content column is 652 px, and the
+  // Equipos table's flexed name column was squeezed to 9 px: a table with no
+  // team names in it.
+  testWidgets('a table too narrow for its columns scrolls, not collapses',
+      (tester) async {
+    await tester.pumpWidget(_app(SizedBox(
+      width: 300,
+      child: AdminTable<int>(
+        columns: [
+          AdminColumn('Nombre', (r) => Text('a$r')),
+          AdminColumn('Equipo', (r) => Text('b$r')),
+          AdminColumn('Niveles', (r) => Text('c$r'), width: 150),
+        ],
+        rows: const [1],
+      ),
+    )));
+
+    expect(find.byType(SingleChildScrollView), findsOneWidget);
+    // 96 + 96 + 150, each with its 12 px gutter: the third column starts
+    // beyond the box instead of everything sharing 138 px.
+    expect(tester.getTopLeft(find.text('Niveles')).dx, greaterThan(200));
+  });
+
 }

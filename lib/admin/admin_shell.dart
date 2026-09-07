@@ -306,7 +306,15 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
                 nav: _nav,
                 title: _label(r.section),
                 contextBar: _withContextBar.contains(r.section)
-                    ? ContextBar(filters: _filters, topics: _topics, teams: _teams)
+                    ? ContextBar(
+                        filters: _filters,
+                        topics: _topics,
+                        teams: _teams,
+                        // Mastery is cumulative and says so in its own
+                        // footnote; the period control would be a lever
+                        // wired to nothing.
+                        period: r.section != 'mastery',
+                      )
                     : null,
                 titleAction:
                     _withIris.contains(r.section) ? _irisToggle(t) : null,

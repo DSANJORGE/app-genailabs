@@ -100,6 +100,15 @@ class AdminTokens {
   /// [TestuEyebrow] land on the same letterform as [eyebrow].
   static const double eyebrowTracking = 1.33;
 
+  /// The console's one tooltip skin: `card2` on a hairline. Every chart,
+  /// cell and bar that explains itself on hover wears this one -- four
+  /// hand-rolled copies had already drifted apart by a radius.
+  static final BoxDecoration tip = BoxDecoration(
+    color: _t.card2,
+    border: Border.all(color: _t.line),
+    borderRadius: BorderRadius.circular(6),
+  );
+
   static TextStyle mono(double size, {Color? color}) => TextStyle(
         fontFamily: 'GeistMono',
         fontWeight: FontWeight.w500,

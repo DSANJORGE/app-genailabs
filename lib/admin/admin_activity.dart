@@ -133,19 +133,17 @@ class _AdminActivityState extends State<AdminActivity>
 
   // ------------------------------------------------------------------ hours
 
-  /// The heatmap is a fixed 418 px grid, so the card lets its child size
-  /// itself and pins it to the left rather than stretching a 14 px cell.
+  /// The grid takes the card's width (the cells stretch to fill it), so the
+  /// card lets its child size itself.
   Widget _hours(Activity a) => ChartCard(
         eyebrow: L('When they learn', 'Cuándo aprenden'),
         height: null,
         footnote: L(
-          'Answers by weekday and hour. The count is in every cell.',
-          'Respuestas por día de la semana y hora. El recuento está en cada celda.',
+          'Answers by weekday and hour. Hover a cell for its count.',
+          'Respuestas por día de la semana y hora. Pasa el ratón por una '
+              'celda para ver su recuento.',
         ),
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: hoursHeatmap(a.hours),
-        ),
+        child: hoursHeatmap(a.hours),
       );
 
   // ------------------------------------------------------------- Iris usage
@@ -197,6 +195,13 @@ class _AdminActivityState extends State<AdminActivity>
           ),
           const SizedBox(height: 14),
           StatRow([
+            // Spec §6.8: who is asking is the figure a training lead reads
+            // first -- 42 questions from 9 people is a different signal from
+            // 42 questions from one.
+            StatBlock(
+              label: L('People', 'Personas'),
+              value: grouped(a.iris.people),
+            ),
             StatBlock(
               label: L('Rated', 'Valoradas'),
               value: _share(a.iris.ratedShare),
@@ -229,7 +234,7 @@ class _AdminActivityState extends State<AdminActivity>
           else
             for (final s in sections)
               BarRow(
-                label: s.name,
+                label: sectionName(s.name),
                 value: s.questions,
                 max: top,
                 tooltip: _askedTip(s),
@@ -243,7 +248,7 @@ class _AdminActivityState extends State<AdminActivity>
   /// which the server leaves null until somebody rates a reply.
   String _askedTip(SectionQ s) {
     final helpful = s.helpfulShare;
-    return '${s.name} · ${s.questions} ${L('questions', 'preguntas')} · '
+    return '${sectionName(s.name)} · ${s.questions} ${L('questions', 'preguntas')} · '
         '${helpful == null ? L('not rated yet', 'todavía sin valorar') : L('${pct(helpful)} helpful', '${pct(helpful)} útiles')}';
   }
 
@@ -256,6 +261,23 @@ class _AdminActivityState extends State<AdminActivity>
         (_themePalette[i], _themeLabel(_themeKeys[i]), counts[i]),
     ];
     final labels = a.iris.labels;
+    // Nobody has asked anything: a bar with no segments and a legend with no
+    // entries is a card that says nothing at all.
+    if (segments.every((s) => s.$3 == 0)) {
+      return ChartCard(
+        eyebrow: L('Question themes', 'Temas de las preguntas'),
+        height: null,
+        child: EmptyState(
+          eyebrow: L('No questions yet', 'Todavía sin preguntas'),
+          text: L(
+            'Nobody has asked $_persona anything in this period. The themes '
+                'appear as soon as someone does.',
+            'Nadie ha preguntado nada a $_persona en este periodo. Los temas '
+                'aparecen en cuanto alguien lo haga.',
+          ),
+        ),
+      );
+    }
     return ChartCard(
       eyebrow: L('Question themes', 'Temas de las preguntas'),
       height: null,
@@ -350,11 +372,7 @@ class _AdminActivityState extends State<AdminActivity>
             message: '$label · $count',
             waitDuration: Duration.zero,
             textStyle: AdminTokens.mono(11),
-            decoration: BoxDecoration(
-              color: t.card2,
-              border: Border.all(color: t.line),
-              borderRadius: BorderRadius.circular(6),
-            ),
+            decoration: AdminTokens.tip,
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 10),
               decoration: BoxDecoration(
@@ -418,10 +436,7 @@ class _AdminActivityState extends State<AdminActivity>
           ),
           AdminColumn(
             L('Last activity', 'Última actividad'),
-            (p) => Text(
-              p.lastActivity == null ? '—' : _date(p.lastActivity!),
-              style: AdminTokens.mono(11.5),
-            ),
+            (p) => Text(date(p.lastActivity), style: AdminTokens.mono(11.5)),
             sortKey: days,
             width: 130,
             numeric: true,
@@ -441,9 +456,6 @@ class _AdminActivityState extends State<AdminActivity>
     );
   }
 }
-
-String _date(DateTime d) =>
-    '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}';
 
 /// The daily series and its toggle, on its own state: switching counter
 /// redraws one chart, not the heatmap's 168 cells and the tables below it.

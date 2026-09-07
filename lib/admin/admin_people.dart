@@ -147,7 +147,7 @@ class _AdminPeopleState extends State<AdminPeople> {
           _table(teams, t),
           if (_canViewProfile) ...[
             const SizedBox(height: 10),
-            Text(L('Tap a row to open the profile.', 'Toca una fila para ver la ficha.'),
+            Text(L('Click a row to open the profile.', 'Haz clic en una fila para ver la ficha.'),
                 style: AdminTokens.footnote),
           ],
         ],
@@ -161,9 +161,8 @@ class _AdminPeopleState extends State<AdminPeople> {
         decoration: InputDecoration(
           hintText: L('Search by name, email or team', 'Buscar por nombre, correo o equipo'),
           hintStyle: TextStyle(fontFamily: 'Geist', fontSize: 12.5, color: t.mut),
-          prefixIcon: Icon(Icons.search, size: 16, color: t.mut),
           isDense: true,
-          contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+          contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 18),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(999), borderSide: BorderSide(color: t.line2)),
           enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(999), borderSide: BorderSide(color: t.line2)),
           focusedBorder: OutlineInputBorder(
@@ -194,13 +193,13 @@ class _AdminPeopleState extends State<AdminPeople> {
             L('Team', 'Equipo'),
             (u) => _teamCell(u, teams, t),
             sortKey: (u) => _teamName(u.team),
-            width: 110,
+            flex: 2,
           ),
           AdminColumn(
             L('Role', 'Rol'),
             (u) => _roleCell(u, t),
             sortKey: (u) => roleLabel(u.role),
-            width: 130,
+            flex: 2,
           ),
           AdminColumn(
             L('Last activity', 'Última actividad'),
@@ -266,8 +265,9 @@ class _AdminPeopleState extends State<AdminPeople> {
         minimumSize: const Size(0, 28),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         foregroundColor: AdminTokens.redText,
-        disabledForegroundColor: t.faint,
-        textStyle: const TextStyle(fontFamily: 'Geist', fontSize: 12, fontWeight: FontWeight.w700),
+        // `faint` is for mono eyebrows only (constraints, R10).
+        disabledForegroundColor: t.mut.withValues(alpha: 0.6),
+        textStyle: const TextStyle(fontFamily: 'Geist', fontSize: 12, fontWeight: FontWeight.w500),
       ),
       child: Text(L('Disable', 'Desactivar')),
     );
@@ -384,7 +384,7 @@ class _AdminPeopleState extends State<AdminPeople> {
                     // file_picker only if Minsur asks for a real file upload.
                     L('Paste the CSV text (header: email,firstName,lastName,team).',
                         'Pega el texto CSV (encabezado: email,firstName,lastName,team).'),
-                    style: TextStyle(color: t.faint, fontSize: 11),
+                    style: TextStyle(color: t.mut, fontSize: 11),
                   ),
                   const SizedBox(height: 12),
                   TextField(
@@ -396,7 +396,7 @@ class _AdminPeopleState extends State<AdminPeople> {
                         v.trim().isEmpty ? null : parseUsersCsv(v, teamIds: teamIds, existingEmails: existing)),
                   ),
                   const SizedBox(height: 12),
-                  if (preview != null)
+                  if (preview != null && preview!.rows.isNotEmpty)
                     ConstrainedBox(
                       constraints: const BoxConstraints(maxHeight: 220),
                       child: SingleChildScrollView(
@@ -415,6 +415,13 @@ class _AdminPeopleState extends State<AdminPeople> {
                         ),
                       ),
                     ),
+                  // What the paste amounts to, before anything is sent. A
+                  // preview table with an Error column on every row and a
+                  // disabled button was the whole explanation until now.
+                  if (preview != null) ...[
+                    const SizedBox(height: 10),
+                    Text(_csvSummary(preview!), style: AdminTokens.footnote),
+                  ],
                   const SizedBox(height: 16),
                   Row(mainAxisAlignment: MainAxisAlignment.end, children: [
                     TextButton(onPressed: () => Navigator.pop(dctx), child: Text(L('Cancel', 'Cancelar'))),
@@ -444,4 +451,29 @@ class _AdminPeopleState extends State<AdminPeople> {
       ),
     );
   }
+}
+
+/// The import preview in one line: what will be created, what was rejected,
+/// or why nothing was recognised at all. The dialog's own empty and error
+/// state -- a table of red cells does not tell a reader what to do next.
+String _csvSummary(CsvImport preview) {
+  if (preview.rows.isEmpty) {
+    return L(
+      'No rows recognised. The first line has to be the header: '
+          'email,firstName,lastName,team.',
+      'No se reconoció ninguna fila. La primera línea debe ser el encabezado: '
+          'email,firstName,lastName,team.',
+    );
+  }
+  final ok = preview.valid.length;
+  final bad = preview.rows.length - ok;
+  if (ok == 0) {
+    return L('No row can be imported: fix the $bad below and paste again.',
+        'No se puede importar ninguna fila: corrige las $bad de abajo y '
+            'vuelve a pegar.');
+  }
+  return bad == 0
+      ? L('$ok rows ready to import.', '$ok filas listas para importar.')
+      : L('$ok rows ready · $bad rejected, listed below.',
+          '$ok filas listas · $bad descartadas, con el motivo abajo.');
 }

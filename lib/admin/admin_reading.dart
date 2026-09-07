@@ -29,6 +29,20 @@ String date(DateTime? d) {
 /// noise everywhere the console reads one back.
 String sectionName(String raw) => raw.replaceFirst(RegExp(r'^\d+\.\s*'), '');
 
+/// Sort key for one subtopic column: topic, then the ordinal the title
+/// carries, then the name.
+///
+/// The ordinal is the whole point. Sorted as text, "10. Datos personales"
+/// lands between "1. Contraseñas" and "2. Phishing" -- the course's own order,
+/// scrambled, in the one view whose columns ARE that order. Padded to six
+/// digits so it sorts as the number it is. A title without an ordinal sorts
+/// last, where an unnumbered extra belongs.
+String sectionOrder(String topic, String rawSection) {
+  final ordinal = RegExp(r'^(\d+)\.').firstMatch(rawSection)?.group(1);
+  return '$topic|${(ordinal ?? '999999').padLeft(6, '0')}|'
+      '${sectionName(rawSection)}';
+}
+
 /// The tutor's name, or the product's default. Every analytics screen signs
 /// its reading with it and names it in its Iris copy.
 String personaName(AdminMe me) => personaNameOf(me.persona);
@@ -265,7 +279,7 @@ String? weakestSubtopic(List<MasteryRow> rows) {
   final tallies = <String, Map<String, List<int>>>{};
   final order = <String, String>{};
   for (final r in rows) {
-    order[r.sectionKey] = '${r.topic} ${r.section}';
+    order[r.sectionKey] = sectionOrder(r.topic, r.section);
     final t = tallies
         .putIfAbsent(r.sectionKey, () => {})
         .putIfAbsent(r.user, () => [0, 0]);
