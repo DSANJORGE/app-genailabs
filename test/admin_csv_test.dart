@@ -22,4 +22,7 @@ void main() {
   test('csvOf quotes commas and quotes', () {
     expect(csvOf([['a', 'b,c', 'd"e']]), 'a,"b,c","d""e"\r\n');
   });
+  test('csvOf guards formula-injection leading chars', () {
+    expect(csvOf([['=cmd', '+1', '-1', '@x', 'ok']]), "'=cmd,'+1,'-1,'@x,ok\r\n");
+  });
 }

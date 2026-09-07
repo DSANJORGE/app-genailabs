@@ -85,5 +85,9 @@ List<String> _split(String line) {
 
 String csvOf(List<List<String>> table) => [
       for (final row in table)
-        '${row.map((v) => v.contains(RegExp(r'[",\r\n]')) ? '"${v.replaceAll('"', '""')}"' : v).join(',')}\r\n'
+        '${row.map((v) {
+          // ponytail: guard formula-injection chars Excel/Sheets auto-execute on open.
+          final g = RegExp(r'^[=+\-@]').hasMatch(v) ? "'$v" : v;
+          return g.contains(RegExp(r'[",\r\n]')) ? '"${g.replaceAll('"', '""')}"' : g;
+        }).join(',')}\r\n'
     ].join();

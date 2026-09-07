@@ -28,7 +28,11 @@ class _AdminAppState extends State<AdminApp> {
     AdminSession.onSignedOut = () {
       if (mounted) setState(() => _signedIn = false);
     };
-    AdminSession.restore().then((v) => setState(() => _signedIn = v));
+    AdminSession.restore().then((v) {
+      if (mounted) setState(() => _signedIn = v);
+    }, onError: (_) {
+      if (mounted) setState(() => _signedIn = false);
+    });
   }
 
   @override
