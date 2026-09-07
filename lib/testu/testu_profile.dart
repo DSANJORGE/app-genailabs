@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -171,40 +172,43 @@ class _TestuProfileScreenState extends State<TestuProfileScreen> {
                           'teléfono.'),
                   t: t),
             ]),
-            _ProfCard(children: [
-              _H4(L('SECURITY', 'SEGURIDAD')),
-              _SetRow(
-                title: TestuLock.available
-                    ? L('Unlock with ${TestuLock.name}',
-                        'Desbloquear con ${TestuLock.name}')
-                    : L('Unlock with Face ID or fingerprint',
-                        'Desbloquear con Face ID o huella'),
-                sub: TestuLock.available
-                    ? L('Open the app without waiting for an emailed code',
-                        'Abre la app sin esperar un código por correo')
-                    : L('Set up Face ID or a fingerprint on this device first',
-                        'Configura Face ID o una huella en este dispositivo '
-                            'primero'),
-                last: true,
-                trailing: TestuLock.available
-                    ? _Toggle(on: TestuLock.enabled, onTap: _toggleLock)
-                    : Opacity(
-                        opacity: 0.55, child: _Toggle(on: false)),
-              ),
-              if (_lockError != null) ...[
+            // No sensor in a browser tab; the card would only ever say
+            // "set up Face ID first".
+            if (!kIsWeb)
+              _ProfCard(children: [
+                _H4(L('SECURITY', 'SEGURIDAD')),
+                _SetRow(
+                  title: TestuLock.available
+                      ? L('Unlock with ${TestuLock.name}',
+                          'Desbloquear con ${TestuLock.name}')
+                      : L('Unlock with Face ID or fingerprint',
+                          'Desbloquear con Face ID o huella'),
+                  sub: TestuLock.available
+                      ? L('Open the app without waiting for an emailed code',
+                          'Abre la app sin esperar un código por correo')
+                      : L('Set up Face ID or a fingerprint on this device first',
+                          'Configura Face ID o una huella en este dispositivo '
+                              'primero'),
+                  last: true,
+                  trailing: TestuLock.available
+                      ? _Toggle(on: TestuLock.enabled, onTap: _toggleLock)
+                      : Opacity(
+                          opacity: 0.55, child: _Toggle(on: false)),
+                ),
+                if (_lockError != null) ...[
+                  const SizedBox(height: 8),
+                  Text(_lockError!,
+                      style: TextStyle(
+                          fontFamily: 'Geist', fontSize: 11.5, color: t.red)),
+                ],
                 const SizedBox(height: 8),
-                Text(_lockError!,
-                    style: TextStyle(
-                        fontFamily: 'Geist', fontSize: 11.5, color: t.red)),
-              ],
-              const SizedBox(height: 8),
-              _Note(
-                  L('Your face or fingerprint stays on this phone — TestU '
-                          'never receives it. Signing out turns this off.',
-                      'Tu cara o tu huella se quedan en este teléfono: TestU '
-                          'nunca las recibe. Al cerrar sesión se desactiva.'),
-                  t: t),
-            ]),
+                _Note(
+                    L('Your face or fingerprint stays on this phone — TestU '
+                            'never receives it. Signing out turns this off.',
+                        'Tu cara o tu huella se quedan en este teléfono: TestU '
+                            'nunca las recibe. Al cerrar sesión se desactiva.'),
+                    t: t),
+              ]),
             _ProfCard(children: [
               _H4(L('LANGUAGE', 'IDIOMA')),
               _SetRow(
