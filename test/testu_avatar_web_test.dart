@@ -29,4 +29,14 @@ void main() {
   test('a key that is not a data URL does not exist here', () {
     expect(avatarExists('/var/mobile/avatars/1.jpg'), isFalse);
   });
+
+  test('picking the same photo twice keeps one entry', () async {
+    final bytes = Uint8List.fromList([1, 2, 3]);
+    final src1 = await avatarAdd(XFile.fromData(bytes, mimeType: 'image/png'));
+    final src2 = await avatarAdd(XFile.fromData(bytes, mimeType: 'image/png'));
+    expect(src1, src2);
+    expect(await avatarRestoreLibrary(), [src1]);
+    await avatarRemove(src1);
+    expect(await avatarRestoreLibrary(), isEmpty);
+  });
 }

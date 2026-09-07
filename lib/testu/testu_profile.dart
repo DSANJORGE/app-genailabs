@@ -53,7 +53,9 @@ Future<void> _addAvatar() async {
       .pickImage(source: ImageSource.gallery, maxWidth: 512);
   if (picked == null) return;
   final src = await avatarAdd(picked);
-  testuAvatarLibrary.value = [...testuAvatarLibrary.value, src];
+  if (!testuAvatarLibrary.value.contains(src)) {
+    testuAvatarLibrary.value = [...testuAvatarLibrary.value, src];
+  }
   await _selectAvatar(src);
 }
 

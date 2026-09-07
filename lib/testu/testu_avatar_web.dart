@@ -17,8 +17,11 @@ bool avatarExists(String src) => src.startsWith('data:');
 Future<String> avatarAdd(XFile picked) async {
   final src = 'data:${picked.mimeType ?? 'image/jpeg'};base64,'
       '${base64Encode(await picked.readAsBytes())}';
+  final lib = await avatarRestoreLibrary();
+  // Re-picking the same photo selects the existing entry instead of adding a twin.
+  if (lib.contains(src)) return src;
   final p = await SharedPreferences.getInstance();
-  await p.setStringList(_kLib, [...await avatarRestoreLibrary(), src]);
+  await p.setStringList(_kLib, [...lib, src]);
   return src;
 }
 
