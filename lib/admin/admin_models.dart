@@ -18,19 +18,51 @@ class SuiteModule {
       );
 }
 
+/// The site's tutor as me.json sends it: the organisation the console
+/// belongs to, and the face and language its Iris speaks with. Absent on a
+/// server that predates the `persona` key in me.groovy, so every consumer
+/// treats it as optional.
+class AdminPersona {
+  AdminPersona(this.name, {this.avatar, this.organization, this.language});
+  final String name;
+
+  /// Avatar image URL, organisation name, `en`/`es`. Empty strings from the
+  /// eMe record land here as null: an empty avatar URL would blow up
+  /// NetworkImage, and an empty organisation must fall back, not print.
+  final String? avatar, organization, language;
+
+  factory AdminPersona.fromJson(Map j) => AdminPersona(
+        '${j['name'] ?? ''}',
+        avatar: _some(j['avatar']),
+        organization: _some(j['organization']),
+        language: _some(j['language']),
+      );
+
+  static String? _some(Object? v) {
+    final s = v?.toString().trim() ?? '';
+    return s.isEmpty ? null : s;
+  }
+}
+
 class AdminMe {
   AdminMe(this.id, this.email, this.name, this.role, this.permissions,
-      this.modules);
+      this.modules, {this.persona});
   final String id, email, name, role;
   final Set<String> permissions;
   final List<SuiteModule> modules;
+  final AdminPersona? persona;
 
   bool can(String p) => permissions.contains(p);
   List<SuiteModule> get webModules =>
       [for (final m in modules) if (m.enabled && m.surfaces.contains('web')) m];
 
+  /// What the nav calls this console. The tutor persona carries the client's
+  /// name; without one the product name is the honest fallback.
+  String get organization => persona?.organization ?? 'TestU';
+
   factory AdminMe.fromJson(Map j) {
     final u = j['user'] as Map? ?? {};
+    final persona = j['persona'];
     return AdminMe(
       '${u['id'] ?? ''}',
       '${u['email'] ?? ''}',
@@ -38,6 +70,7 @@ class AdminMe {
       '${j['role'] ?? 'users'}',
       {for (final p in (j['permissions'] as List? ?? [])) '$p'},
       [for (final m in (j['modules'] as List? ?? [])) SuiteModule.fromJson(m)],
+      persona: persona is Map ? AdminPersona.fromJson(persona) : null,
     );
   }
 }

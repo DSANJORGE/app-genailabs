@@ -25,6 +25,27 @@ void main() {
     expect(me.can('analytics_view'), isTrue);
     expect(me.can('personas_operate'), isFalse);
     expect(me.webModules.map((m) => m.id), ['personas']);
+    // No persona key (an older server): the nav still has a name to show.
+    expect(me.persona, isNull);
+    expect(me.organization, 'TestU');
+  });
+
+  test('me reads the tutor persona, blank fields and all', () async {
+    http.canned['services/testu/personas/me.json'] = {
+      'user': {'id': 'a@b.c'},
+      'persona': {
+        'name': 'Iris',
+        'avatar': '',
+        'organization': 'Minsur',
+        'language': 'es',
+      },
+    };
+    final me = await api.me();
+    expect(me.persona!.name, 'Iris');
+    expect(me.persona!.language, 'es');
+    // An empty avatar URL would crash NetworkImage; it must arrive as null.
+    expect(me.persona!.avatar, isNull);
+    expect(me.organization, 'Minsur');
   });
 
   test('report parses rows and summary', () async {
