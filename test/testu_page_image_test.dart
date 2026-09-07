@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:genai_labs/testu/testu_icons.dart';
 import 'package:genai_labs/testu/testu_pdf.dart';
 import 'package:genai_labs/testu/testu_theme.dart';
 
@@ -51,7 +52,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(wash, findsOneWidget);
     expect(tester.widget<RotatedBox>(find.byType(RotatedBox)).quarterTurns, 0);
-    await tester.tap(find.text('↻'));
+    await tester.tap(find.byWidgetPredicate(
+        (w) => w is TestuIcon && w.glyph == TestuGlyph.rotate));
     await tester.pumpAndSettle();
     expect(tester.widget<RotatedBox>(find.byType(RotatedBox)).quarterTurns, 1);
   });

@@ -163,7 +163,7 @@ class _TestuThreadState extends State<TestuThread> {
       decoration: reply
           ? null
           : BoxDecoration(
-              color: const Color(0xFF141416),
+              color: t.card,
               border: Border.all(color: t.line2),
               borderRadius: BorderRadius.circular(12),
             ),
@@ -190,7 +190,7 @@ class _TestuThreadState extends State<TestuThread> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    border: Border.all(color: const Color(0xFF2F6A4C)),
+                    border: Border.all(color: t.greenBorder),
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(c.role!,
@@ -209,7 +209,7 @@ class _TestuThreadState extends State<TestuThread> {
                   fontFamily: 'Geist',
                   fontSize: reply ? 12 : 12.5,
                   height: 1.5,
-                  color: const Color(0xFFC2C1BD))),
+                  color: t.inkDim)),
           const SizedBox(height: 7),
           Row(
             children: [
@@ -271,7 +271,7 @@ class _TestuThreadState extends State<TestuThread> {
                       style: TextStyle(
                           fontSize: 10,
                           decoration: TextDecoration.underline,
-                          decorationColor: const Color(0xFF3A3A40),
+                          decorationColor: t.idle,
                           color: t.faint)),
                 ),
             ],
@@ -409,8 +409,8 @@ class _SocialThreadEntryState extends State<SocialThreadEntry> {
                     ),
                   ),
                 ),
-                Text(_open ? '−' : '+',
-                    style: TextStyle(fontSize: 13, color: t.faint)),
+                TestuIcon(_open ? TestuGlyph.minus : TestuGlyph.plus,
+                    size: 13, color: t.faint),
               ],
             ),
           ),
@@ -775,11 +775,9 @@ void showTestuReactionsSheet(BuildContext context,
       rows.add((p.$1, p.$2, e.key, false));
     }
   }
-  showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    barrierColor: const Color(0xA8000000),
+  showTestuSheet<void>(
+    context,
+    maxHeight: 0.66,
     builder: (context) {
       final t = TestuTokens.of(context);
       TestuReaction? filter;
@@ -805,27 +803,11 @@ void showTestuReactionsSheet(BuildContext context,
                 child: child,
               ),
             );
-        return Container(
-          constraints: BoxConstraints(
-              maxHeight: MediaQuery.sizeOf(context).height * 0.66),
-          decoration: BoxDecoration(
-            color: t.card,
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(22)),
-            border: Border(top: BorderSide(color: t.line2)),
-          ),
+        return Padding(
           padding: EdgeInsets.only(
               bottom: 14 + MediaQuery.paddingOf(context).bottom),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Container(
-              width: 36,
-              height: 4,
-              margin: const EdgeInsets.only(top: 14, bottom: 18),
-              decoration: BoxDecoration(
-                color: t.line2,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
+            const TestuGrabber(),
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 18),

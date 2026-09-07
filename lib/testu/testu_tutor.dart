@@ -38,9 +38,12 @@ class _TestuTutorScreenState extends State<TestuTutorScreen> {
   bool _in = false;
   final _scroll = ScrollController();
 
-  // Live: the learner's tally per section, fetched once per visit. Null until
-  // it arrives (or when it fails): the greeting then reads as "no answers yet".
+  // Live: the learner's tally per section, fetched once per visit. While it
+  // is on its way the tutor is "typing" — the greeting must not claim "no
+  // answers yet" about a record that simply hasn't loaded. Null after a
+  // failure reads as no record.
   TutorProgress? _progress;
+  bool _loadingProgress = false;
 
   // (fromUser, text), in order.
   final _chat = <(bool, String)>[];
@@ -74,9 +77,16 @@ class _TestuTutorScreenState extends State<TestuTutorScreen> {
       if (mounted) setState(() => _in = true);
     });
     if (testuLive) {
+      _loadingProgress = true;
       loadTutorProgress().then((p) {
-        if (mounted && p != null) setState(() => _progress = p);
-      }).catchError((_) {});
+        if (!mounted) return;
+        setState(() {
+          _loadingProgress = false;
+          if (p != null) _progress = p;
+        });
+      }).catchError((_) {
+        if (mounted) setState(() => _loadingProgress = false);
+      });
     }
   }
 
@@ -130,14 +140,19 @@ class _TestuTutorScreenState extends State<TestuTutorScreen> {
               AnimatedSlide(
                 offset: _in ? Offset.zero : const Offset(0, 0.04),
                 duration: const Duration(milliseconds: 400),
-                curve: Curves.easeOut,
+                curve: TestuTokens.curve,
                 child: AnimatedOpacity(
                   opacity: _in ? 1 : 0,
                   duration: const Duration(milliseconds: 400),
-                  child: testuLive
-                      ? _liveGreeting(
-                          context, _progress, widget.onCalibration, _send)
-                      : _demoGreeting(context, widget.onCalibration, _send),
+                  child: !testuLive
+                      ? _demoGreeting(context, widget.onCalibration, _send)
+                      : _loadingProgress && _progress == null
+                          ? const SullyMessage.typing(
+                              key: ValueKey('tutor-loading'),
+                              avatar: false,
+                              bottomPadding: 16)
+                          : _liveGreeting(
+                              context, _progress, widget.onCalibration, _send),
                 ),
               ),
               const SizedBox(height: 14),
@@ -148,10 +163,8 @@ class _TestuTutorScreenState extends State<TestuTutorScreen> {
               // Keyed so the reply that takes its slot gets a fresh State
               // (otherwise it inherits these never-ending dots).
               if (_waiting)
-                const SullyMessage(
+                const SullyMessage.typing(
                     key: ValueKey('tutor-typing'),
-                    spans: [],
-                    delay: 600000,
                     avatar: false,
                     bottomPadding: 16),
               const _PrivacyNote(),
@@ -235,8 +248,6 @@ class _PrivacyNote extends StatelessWidget {
   }
 }
 
-const _ital = TextStyle(fontStyle: FontStyle.italic, color: Color(0xFFA9A8A4));
-
 /// Live greeting, written from the learner's own record in the live
 /// tutorial: the section they last answered and the one they are weakest in
 /// (Diego, 2026-09-03). No record yet -> an invitation to start.
@@ -257,7 +268,7 @@ Widget _liveGreeting(BuildContext context, TutorProgress? p,
       TextSpan(text: hi + L("I don't have any answers of yours yet in ",
           'Todavía no tengo respuestas tuyas en ')),
       TextSpan(text: p?.tutorialTitle ?? L('your tutorial', 'tu tutorial'),
-          style: _ital),
+          style: kItalic),
       TextSpan(text: L('. Shall we start, or is there anything else on your mind?',
           '. ¿Empezamos, o hay algo en lo que estés pensando?')),
     ]);
@@ -266,7 +277,7 @@ Widget _liveGreeting(BuildContext context, TutorProgress? p,
     spans.addAll([
       TextSpan(text: hi + L('The last thing you worked on was ',
           'Lo último que trabajaste fue ')),
-      TextSpan(text: name(last), style: _ital),
+      TextSpan(text: name(last), style: kItalic),
       TextSpan(
           text: clean
               ? L(' (${score(last)} — nothing to fix there). Want to keep going, or is there anything else on your mind?',
@@ -278,10 +289,10 @@ Widget _liveGreeting(BuildContext context, TutorProgress? p,
     spans.addAll([
       TextSpan(text: hi + L('The last thing you worked on was ',
           'Lo último que trabajaste fue ')),
-      TextSpan(text: name(last), style: _ital),
+      TextSpan(text: name(last), style: kItalic),
       TextSpan(text: L(' (${score(last)}). Where you are weakest is ',
           ' (${score(last)}). Donde más flojeas es ')),
-      TextSpan(text: name(weakest), style: _ital),
+      TextSpan(text: name(weakest), style: kItalic),
       TextSpan(
           text: L(' (${score(weakest)}) — I have marked it to revisit. Want to go over it now, or is there anything else on your mind?',
               ' (${score(weakest)}) — lo he marcado para repasar. ¿Quieres repasarlo ahora, o hay algo más en lo que estés pensando?')),
@@ -316,13 +327,13 @@ Widget _chips(BuildContext context, VoidCallback onCalibration,
       spacing: 8,
       runSpacing: 8,
       children: [
-        _Chip(primary,
+        TestuChip(primary,
             primary: true,
             onTap: () => showTestuSession(context, sectionId: sectionId)),
-        _Chip(L('How is my calibration?', '¿Cómo va mi calibración?'),
+        TestuChip(L('How is my calibration?', '¿Cómo va mi calibración?'),
             onTap: onCalibration),
         // A canned question: sent as if typed.
-        _Chip(ask, onTap: () => onAsk(ask)),
+        TestuChip(ask, onTap: () => onAsk(ask)),
       ],
     ),
   );
@@ -343,7 +354,7 @@ Widget _demoGreeting(BuildContext context, VoidCallback onCalibration,
       TextSpan(
           text: CL('due diligence', 'la debida diligencia',
               'chock timing', 'el momento de calzar'),
-          style: _ital),
+          style: kItalic),
       TextSpan(
           text: L(' — I’ve scheduled it into today’s Daily '
                   'Challenge. Want to talk it through first, or '
@@ -356,40 +367,6 @@ Widget _demoGreeting(BuildContext context, VoidCallback onCalibration,
         primary: L('Review it now', 'Repasarlo ahora'),
         ask: L(client.askEn, client.askEs)),
   );
-}
-
-/// Suggestion chip — outlined, or white when it's the adaptive recommendation.
-class _Chip extends StatelessWidget {
-  const _Chip(this.label, {this.primary = false, required this.onTap});
-
-  final String label;
-  final bool primary;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = TestuTokens.of(context);
-    return TestuPressable(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 14),
-        decoration: BoxDecoration(
-          color: primary ? t.primaryAction : null,
-          border: Border.all(color: primary ? t.primaryAction : t.line2),
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontFamily: 'Geist',
-            fontSize: 11.5,
-            fontWeight: primary ? FontWeight.w700 : FontWeight.w400,
-            color: primary ? t.onPrimaryAction : const Color(0xFFC2C1BD),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 /// Pinned ask bar above the nav, fading up from the page background.

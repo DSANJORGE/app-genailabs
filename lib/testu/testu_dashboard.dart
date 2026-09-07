@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'testu_i18n.dart';
+import 'testu_icons.dart';
 import 'testu_live.dart';
 import 'testu_theme.dart';
 import 'testu_topics.dart' show masteryOf;
@@ -28,6 +29,10 @@ class TestuDashboardScreen extends StatefulWidget {
 class _TestuDashboardScreenState extends State<TestuDashboardScreen> {
   List<TopicProgress>? _live;
 
+  /// First load answered (data or failure). Skeletons only before that;
+  /// a failed load falls back to the prototype's cards, as it always did.
+  bool _loaded = false;
+
   @override
   void initState() {
     super.initState();
@@ -45,39 +50,43 @@ class _TestuDashboardScreenState extends State<TestuDashboardScreen> {
       if (mounted) setState(() => _live = p);
     }).catchError((Object e) {
       debugPrint('TestU: dashboard progress ($e)');
+    }).whenComplete(() {
+      if (mounted) setState(() => _loaded = true);
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final t = TestuTokens.of(context);
     final live = _live;
+    // Live and still loading: skeletons, not the prototype's numbers
+    // flashing for a second and then being replaced by real ones.
+    final loading = testuLive && !_loaded;
     final answers = [for (final p in live ?? const <TopicProgress>[]) ...p.answers];
     return SafeArea(
       bottom: false,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(18, 14, 18, 110),
         children: [
-          Text(
-            L('Your readiness', 'Tu preparación'),
-            style: TextStyle(
-              fontFamily: 'Sora',
-              fontWeight: FontWeight.w700,
-              fontSize: 21,
-              letterSpacing: -0.21,
-              color: t.ink,
-            ),
-          ),
+          Text(L('Your readiness', 'Tu preparación'), style: kH1),
           const SizedBox(height: 12),
-          _ReadinessCard(live: live),
+          if (loading) const _SkeletonCard() else _ReadinessCard(live: live),
           const SizedBox(height: 12),
           const _PeerCard(),
           const SizedBox(height: 12),
-          _CalibrationCard(answers: live == null ? null : answers),
+          if (loading)
+            const _SkeletonCard()
+          else
+            _CalibrationCard(answers: live == null ? null : answers),
           const SizedBox(height: 12),
-          _WeekCard(days: live == null ? null : _week(answers)),
+          if (loading)
+            const _SkeletonCard()
+          else
+            _WeekCard(days: live == null ? null : _week(answers)),
           const SizedBox(height: 12),
-          _MastRowsCard(
+          if (loading)
+            const _SkeletonCard()
+          else
+            _MastRowsCard(
             title: L('MASTERY BY TOPIC', 'DOMINIO POR TEMA'),
             rows: live != null
                 ? [for (final p in live) _liveTopicRow(p)]
@@ -85,23 +94,19 @@ class _TestuDashboardScreenState extends State<TestuDashboardScreen> {
               _MastRow(CL('Hazard Prevention', 'Prevención de Riesgos',
                       'FOD Prevention', 'Prevención de FOD'),
                   L('Improve Mode available', 'Modo Mejorar disponible'),
-                  TestuPill(L('Expert · Stable', 'Experto · Estable'),
-                      color: t.greenText,
-                      borderColor: const Color(0xFF2F6A4C))),
+                  TestuPill.green(L('Expert · Stable', 'Experto · Estable'))),
               _MastRow(
                   CL('Human Rights & Due Diligence',
                       'Derechos Humanos y Debida Diligencia',
                       'Ramp Safety & Turnaround', 'Seguridad en Rampa y Turnaround'),
                   L('Learn Mode · 21 of 36', 'Modo Aprender · 21 de 36'),
-                  TestuPill(
-                      L('Competent · Review soon', 'Competente · Repasar pronto'),
-                      color: t.gold, borderColor: const Color(0xFF8A7A3A))),
+                  TestuPill.gold(
+                      L('Competent · Review soon', 'Competente · Repasar pronto'))),
               _MastRow(
                   CL('Cybersecurity', 'Ciberseguridad',
                       'Radio Communication', 'Comunicación por Radio'),
                   L('${client.tutor} recommends 10 min today', '${client.tutor} recomienda 10 min hoy'),
-                  TestuPill(L('Competent · At risk', 'Competente · En riesgo'),
-                      color: t.amber, borderColor: const Color(0xFF7A5C1E))),
+                  TestuPill.amber(L('Competent · At risk', 'Competente · En riesgo'))),
             ],
           ),
           const SizedBox(height: 12),
@@ -113,26 +118,21 @@ class _TestuDashboardScreenState extends State<TestuDashboardScreen> {
                   CL('Safe operations conduct', 'Conducta segura en operaciones',
                       'Safe aircraft handling', 'Manejo seguro de la aeronave'),
                   L('3 of 4 behaviors evidenced', '3 de 4 conductas evidenciadas'),
-                  TestuPill(L('Strong', 'Sólido'),
-                      color: t.greenText,
-                      borderColor: const Color(0xFF2F6A4C))),
+                  TestuPill.green(L('Strong', 'Sólido'))),
               _MastRow(
                   CL('Situational awareness on site',
                       'Conciencia situacional en la unidad',
                       'Situational awareness on stand',
                       'Conciencia situacional en el stand'),
                   L('1 of 3 behaviors evidenced', '1 de 3 conductas evidenciadas'),
-                  TestuPill(L('Building', 'En desarrollo'),
-                      color: t.amber, borderColor: const Color(0xFF7A5C1E))),
+                  TestuPill.amber(L('Building', 'En desarrollo'))),
               _MastRow(
                   L('Communication & coordination', 'Comunicación y coordinación'),
                   CL('1 of 5 behaviors evidenced · tied to Cybersecurity',
                       '1 de 5 conductas evidenciadas · ligado a Ciberseguridad',
                       '1 of 5 behaviors evidenced · tied to Radio Communication',
                       '1 de 5 conductas evidenciadas · ligado a Comunicación por Radio'),
-                  TestuPill(L('At risk', 'En riesgo'),
-                      color: const Color(0xFFD08B8B),
-                      borderColor: const Color(0xFF6E3535))),
+                  TestuPill.red(L('At risk', 'En riesgo'))),
             ],
             note: L(
                 'Behaviors are what ${client.name} expects from your role. Every benchmark answer records evidence toward them.',
@@ -140,6 +140,39 @@ class _TestuDashboardScreenState extends State<TestuDashboardScreen> {
           ),
           const SizedBox(height: 12),
           const _CertCard(),
+        ],
+      ),
+    );
+  }
+}
+
+/// Loading stand-in for a data card: label bar + a headline bar + two lines.
+class _SkeletonCard extends StatelessWidget {
+  const _SkeletonCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TestuTokens.of(context);
+    Widget bar(double w, double h) => Container(
+          width: w,
+          height: h,
+          decoration: BoxDecoration(
+            color: t.card2,
+            borderRadius: BorderRadius.circular(h / 2),
+          ),
+        );
+    return TestuCard(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          bar(120, 8),
+          const SizedBox(height: 14),
+          bar(170, 16),
+          const SizedBox(height: 14),
+          bar(double.infinity, 10),
+          const SizedBox(height: 8),
+          bar(200, 10),
         ],
       ),
     );
@@ -266,15 +299,7 @@ class _ReadinessCard extends StatelessWidget {
             textBaseline: TextBaseline.alphabetic,
             children: [
               Expanded(
-                child: Text(
-                  headline,
-                  style: const TextStyle(
-                    fontFamily: 'Sora',
-                    fontWeight: FontWeight.w700,
-                    fontSize: 17,
-                    color: Color(0xFFE9E8E4),
-                  ),
-                ),
+                child: Text(headline, style: kSheetTitle),
               ),
               TestuEyebrow(L('EXPLAINABLE', 'EXPLICABLE')),
             ],
@@ -297,21 +322,21 @@ class _CompLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = TestuTokens.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8),
       decoration: last
           ? null
-          : const BoxDecoration(
-              border: Border(bottom: BorderSide(color: Color(0xFF17171A)))),
+          : BoxDecoration(border: Border(bottom: BorderSide(color: t.card2))),
       child: Row(
         children: [
           Expanded(
             child: Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'Geist',
                 fontSize: 12,
-                color: Color(0xFFC2C1BD),
+                color: t.inkDim,
               ),
             ),
           ),
@@ -385,10 +410,8 @@ class _PeerCard extends StatelessWidget {
               children: [
                 _LegendDot(t.orange, L('You', 'Tú')),
                 _LegendDot(t.mut, L('Peer median', 'Mediana del grupo')),
-                TestuPill(
-                    L('Top quartile · calibration', 'Cuartil superior · calibración'),
-                    color: t.greenText,
-                    borderColor: const Color(0xFF2F6A4C)),
+                TestuPill.green(
+                    L('Top quartile · calibration', 'Cuartil superior · calibración')),
               ],
             )
           else
@@ -398,8 +421,8 @@ class _PeerCard extends StatelessWidget {
                 const SizedBox(width: 14),
                 _LegendDot(t.mut, L('Peer median', 'Mediana del grupo')),
                 const Spacer(),
-                TestuPill(L('Top quartile · calibration', 'Cuartil superior · calibración'),
-                    color: t.greenText, borderColor: const Color(0xFF2F6A4C)),
+                TestuPill.green(
+                    L('Top quartile · calibration', 'Cuartil superior · calibración')),
               ],
             ),
           const SizedBox(height: 12),
@@ -473,20 +496,20 @@ class _PeerMetric extends StatelessWidget {
             Expanded(
               child: Text(
                 label,
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: 'Geist',
                   fontSize: 11.5,
-                  color: Color(0xFFC2C1BD),
+                  color: t.inkDim,
                 ),
               ),
             ),
             Text(
               you,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'Geist',
                 fontWeight: FontWeight.w600,
                 fontSize: 11.5,
-                color: Color(0xFFE6E4E0),
+                color: t.ink,
               ),
             ),
           ],
@@ -501,7 +524,7 @@ class _PeerMetric extends StatelessWidget {
               children: [
                 Container(
                   decoration: BoxDecoration(
-                    color: const Color(0xFF26262C),
+                    color: t.track,
                     borderRadius: BorderRadius.circular(3),
                   ),
                 ),
@@ -653,7 +676,7 @@ class _Quad extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
       decoration: BoxDecoration(
-        border: Border.all(color: hot ? const Color(0xFF6E3535) : t.line),
+        border: Border.all(color: hot ? t.redBorder : t.line),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
@@ -665,7 +688,7 @@ class _Quad extends StatelessWidget {
               fontFamily: 'GeistMono',
               fontWeight: FontWeight.w500,
               fontSize: 16,
-              color: hot ? const Color(0xFFD08B8B) : t.ink,
+              color: hot ? t.redText : t.ink,
             ),
           ),
           const SizedBox(height: 2),
@@ -724,9 +747,11 @@ class _WeekCard extends StatelessWidget {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          _Bar(c, const Color(0xFF3F7D5F)),
+                          // Chart bars: the semantic colours dimmed to
+                          // ~72% so a full week doesn't shout.
+                          _Bar(c, t.green.withValues(alpha: 0.72)),
                           const SizedBox(width: 3),
-                          _Bar(i, const Color(0xFF8F4444)),
+                          _Bar(i, t.red.withValues(alpha: 0.72)),
                         ],
                       ),
                     ),
@@ -780,15 +805,7 @@ class _MastRow {
 Widget _mastText(_MastRow r) => Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          r.title,
-          style: const TextStyle(
-            fontFamily: 'Geist',
-            fontWeight: FontWeight.w600,
-            fontSize: 12.5,
-            color: Color(0xFFE9E8E4),
-          ),
-        ),
+        Text(r.title, style: kRowTitle),
         const SizedBox(height: 2),
         Text(
           r.sub,
@@ -806,6 +823,7 @@ class _MastRowsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = TestuTokens.of(context);
     return TestuCard(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
       child: Column(
@@ -818,9 +836,8 @@ class _MastRowsCard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 11),
               decoration: r == rows.last
                   ? null
-                  : const BoxDecoration(
-                      border: Border(
-                          bottom: BorderSide(color: Color(0xFF17171A)))),
+                  : BoxDecoration(
+                      border: Border(bottom: BorderSide(color: t.card2))),
               // The pill takes its intrinsic width, so past XXL it starves
               // the title column until "Derechos Humanos" breaks mid-word.
               // Give the title the full row and drop the pill below it.
@@ -869,17 +886,10 @@ class _CertCard extends StatelessWidget {
             height: 44,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              border: Border.all(color: const Color(0xFF8A7A3A)),
+              border: Border.all(color: t.goldBorder),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Text(
-              '✓',
-              style: TextStyle(
-                fontFamily: 'Sora',
-                fontSize: 17,
-                color: t.gold,
-              ),
-            ),
+            child: TestuIcon(TestuGlyph.check, size: 18, color: t.gold),
           ),
           const SizedBox(width: 13),
           // Issuer line stacks under the title — a trailing caption column
@@ -891,12 +901,7 @@ class _CertCard extends StatelessWidget {
                 Text(
                   CL('Human Rights — Certified', 'Derechos Humanos — Certificado',
                       'Ramp Safety — Certified', 'Seguridad en Rampa — Certificada'),
-                  style: const TextStyle(
-                    fontFamily: 'Geist',
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                    color: Color(0xFFE9E8E4),
-                  ),
+                  style: kRowTitle.copyWith(fontSize: 13),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -912,8 +917,9 @@ class _CertCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontFamily: 'GeistMono',
-                    fontSize: 8,
-                    letterSpacing: 0.64, // +0.08em
+                    fontWeight: FontWeight.w500,
+                    fontSize: 8.5,
+                    letterSpacing: 1.02,
                     color: t.faint,
                   ),
                 ),

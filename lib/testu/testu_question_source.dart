@@ -2,14 +2,14 @@ import 'package:flutter/painting.dart';
 
 import 'testu_i18n.dart';
 import 'testu_client.dart';
+import 'testu_theme.dart';
 
 /// Where session questions come from. The session screen only sees this
 /// seam, so a live EnterMedia-backed source can slot in later without
 /// touching the widgets or the engine.
 
 /// Italic accent inside framing copy; shared with the live adapter.
-const testuItal =
-    TextStyle(fontStyle: FontStyle.italic, color: Color(0xFFA9A8A4));
+final testuItal = kItalic;
 const _bold = TextStyle(fontWeight: FontWeight.w700);
 
 /// One session question, render-ready. Fields a backend can't supply are

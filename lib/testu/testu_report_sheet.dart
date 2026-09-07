@@ -18,22 +18,8 @@ Future<void> showTestuReportSheet(
   required List<String> reasons,
   required void Function(String reason, String? note) onSend,
 }) {
-  final t = TestuTokens.of(context);
-  return showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: t.card,
-    barrierColor: const Color(0xA8000000),
-    shape: RoundedRectangleBorder(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
-      side: BorderSide(color: t.line2),
-    ),
-    // maxWidth restores Material's landscape sheet cap (passing constraints
-    // replaces the default) — matches the schedule/resource/PDF sheets.
-    constraints: BoxConstraints(
-      maxHeight: MediaQuery.sizeOf(context).height * 0.88,
-      maxWidth: 640,
-    ),
+  return showTestuSheet<void>(
+    context,
     builder: (_) => _ReportSheetBody(
       eyebrow: eyebrow,
       title: title,
@@ -88,21 +74,11 @@ class _ReportSheetBodyState extends State<_ReportSheetBody> {
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(
-            20, 10, 20, 20 + MediaQuery.paddingOf(context).bottom),
+            20, 0, 20, 20 + MediaQuery.paddingOf(context).bottom),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: t.line2,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
+            const TestuGrabber(),
             if (_sent)
               _sentView(t)
             else
@@ -116,16 +92,7 @@ class _ReportSheetBodyState extends State<_ReportSheetBody> {
   List<Widget> _formChildren(TestuTokens t) => [
         TestuEyebrow(widget.eyebrow, color: t.amber),
         const SizedBox(height: 6),
-        Text(
-          widget.title,
-          style: TextStyle(
-            fontFamily: 'Sora',
-            fontWeight: FontWeight.w700,
-            fontSize: 17,
-            letterSpacing: -0.17,
-            color: t.ink,
-          ),
-        ),
+        Text(widget.title, style: kSheetTitle),
         const SizedBox(height: 8),
         Text(
           widget.subtitle,
@@ -142,32 +109,10 @@ class _ReportSheetBodyState extends State<_ReportSheetBody> {
           runSpacing: 8,
           children: [
             for (final (i, r) in widget.reasons.indexed)
-              TestuPressable(
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  setState(() => _picked = i);
-                },
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 8, horizontal: 13),
-                  decoration: BoxDecoration(
-                    color: _picked == i ? const Color(0xFF232327) : null,
-                    border: Border.all(
-                        color:
-                            _picked == i ? const Color(0xFF4A4A52) : t.line2),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    r,
-                    style: TextStyle(
-                      fontFamily: 'Geist',
-                      fontSize: 11.5,
-                      fontWeight:
-                          _picked == i ? FontWeight.w600 : FontWeight.w400,
-                      color: _picked == i ? t.ink : t.mut,
-                    ),
-                  ),
-                ),
+              TestuChip(
+                r,
+                selected: _picked == i,
+                onTap: () => setState(() => _picked = i),
               ),
           ],
         ),
@@ -177,27 +122,11 @@ class _ReportSheetBodyState extends State<_ReportSheetBody> {
           minLines: 2,
           maxLines: 4,
           style: TextStyle(fontFamily: 'Geist', fontSize: 12.5, color: t.ink),
-          decoration: InputDecoration(
-            hintText: L('Anything else the team should know? (optional)',
-                '¿Algo más que el equipo deba saber? (opcional)'),
-            hintStyle: TextStyle(
-                fontFamily: 'Geist', fontSize: 12, color: t.faint),
-            filled: true,
-            fillColor: const Color(0xFF101013),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: t.line2),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: t.line2),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF4A4A52)),
-            ),
-            contentPadding: const EdgeInsets.all(12),
-          ),
+          decoration: testuFieldDecoration(t,
+              hint: L('Anything else the team should know? (optional)',
+                  '¿Algo más que el equipo deba saber? (opcional)'),
+              fill: t.field,
+              fontSize: 12.5),
         ),
         const SizedBox(height: 18),
         TestuButton(
@@ -216,15 +145,8 @@ class _ReportSheetBodyState extends State<_ReportSheetBody> {
             const SizedBox(height: 18),
             const TestuCheckPulse(),
             const SizedBox(height: 18),
-            Text(
-              L('Sent. Thank you.', 'Enviado. Gracias.'),
-              style: TextStyle(
-                fontFamily: 'Sora',
-                fontWeight: FontWeight.w700,
-                fontSize: 17,
-                color: t.ink,
-              ),
-            ),
+            Text(L('Sent. Thank you.', 'Enviado. Gracias.'),
+                style: kSheetTitle),
             const SizedBox(height: 8),
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 290),

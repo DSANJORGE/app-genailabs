@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 
 import 'testu_client.dart';
 import 'testu_i18n.dart';
+import 'testu_theme.dart';
+
+const _t = TestuTokens.instance;
 
 /// Cinematic launch intro (spec: prototype v6 .splash) — breathing glow in
 /// the client's brand colour, its wordmark's letters rise in as tracking
@@ -92,7 +95,7 @@ class _TestuSplashState extends State<TestuSplash>
           return Opacity(
             opacity: 1 - exit,
             child: Container(
-              color: const Color(0xFF0A0A0B),
+              color: _t.bg,
               alignment: Alignment.center,
               child: Transform.translate(
                 offset: Offset(0, -46 * exit),
@@ -173,7 +176,7 @@ class _TestuSplashState extends State<TestuSplash>
                                   Container(
                                     width: 150 * rule,
                                     height: 1,
-                                    color: const Color(0xFF2C2C33),
+                                    color: _t.line2,
                                   ),
                                   if (tip > 0.1 && tip < 1)
                                     Positioned(
@@ -211,7 +214,7 @@ class _TestuSplashState extends State<TestuSplash>
                                 fontFamily: 'GeistMono',
                                 fontSize: 9,
                                 letterSpacing: 1.08 + 1.62 * sub, // .12→.3em
-                                color: const Color(0xFF8B8F98),
+                                color: _t.mut,
                               ),
                             ),
                           ),
@@ -227,13 +230,9 @@ class _TestuSplashState extends State<TestuSplash>
                                           '${client.persona}, ${G('bienvenido', 'bienvenida')} de nuevo.')
                                       : L('${client.persona}, welcome.',
                                           '${client.persona}, ${G('bienvenido', 'bienvenida')}.'),
-                                  style: const TextStyle(
-                                    fontFamily: 'Sora',
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 17,
-                                    letterSpacing: -0.17,
-                                    color: Color(0xFFF4F2EE),
-                                  ),
+                                  style: kSheetTitle.copyWith(
+                                      height: null,
+                                      color: _t.primaryAction),
                                 ),
                               ),
                             ),

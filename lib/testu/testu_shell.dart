@@ -286,8 +286,8 @@ class _TodayHeader extends StatelessWidget {
                 child: Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(
-                    L('Friday, August 29 · ${client.orgEn}',
-                        'Viernes, 29 de agosto · ${client.orgEs}'),
+                    L('${_today()} · ${client.orgEn}',
+                        '${_today()} · ${client.orgEs}'),
                     style: kCardBody,
                   ),
                 ),
@@ -343,23 +343,16 @@ class _TodayHeader extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      L('${client.tutor.toUpperCase()} · YOUR TUTOR', '${client.tutor.toUpperCase()} · TU TUTOR'),
-                      style: TextStyle(
-                        fontFamily: 'GeistMono',
-                        fontSize: 9,
-                        letterSpacing: 1.44, // +0.16em
-                        color: t.faint,
-                      ),
-                    ),
+                    TestuEyebrow.kicker(L('${client.tutor.toUpperCase()} · YOUR TUTOR',
+                        '${client.tutor.toUpperCase()} · TU TUTOR')),
                     const SizedBox(height: 2),
                     Text(
                       L('Two priorities today — one certification deadline, then reinforcement.',
                           'Dos prioridades hoy — una certificación que vence, y después refuerzo.'),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'Geist',
                         fontSize: 12,
-                        color: Color(0xFFC9C8C4),
+                        color: t.inkDim,
                       ),
                     ),
                   ],
@@ -404,7 +397,7 @@ class _CertificationCard extends StatelessWidget {
               ? TestuAct(L('Schedule evaluation', 'Programar evaluación'),
                   primary: true, onTap: onSchedule)
               : TestuAct('✓ ${L('Scheduled', 'Programada')} · $scheduled',
-                  borderColor: const Color(0xFF2F6A4C),
+                  borderColor: t.greenBorder,
                   color: t.greenText,
                   onTap: onSchedule),
         ],
@@ -570,8 +563,7 @@ class _ContinueHeroState extends State<_ContinueHero> {
                                     L('Competent · Review soon',
                                         'Competente · Repasar pronto'),
                                 color: head?.pillColor ?? t.gold,
-                                borderColor:
-                                    head?.pillBorder ?? const Color(0xFF8A7A3A)),
+                                borderColor: head?.pillBorder ?? t.goldBorder),
                             const SizedBox(width: 10),
                             // Flexible: overflows at 360dp otherwise (Spanish).
                             Flexible(
@@ -582,10 +574,10 @@ class _ContinueHeroState extends State<_ContinueHero> {
                                         '${head.answered} de ${head.questions} preguntas'),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontFamily: 'Geist',
                                   fontSize: 11.5,
-                                  color: Color(0xFFB5B4B0),
+                                  color: t.inkDim,
                                 ),
                               ),
                             ),
@@ -632,7 +624,7 @@ class _RiskNote extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           TestuEyebrow(L('NEEDS REINFORCEMENT', 'NECESITA REFUERZO'),
-              color: const Color(0xFFD08B8B)),
+              color: t.redText),
           const SizedBox(height: 7),
           _CardBody(CL(
               'Cybersecurity needs reinforcement. ${client.tutor} recommends a 10-minute session today.',
@@ -666,11 +658,11 @@ class _ChallengeRing extends StatelessWidget {
         child: Center(
           child: Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontFamily: 'GeistMono',
               fontWeight: FontWeight.w500,
               fontSize: 10.5,
-              color: Color(0xFFD8D7D3),
+              color: t.inkSoft,
             ),
           ),
         ),
@@ -692,7 +684,8 @@ class _RingPainter extends CustomPainter {
     final paint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3;
-    canvas.drawCircle(center, radius, paint..color = const Color(0xFF26262C));
+    canvas.drawCircle(
+        center, radius, paint..color = TestuTokens.instance.track);
     canvas.drawArc(
       Rect.fromCircle(center: center, radius: radius),
       -1.5708, // start at 12 o'clock
@@ -718,14 +711,30 @@ class _CardTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text,
-      style: const TextStyle(
+      style: TextStyle(
         fontFamily: 'Geist',
         fontWeight: FontWeight.w600,
         fontSize: 14,
-        color: Color(0xFFE9E8E4),
+        color: TestuTokens.of(context).ink,
       ),
     );
   }
+}
+
+/// Today's date in the header — the port shipped the prototype's fixed
+/// "Friday, August 29"; a daily plan wears the real day.
+String _today() {
+  final d = DateTime.now();
+  const daysEn = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday',
+      'Saturday', 'Sunday'];
+  const daysEs = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes',
+      'Sábado', 'Domingo'];
+  const monthsEn = ['January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'];
+  const monthsEs = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+      'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  return L('${daysEn[d.weekday - 1]}, ${monthsEn[d.month - 1]} ${d.day}',
+      '${daysEs[d.weekday - 1]}, ${d.day} de ${monthsEs[d.month - 1]}');
 }
 
 class _CardBody extends StatelessWidget {

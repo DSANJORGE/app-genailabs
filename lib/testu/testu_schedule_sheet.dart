@@ -18,25 +18,8 @@ Future<void> showTestuScheduleSheet(
   BuildContext context, {
   required ValueChanged<String> onScheduled,
 }) {
-  final t = TestuTokens.of(context);
-  return showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: t.card,
-    barrierColor: const Color(0xA8000000),
-    shape: RoundedRectangleBorder(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
-      side: BorderSide(color: t.line2),
-    ),
-    // isScrollControlled lifts the 9/16 cap, so without a ceiling this sheet
-    // grows to the full screen and its rounded top + grabber land under the
-    // status bar. 0.88 matches the resource and PDF sheets. maxWidth restores
-    // Material's landscape cap (passing constraints replaces the default),
-    // so every sheet floats centered at the same width on a rotated phone.
-    constraints: BoxConstraints(
-      maxHeight: MediaQuery.sizeOf(context).height * 0.88,
-      maxWidth: 640,
-    ),
+  return showTestuSheet<void>(
+    context,
     builder: (_) => _ScheduleSheetBody(onScheduled: onScheduled),
   );
 }
@@ -61,6 +44,7 @@ class _ScheduleSheetBody extends StatefulWidget {
 
 class _ScheduleSheetBodyState extends State<_ScheduleSheetBody> {
   int? _picked;
+  String? _youMsg;
   String? _extraMsg;
   bool _confirmed = false;
 
@@ -86,21 +70,12 @@ class _ScheduleSheetBodyState extends State<_ScheduleSheetBody> {
     return SafeArea(
       top: false,
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(18, 12, 18, 26),
+        padding: EdgeInsets.fromLTRB(
+            18, 0, 18, 26 + MediaQuery.viewInsetsOf(context).bottom),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: t.line2,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
+            const TestuGrabber(),
             if (_confirmed)
               _SuccessView(label: _slot!.label)
             else
@@ -138,8 +113,12 @@ class _ScheduleSheetBodyState extends State<_ScheduleSheetBody> {
                   picked: _picked == s.day, onTap: () => _pick(s.day)),
           ],
         ),
-        if (_extraMsg != null) ...[
+        if (_youMsg != null) ...[
           const SizedBox(height: 14),
+          TestuYouMsg(text: _youMsg!),
+        ],
+        if (_extraMsg != null) ...[
+          if (_youMsg == null) const SizedBox(height: 14),
           SullyMessage.text(_extraMsg!),
         ],
         const SizedBox(height: 12),
@@ -147,7 +126,7 @@ class _ScheduleSheetBodyState extends State<_ScheduleSheetBody> {
           spacing: 8,
           runSpacing: 8,
           children: [
-            _QaChip(L('Anything on Monday?', '¿Algo el lunes?'),
+            TestuChip(L('Anything on Monday?', '¿Algo el lunes?'),
                 onTap: () => _ask(L(
                     'Monday is tight — you’re rostered 06:00–14:00 and the '
                         'afternoon has the station safety briefing. Tuesday '
@@ -155,7 +134,7 @@ class _ScheduleSheetBodyState extends State<_ScheduleSheetBody> {
                     'El lunes va justo — tienes turno de 06:00 a 14:00 y por '
                         'la tarde está el briefing de seguridad. El martes a '
                         'las 08:15 es el hueco tranquilo más cercano.'))),
-            _QaChip(L('Can it be split in two?', '¿Se puede partir en dos?'),
+            TestuChip(L('Can it be split in two?', '¿Se puede partir en dos?'),
                 onTap: () => _ask(L(
                     'The renewal evaluation has to run in one sitting — '
                         'that’s a certification rule, not mine. 25 minutes, '
@@ -177,21 +156,16 @@ class _ScheduleSheetBodyState extends State<_ScheduleSheetBody> {
         TestuButton(L('Not now', 'Ahora no'),
             onTap: () => Navigator.pop(context)),
         const SizedBox(height: 14),
-        // ponytail: decorative ask bar — becomes a real input when the
-        // schedule flow talks to the backend.
-        Container(
-          padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 16),
-          decoration: BoxDecoration(
-            color: const Color(0xFF101013),
-            border: Border.all(color: t.line2),
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Text(
-            L('Ask ${client.tutor} for a different time…',
-                'Pide a ${client.tutor} otra hora…'),
-            style: TextStyle(
-                fontFamily: 'Geist', fontSize: 12.5, color: t.faint),
-          ),
+        // House composer, live like every other ask bar (continuous-tutor
+        // rule). ponytail: one canned answer until the schedule flow talks
+        // to the backend's roster.
+        TestuComposer(
+          hint: L('Ask ${client.tutor} for a different time…',
+              'Pide a ${client.tutor} otra hora…'),
+          onSend: (text) => _ask(
+              L('Those three are the only quiet slots I can see before the deadline. Pick one, or free some time on your calendar and I’ll look again.',
+                  'Esos tres son los únicos huecos tranquilos que veo antes de la fecha límite. Elige uno, o libera tiempo en tu calendario y vuelvo a mirar.'),
+              from: text),
         ),
       ];
 
@@ -200,9 +174,12 @@ class _ScheduleSheetBodyState extends State<_ScheduleSheetBody> {
     setState(() => _picked = day);
   }
 
-  void _ask(String answer) {
+  void _ask(String answer, {String? from}) {
     HapticFeedback.selectionClick();
-    setState(() => _extraMsg = answer);
+    setState(() {
+      _youMsg = from;
+      _extraMsg = answer;
+    });
   }
 }
 
@@ -212,18 +189,7 @@ class _SheetTitle extends StatelessWidget {
   final String text;
 
   @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: TextStyle(
-        fontFamily: 'Sora',
-        fontWeight: FontWeight.w700,
-        fontSize: 17,
-        letterSpacing: -0.17,
-        color: TestuTokens.of(context).ink,
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Text(text, style: kSheetTitle);
 }
 
 /// 2-week mini calendar: 7 columns, orange dot marks an available day.
@@ -314,8 +280,8 @@ class _DayCell extends StatelessWidget {
               color: picked
                   ? t.onPrimaryAction
                   : available
-                      ? const Color(0xFFE6E4E0)
-                      : const Color(0xFF7E828A),
+                      ? t.ink
+                      : t.faint,
             ),
           ),
           if (available)
@@ -362,36 +328,7 @@ class _SlotChip extends StatelessWidget {
             fontFamily: 'Geist',
             fontSize: 11.5,
             fontWeight: picked ? FontWeight.w700 : FontWeight.w400,
-            color: picked ? t.onPrimaryAction : const Color(0xFFD6D4D0),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _QaChip extends StatelessWidget {
-  const _QaChip(this.label, {required this.onTap});
-
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return TestuPressable(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 14),
-        decoration: BoxDecoration(
-          border: Border.all(color: TestuTokens.of(context).line2),
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Text(
-          label,
-          style: const TextStyle(
-            fontFamily: 'Geist',
-            fontSize: 11.5,
-            color: Color(0xFFC2C1BD),
+            color: picked ? t.onPrimaryAction : t.inkSoft,
           ),
         ),
       ),
@@ -413,17 +350,7 @@ class _SuccessView extends StatelessWidget {
       child: Column(
         children: [
           const SizedBox(height: 18),
-          SizedBox(
-            width: 76,
-            height: 76,
-            child: TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0, end: 1),
-              duration: const Duration(milliseconds: 1900),
-              builder: (_, v, child) => CustomPaint(
-                painter: _CheckPainter(progress: v, green: t.green),
-              ),
-            ),
-          ),
+          const TestuCheckPulse(),
           const SizedBox(height: 18),
           _SheetTitle(L('Locked in. Quiet high-five, ${client.persona}.',
               'Apuntado. Choca esos cinco en silencio, ${client.persona}.')),
@@ -441,8 +368,8 @@ class _SuccessView extends StatelessWidget {
                 children: [
                   TextSpan(
                     text: label,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w700, color: Color(0xFFE6E4E0)),
+                    style:
+                        TextStyle(fontWeight: FontWeight.w700, color: t.ink),
                   ),
                   TextSpan(
                       text: L(
@@ -474,60 +401,3 @@ class _SuccessView extends StatelessWidget {
   }
 }
 
-/// One paint, three phases of `progress` (0–1 over 1.9s, mirroring the
-/// prototype timings): check draws .25–.5s, pulse ring expands .3–1.9s.
-class _CheckPainter extends CustomPainter {
-  const _CheckPainter({required this.progress, required this.green});
-
-  final double progress;
-  final Color green;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final ms = progress * 1900;
-    final center = size.center(Offset.zero);
-    const ring = Color(0xFF2F6A4C);
-
-    final pulse = ((ms - 300) / 1600).clamp(0.0, 1.0);
-    if (pulse > 0 && pulse < 1) {
-      canvas.drawCircle(
-        center,
-        36 * (1 + 0.65 * pulse),
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1
-          ..color = ring.withValues(alpha: 0.9 * (1 - pulse)),
-      );
-    }
-
-    canvas.drawCircle(
-      center,
-      36,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5
-        ..color = ring,
-    );
-
-    final draw = Curves.easeOut.transform(((ms - 250) / 500).clamp(0.0, 1.0));
-    if (draw > 0) {
-      final path = Path()
-        ..moveTo(24, 39)
-        ..lineTo(34, 49)
-        ..lineTo(53, 29);
-      final metric = path.computeMetrics().first;
-      canvas.drawPath(
-        metric.extractPath(0, metric.length * draw),
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 3
-          ..strokeCap = StrokeCap.round
-          ..strokeJoin = StrokeJoin.round
-          ..color = green,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(_CheckPainter old) => old.progress != progress;
-}

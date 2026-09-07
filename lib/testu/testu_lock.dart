@@ -120,25 +120,11 @@ class TestuLock {
 
 /// Offered once, straight after the first successful code sign-in. Declining
 /// is a real answer — the same switch waits in Settings.
-Future<void> showTestuLockOffer(BuildContext context) {
-  final t = TestuTokens.of(context);
-  return showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    isDismissible: false,
-    backgroundColor: t.card,
-    barrierColor: const Color(0xA8000000),
-    shape: RoundedRectangleBorder(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
-      side: BorderSide(color: t.line2),
-    ),
-    constraints: BoxConstraints(
-      maxHeight: MediaQuery.sizeOf(context).height * 0.88,
-      maxWidth: 640,
-    ),
-    builder: (_) => const _LockOfferSheet(),
-  );
-}
+Future<void> showTestuLockOffer(BuildContext context) => showTestuSheet<void>(
+      context,
+      dismissible: false,
+      builder: (_) => const _LockOfferSheet(),
+    );
 
 class _LockOfferSheet extends StatefulWidget {
   const _LockOfferSheet();
@@ -185,21 +171,11 @@ class _LockOfferSheetState extends State<_LockOfferSheet> {
     return SafeArea(
       top: false,
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(18, 12, 18, 26),
+        padding: const EdgeInsets.fromLTRB(18, 0, 18, 26),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 18),
-                decoration: BoxDecoration(
-                  color: t.line2,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
+            const TestuGrabber(),
             if (_done) ..._successChildren(t) else ..._offerChildren(t),
           ],
         ),
@@ -426,22 +402,12 @@ class _TestuLockScreenState extends State<TestuLockScreen> {
   }
 }
 
-/// Sheet/screen title — Sora 700, matching the other sheets.
+/// Sheet/screen title — the shared sheet title style.
 class _Title extends StatelessWidget {
   const _Title(this.text);
 
   final String text;
 
   @override
-  Widget build(BuildContext context) => Text(
-        text,
-        style: TextStyle(
-          fontFamily: 'Sora',
-          fontWeight: FontWeight.w700,
-          fontSize: 17,
-          letterSpacing: -0.17,
-          height: 1.3,
-          color: TestuTokens.of(context).ink,
-        ),
-      );
+  Widget build(BuildContext context) => Text(text, style: kSheetTitle);
 }

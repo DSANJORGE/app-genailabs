@@ -36,58 +36,21 @@ String whereOf(Ref r) => r.at != null
 /// the others, each "PDF/VIDEO  Title · p. N | m:ss".
 void showTestuSources(
     BuildContext context, Cite c, void Function(Cite) open) {
-  final t = TestuTokens.of(context);
-  showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: t.card,
-    shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
-    builder: (ctx) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
-            child: Text(L('Sources', 'Fuentes'), style: kLabel),
-          ),
-          for (final r in [c.ref, ...c.others])
-            TestuPressable(
-              onTap: () {
-                Navigator.of(ctx).pop();
-                open(c.to(r));
-              },
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                child: Row(children: [
-                  SizedBox(
-                    width: 44,
-                    child: Text(
-                      liveDocs[r.title]?.isVideo == true ? 'VIDEO' : 'PDF',
-                      style: TextStyle(
-                          fontFamily: 'GeistMono',
-                          fontSize: 9,
-                          letterSpacing: 1.44,
-                          color: t.orange),
-                    ),
-                  ),
-                  Expanded(
-                    child: Text(
-                      '${r.title}${whereOf(r)}',
-                      style: const TextStyle(
-                          fontFamily: 'Geist',
-                          fontSize: 13,
-                          color: Color(0xFFD6D4D0)),
-                    ),
-                  ),
-                ]),
-              ),
-            ),
-          const SizedBox(height: 8),
-        ],
-      ),
-    ),
+  showTestuListSheet(
+    context,
+    title: L('SOURCES', 'FUENTES'),
+    maxHeight: 0.6,
+    rows: [
+      for (final r in [c.ref, ...c.others])
+        (
+          tag: liveDocs[r.title]?.isVideo == true ? 'VIDEO' : 'PDF',
+          label: '${r.title}${whereOf(r)}',
+          trailing: null,
+          selected: false,
+          indent: false,
+          onTap: () => open(c.to(r)),
+        ),
+    ],
   );
 }
 
@@ -120,11 +83,11 @@ class TestuSourceBlock extends StatelessWidget {
           if (quote != null) ...[
             Text(
               '“$quote”',
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'Sora',
                 fontSize: 12.5,
                 height: 1.62,
-                color: Color(0xFFDCDAD6),
+                color: t.inkSoft,
               ),
             ),
             const SizedBox(height: 7),
@@ -144,7 +107,7 @@ class TestuSourceBlock extends StatelessWidget {
                       fontSize: 10.5,
                       color: t.blue,
                       decoration: TextDecoration.underline,
-                      decorationColor: const Color(0xFF3D5C7D),
+                      decorationColor: t.blue.withValues(alpha: 0.45),
                     ),
                   ),
                 ),
@@ -359,7 +322,6 @@ class _SullyMessageState extends State<SullyMessage> {
 
   @override
   Widget build(BuildContext context) {
-    final t = TestuTokens.of(context);
     return Padding(
       padding: EdgeInsets.only(bottom: widget.bottomPadding),
       child: Row(
@@ -382,27 +344,14 @@ class _SullyMessageState extends State<SullyMessage> {
                 child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  client.tutor.toUpperCase(),
-                  style: TextStyle(
-                    fontFamily: 'GeistMono',
-                    fontSize: 9,
-                    letterSpacing: 1.44, // +0.16em
-                    color: t.faint,
-                  ),
-                ),
+                TestuEyebrow.kicker(client.tutor.toUpperCase()),
                 const SizedBox(height: 5),
                 if (!_revealed)
                   const _TypingDots()
                 else ...[
                   Text.rich(
                     TextSpan(children: widget.spans),
-                    style: const TextStyle(
-                      fontFamily: 'Geist',
-                      fontSize: 13.5,
-                      height: 1.62,
-                      color: Color(0xFFD6D4D0),
-                    ),
+                    style: kChat,
                   ),
                   if (widget.sourceLine != null) ...[
                     const SizedBox(height: 10),

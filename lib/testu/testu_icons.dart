@@ -18,6 +18,19 @@ enum TestuGlyph {
   send,
   expand,
   faceId,
+  // Chrome glyphs (2026-09-07): these used to be text characters
+  // (✕ ‹ › ▾ ↻ ☰ + − ▶ ✓), which render in whatever font is nearest —
+  // the dropdown caret was a tofu box in the shots.
+  close,
+  chevronLeft,
+  chevronRight,
+  chevronDown,
+  rotate,
+  list,
+  plus,
+  minus,
+  play,
+  check,
 }
 
 class TestuIcon extends StatelessWidget {
@@ -200,6 +213,106 @@ class _GlyphPainter extends CustomPainter {
               ..moveTo(9.5 * s, 20 * s)
               ..lineTo(4 * s, 20 * s)
               ..lineTo(4 * s, 14.5 * s),
+            stroke);
+        return;
+      case TestuGlyph.close:
+        stroke.style = PaintingStyle.stroke;
+        canvas.drawPath(
+            Path()
+              ..moveTo(6 * s, 6 * s)
+              ..lineTo(18 * s, 18 * s)
+              ..moveTo(18 * s, 6 * s)
+              ..lineTo(6 * s, 18 * s),
+            stroke);
+        return;
+      case TestuGlyph.chevronLeft:
+        stroke.style = PaintingStyle.stroke;
+        canvas.drawPath(
+            Path()
+              ..moveTo(15 * s, 5 * s)
+              ..lineTo(8 * s, 12 * s)
+              ..lineTo(15 * s, 19 * s),
+            stroke);
+        return;
+      case TestuGlyph.chevronRight:
+        stroke.style = PaintingStyle.stroke;
+        canvas.drawPath(
+            Path()
+              ..moveTo(9 * s, 5 * s)
+              ..lineTo(16 * s, 12 * s)
+              ..lineTo(9 * s, 19 * s),
+            stroke);
+        return;
+      case TestuGlyph.chevronDown:
+        stroke.style = PaintingStyle.stroke;
+        canvas.drawPath(
+            Path()
+              ..moveTo(5 * s, 9 * s)
+              ..lineTo(12 * s, 16 * s)
+              ..lineTo(19 * s, 9 * s),
+            stroke);
+        return;
+      case TestuGlyph.rotate:
+        // Clockwise arc with an arrowhead at its end.
+        stroke.style = PaintingStyle.stroke;
+        canvas.drawArc(
+            Rect.fromCircle(center: Offset(12 * s, 12.5 * s), radius: 7 * s),
+            -1.2,
+            5.0,
+            false,
+            stroke);
+        canvas.drawPath(
+            Path()
+              ..moveTo(14 * s, 2.5 * s)
+              ..lineTo(15.5 * s, 6.3 * s)
+              ..lineTo(11.5 * s, 7.2 * s),
+            stroke);
+        return;
+      case TestuGlyph.list:
+        stroke.style = PaintingStyle.stroke;
+        canvas.drawPath(
+            Path()
+              ..moveTo(4 * s, 7 * s)
+              ..lineTo(20 * s, 7 * s)
+              ..moveTo(4 * s, 12 * s)
+              ..lineTo(20 * s, 12 * s)
+              ..moveTo(4 * s, 17 * s)
+              ..lineTo(20 * s, 17 * s),
+            stroke);
+        return;
+      case TestuGlyph.plus:
+        stroke.style = PaintingStyle.stroke;
+        canvas.drawPath(
+            Path()
+              ..moveTo(12 * s, 5 * s)
+              ..lineTo(12 * s, 19 * s)
+              ..moveTo(5 * s, 12 * s)
+              ..lineTo(19 * s, 12 * s),
+            stroke);
+        return;
+      case TestuGlyph.minus:
+        stroke.style = PaintingStyle.stroke;
+        canvas.drawLine(Offset(5 * s, 12 * s), Offset(19 * s, 12 * s), stroke);
+        return;
+      case TestuGlyph.play:
+        // Filled triangle, optically centred (nudged right).
+        canvas.drawPath(
+            Path()
+              ..moveTo(8 * s, 5 * s)
+              ..lineTo(19 * s, 12 * s)
+              ..lineTo(8 * s, 19 * s)
+              ..close(),
+            stroke
+              ..style = PaintingStyle.fill
+              ..strokeJoin = StrokeJoin.round);
+        return;
+      case TestuGlyph.check:
+        stroke.style = PaintingStyle.stroke;
+        canvas.drawPath(
+            Path()
+              ..moveTo(5 * s, 12.5 * s)
+              ..lineTo(10 * s, 17.5 * s)
+              ..lineTo(19 * s, 7 * s),
             stroke);
         return;
     }

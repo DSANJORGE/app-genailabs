@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'testu_auth.dart';
 import 'testu_i18n.dart';
+import 'testu_icons.dart';
 import 'testu_lock.dart';
 import 'testu_theme.dart';
 import 'testu_widgets.dart';
@@ -217,7 +218,7 @@ class _TestuProfileScreenState extends State<TestuProfileScreen> {
                 sub: L('Applies across TestU Learn, including ${client.tutor}',
                     'Se aplica en todo TestU Learn, incluido ${client.tutor}'),
                 last: true,
-                trailing: _LangDropdown(
+                trailing: _LangPicker(
                     onChanged: (v) => setState(() => testuLang.value = v)),
               ),
             ]),
@@ -318,10 +319,11 @@ class _TestuProfileScreenState extends State<TestuProfileScreen> {
                 sub: L('No notifications 22:00 – 07:00',
                     'Sin notificaciones 22:00 – 07:00'),
                 last: true,
-                trailing: Text(
-                  '22:00–07:00 ›',
-                  style: kLabel,
-                ),
+                trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Text('22:00–07:00', style: kLabel),
+                  const SizedBox(width: 4),
+                  TestuIcon(TestuGlyph.chevronRight, size: 12, color: t.faint),
+                ]),
               ),
             ]),
             _ProfCard(children: [
@@ -334,11 +336,11 @@ class _TestuProfileScreenState extends State<TestuProfileScreen> {
                         'responsables ven señales de preparación y estado de '
                         'certificación — nunca tus chats, nunca respuestas '
                         'individuales.'),
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: 'Geist',
                   fontSize: 11.5,
                   height: 1.6,
-                  color: Color(0xFFB9B8B4),
+                  color: t.inkDim,
                 ),
               ),
             ]),
@@ -349,20 +351,16 @@ class _TestuProfileScreenState extends State<TestuProfileScreen> {
                   TestuButton(
                     L('Sign out', 'Cerrar sesión'),
                     color: t.red,
-                    borderColor: const Color(0x52C25555),
+                    borderColor: t.red.withValues(alpha: 0.32),
                     onTap: () {
                       Navigator.of(context).pop();
                       TestuAuth.signOut();
                     },
                   ),
                   const SizedBox(height: 12),
-                  Text(
+                  TestuEyebrow(
                     'TESTU LEARN · ${client.name.toUpperCase()} · DEMO BUILD',
-                    style: TextStyle(
-                      fontFamily: 'GeistMono',
-                      fontSize: 9.5,
-                      color: t.faint,
-                    ),
+                    color: t.faint,
                   ),
                 ],
               ),
@@ -411,21 +409,11 @@ class _Head extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = TestuTokens.of(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 0, 18, 6),
+      padding: const EdgeInsets.fromLTRB(4, 0, 18, 6),
       child: Row(
         children: [
-          TestuPressable(
-            onTap: onBack,
-            child: Padding(
-              padding: const EdgeInsets.all(8),
-              child: Text(
-                '‹',
-                style: TextStyle(
-                    fontFamily: 'Sora', fontSize: 26, color: t.mut),
-              ),
-            ),
-          ),
-          const SizedBox(width: 6),
+          TestuIconButton(TestuGlyph.chevronLeft, onTap: onBack, size: 18),
+          const SizedBox(width: 2),
           ValueListenableBuilder<String>(
             valueListenable: testuAvatar,
             builder: (_, src, child) => ClipOval(
@@ -515,9 +503,7 @@ class _AvatarPicker extends StatelessWidget {
                       shape: BoxShape.circle,
                       border: Border.all(color: t.line2),
                     ),
-                    child: Text('+',
-                        style: TextStyle(
-                            fontFamily: 'Sora', fontSize: 20, color: t.mut)),
+                    child: TestuIcon(TestuGlyph.plus, size: 16, color: t.mut),
                   ),
                 ),
               ),
@@ -564,8 +550,7 @@ class _AvatarTile extends StatelessWidget {
                   shape: BoxShape.circle,
                   border: Border.all(
                     width: 2,
-                    color:
-                        selected ? const Color(0xFFF4F2EE) : Colors.transparent,
+                    color: selected ? t.primaryAction : Colors.transparent,
                   ),
                 ),
                 child: ClipOval(
@@ -597,8 +582,7 @@ class _AvatarTile extends StatelessWidget {
                       shape: BoxShape.circle,
                       border: Border.all(color: t.line2),
                     ),
-                    child: Text('✕',
-                        style: TextStyle(fontSize: 8.5, color: t.mut)),
+                    child: TestuIcon(TestuGlyph.close, size: 8, color: t.mut),
                   ),
                 ),
               ),
@@ -631,8 +615,8 @@ class _SetRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 11),
       decoration: last
           ? null
-          : const BoxDecoration(
-              border: Border(bottom: BorderSide(color: Color(0xFF17171A))),
+          : BoxDecoration(
+              border: Border(bottom: BorderSide(color: t.card2)),
             ),
       child: Row(
         children: [
@@ -640,15 +624,7 @@ class _SetRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontFamily: 'Geist',
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                    color: t.ink,
-                  ),
-                ),
+                Text(title, style: kRowTitle),
                 const SizedBox(height: 2),
                 Text(
                   sub,
@@ -674,6 +650,7 @@ class _Toggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = TestuTokens.of(context);
     return GestureDetector(
       onTap: onTap == null
           ? null
@@ -687,7 +664,7 @@ class _Toggle extends StatelessWidget {
         height: 24,
         padding: const EdgeInsets.all(3),
         decoration: BoxDecoration(
-          color: on ? const Color(0xFF2F6A4C) : const Color(0xFF2C2C33),
+          color: on ? t.greenBorder : t.line2,
           borderRadius: BorderRadius.circular(99),
         ),
         child: AnimatedAlign(
@@ -699,7 +676,7 @@ class _Toggle extends StatelessWidget {
             height: 18,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: on ? const Color(0xFFE9E8E4) : const Color(0xFF8B8F98),
+              color: on ? t.ink : t.mut,
             ),
           ),
         ),
@@ -714,56 +691,62 @@ class _GreenPill extends StatelessWidget {
   final String label;
 
   @override
-  Widget build(BuildContext context) {
-    return TestuPill(label,
-        color: const Color(0xFF7DBB9C), borderColor: const Color(0xFF2F6A4C));
-  }
+  Widget build(BuildContext context) => TestuPill.green(label);
 }
 
-/// Native dropdown listing [testuLanguages] — new locales appear
-/// automatically.
-class _LangDropdown extends StatelessWidget {
-  const _LangDropdown({required this.onChanged});
+/// Language: a quiet chip naming the current one; tapping opens the house
+/// picker sheet listing [testuLanguages] (was Material's DropdownButton —
+/// the one stock menu in the app, with a caret the fonts couldn't render).
+class _LangPicker extends StatelessWidget {
+  const _LangPicker({required this.onChanged});
 
   final ValueChanged<String> onChanged;
 
   @override
   Widget build(BuildContext context) {
     final t = TestuTokens.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: t.card2,
-        border: Border.all(color: t.line2),
-        borderRadius: BorderRadius.circular(7),
+    return TestuPressable(
+      onTap: () => showTestuListSheet(
+        context,
+        title: L('LANGUAGE', 'IDIOMA'),
+        maxHeight: 0.4,
+        rows: [
+          for (final e in testuLanguages.entries)
+            (
+              tag: null,
+              label: e.value,
+              trailing: null,
+              selected: e.key == testuLang.value,
+              indent: false,
+              onTap: () {
+                if (e.key != testuLang.value) {
+                  HapticFeedback.selectionClick();
+                  onChanged(e.key);
+                }
+              },
+            ),
+        ],
       ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: testuLang.value,
-          isDense: true,
-          dropdownColor: t.card2,
-          borderRadius: BorderRadius.circular(10),
-          icon: Padding(
-            padding: const EdgeInsets.only(left: 6),
-            child: Text('▾', style: TextStyle(fontSize: 11, color: t.mut)),
-          ),
-          style: TextStyle(
-            fontFamily: 'Geist',
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: t.ink,
-          ),
-          items: [
-            for (final e in testuLanguages.entries)
-              DropdownMenuItem(value: e.key, child: Text(e.value)),
-          ],
-          onChanged: (v) {
-            if (v != null && v != testuLang.value) {
-              HapticFeedback.selectionClick();
-              onChanged(v);
-            }
-          },
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 7, 8, 7),
+        decoration: BoxDecoration(
+          color: t.card2,
+          border: Border.all(color: t.line2),
+          borderRadius: BorderRadius.circular(7),
         ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Text(
+            testuLanguages[testuLang.value] ?? testuLang.value,
+            style: TextStyle(
+              fontFamily: 'Geist',
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: t.ink,
+            ),
+          ),
+          const SizedBox(width: 4),
+          TestuIcon(TestuGlyph.chevronDown, size: 12, color: t.mut),
+        ]),
       ),
     );
   }

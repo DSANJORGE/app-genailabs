@@ -4,6 +4,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:genai_labs/testu/testu_i18n.dart';
 import 'package:genai_labs/testu/testu_lock.dart';
 import 'package:genai_labs/testu/testu_notifications.dart';
 import 'package:genai_labs/testu/testu_pdf.dart';
@@ -15,6 +16,7 @@ import 'package:genai_labs/testu/testu_schedule_sheet.dart';
 import 'package:genai_labs/testu/testu_session.dart';
 import 'package:genai_labs/testu/testu_session_engine.dart';
 import 'package:genai_labs/testu/testu_shell.dart';
+import 'package:genai_labs/testu/testu_signin.dart';
 import 'package:genai_labs/testu/testu_social.dart';
 import 'package:genai_labs/testu/testu_splash.dart';
 import 'package:genai_labs/testu/testu_theme.dart';
@@ -330,5 +332,146 @@ void main() {
               TestuReaction.love: 1,
             }));
     await shot(tester, 'sheet_reactions');
+  });
+
+  // Every surface in portrait, in Spanish — the phone as the demo holds it.
+  // Added for the 2026-09-07 homogenisation pass; PNGs land as p_*.png.
+  group('portrait es', () {
+    setUp(() {
+      testuLang.value = 'es';
+      LocalAuthPlatform.instance = _FakeLocalAuth();
+    });
+    tearDownAll(() => testuLang.value = 'en');
+
+    Future<void> tab(WidgetTester tester, String label, String name,
+        {int seconds = 4}) async {
+      portrait(tester);
+      await pumpApp(tester, const TestuShell());
+      if (label.isNotEmpty) await tester.tap(find.text(label));
+      await settleAndPrecache(tester, seconds: seconds);
+      await shot(tester, name);
+    }
+
+    testWidgets('today', (t) => tab(t, '', 'p_today'));
+    testWidgets('topics', (t) => tab(t, 'TEMAS', 'p_topics'));
+    testWidgets('tutor', (t) => tab(t, 'IRIS', 'p_tutor', seconds: 6));
+    testWidgets('dashboard', (t) => tab(t, 'DASHBOARD', 'p_dashboard'));
+
+    testWidgets('signin', (tester) async {
+      portrait(tester);
+      await pumpApp(tester, TestuSignin(onSignedIn: () {}));
+      await settleAndPrecache(tester);
+      await shot(tester, 'p_signin');
+    });
+
+    testWidgets('topic home', (tester) async {
+      portrait(tester);
+      await pumpApp(tester, const TestuTopicHomeScreen());
+      await settleAndPrecache(tester);
+      await shot(tester, 'p_topic_home');
+      await tester.tap(find.text('Subtemas'));
+      await settleAndPrecache(tester, seconds: 1);
+      await shot(tester, 'p_topic_subtopics');
+      await tester.tap(find.text('Recursos'));
+      await settleAndPrecache(tester, seconds: 1);
+      await shot(tester, 'p_topic_resources');
+      await tester.tap(find.text('Reseñas'));
+      await settleAndPrecache(tester, seconds: 1);
+      await shot(tester, 'p_topic_review');
+    });
+
+    testWidgets('session', (tester) async {
+      portrait(tester);
+      await pumpApp(tester, const TestuSessionScreen());
+      await settleAndPrecache(tester, seconds: 8);
+      await shot(tester, 'p_session');
+      await tester.pump(const Duration(seconds: 8));
+    });
+
+    testWidgets('debrief', (tester) async {
+      portrait(tester);
+      final qs = await LocalQuestionSource().load();
+      await pumpApp(
+          tester,
+          TestuDebriefScreen(
+            questions: qs,
+            topic: LocalQuestionSource().topic,
+            outcome: const SessionOutcome(completed: true, attempts: [
+              Attempt(
+                  qi: 0, chosen: 1, confidence: 3, correct: true, assisted: false),
+              Attempt(
+                  qi: 1, chosen: 0, confidence: 1, correct: true, assisted: true),
+              Attempt(
+                  qi: 2, chosen: 2, confidence: 3, correct: false, assisted: false),
+            ]),
+          ));
+      await settleAndPrecache(tester);
+      await shot(tester, 'p_debrief');
+    });
+
+    testWidgets('notifications', (tester) async {
+      portrait(tester);
+      await pumpApp(tester, const TestuNotificationsScreen());
+      await settleAndPrecache(tester);
+      await shot(tester, 'p_notifications');
+    });
+
+    testWidgets('profile', (tester) async {
+      portrait(tester);
+      await TestuLock.restore();
+      await pumpApp(tester, const TestuProfileScreen());
+      await settleAndPrecache(tester);
+      await shot(tester, 'p_profile');
+      // The language picker sheet (was a Material dropdown).
+      await tester.tap(find.text('Español'));
+      await settleAndPrecache(tester, seconds: 1);
+      await shot(tester, 'p_profile_language');
+    });
+
+    testWidgets('sheets', (tester) async {
+      portrait(tester);
+      await openSheet(tester, (c) => showTestuResource(c, 'vid'));
+      await shot(tester, 'p_sheet_video');
+    });
+    testWidgets('sheet pdf', (tester) async {
+      portrait(tester);
+      await openSheet(tester, (c) => showTestuPdf(c, page: 6));
+      await shot(tester, 'p_sheet_pdf');
+    });
+    testWidgets('sheet schedule', (tester) async {
+      portrait(tester);
+      await openSheet(
+          tester, (c) => showTestuScheduleSheet(c, onScheduled: (_) {}));
+      await shot(tester, 'p_sheet_schedule');
+    });
+    testWidgets('sheet report', (tester) async {
+      portrait(tester);
+      await openSheet(
+          tester,
+          (c) => showTestuReportSheet(c,
+              eyebrow: 'PREGUNTA · REPORTAR',
+              title: 'Reportar esta pregunta',
+              subtitle: 'Llega al equipo de contenido para su revisión.',
+              reasons: const ['Incorrecta', 'Confusa', 'Errata', 'Otro'],
+              onSend: (reason, note) {}));
+      await shot(tester, 'p_sheet_report');
+    });
+    testWidgets('sheet reactions', (tester) async {
+      portrait(tester);
+      await openSheet(
+          tester,
+          (c) => showTestuReactionsSheet(c, reacts: const {
+                TestuReaction.like: 4,
+                TestuReaction.applause: 2,
+                TestuReaction.love: 1,
+              }));
+      await shot(tester, 'p_sheet_reactions');
+    });
+    testWidgets('sheet lock offer', (tester) async {
+      portrait(tester);
+      await TestuLock.restore();
+      await openSheet(tester, showTestuLockOffer);
+      await shot(tester, 'p_sheet_lock_offer');
+    });
   });
 }

@@ -1,9 +1,8 @@
-import 'dart:ui';
-
 import 'package:eme_app_package/models/topic.dart';
 import 'package:flutter/material.dart';
 
 import 'testu_i18n.dart';
+import 'testu_icons.dart';
 import 'testu_live.dart';
 import 'testu_pdf.dart';
 import 'testu_resources.dart';
@@ -12,6 +11,8 @@ import 'testu_social.dart';
 import 'testu_theme.dart';
 import 'testu_widgets.dart';
 import 'testu_client.dart';
+
+const _t = TestuTokens.instance;
 
 // ---------------------------------------------------------------------------
 // Topics tab — role topic list (spec: prototype v6 scr-topics).
@@ -40,15 +41,15 @@ class TestuTopicsScreen extends StatelessWidget {
      sub: L('Learn Mode · 21 of 36 questions',
          'Modo Aprender · 21 de 36 preguntas'),
      pill: L('Competent · Review soon', 'Competente · Repasar pronto'),
-     pillColor: const Color(0xFFCDB96A),
-     pillBorder: const Color(0xFF8A7A3A), opens: true, id: null),
+     pillColor: _t.gold,
+     pillBorder: _t.goldBorder, opens: true, id: null),
     (img: 'chocks.jpg',
      title: CL('Hazard Prevention', 'Prevención de Riesgos',
          'FOD Prevention', 'Prevención de FOD'),
      sub: L('Improve Mode available', 'Modo Mejorar disponible'),
      pill: L('Expert · Stable', 'Experto · Estable'),
-     pillColor: const Color(0xFF7DBB9C),
-     pillBorder: const Color(0xFF2F6A4C), opens: false, id: null),
+     pillColor: _t.greenText,
+     pillBorder: _t.greenBorder, opens: false, id: null),
     (img: 'radio.jpg',
      title: CL('Cybersecurity', 'Ciberseguridad',
          'Radio Communication & Phraseology',
@@ -56,8 +57,8 @@ class TestuTopicsScreen extends StatelessWidget {
      sub: L('${client.tutor} recommends 10 min today',
          '${client.tutor} recomienda 10 min hoy'),
      pill: L('Competent · At risk', 'Competente · En riesgo'),
-     pillColor: const Color(0xFFD9A23F),
-     pillBorder: const Color(0xFF7A5C1E), opens: false, id: null),
+     pillColor: _t.amber,
+     pillBorder: _t.amberBorder, opens: false, id: null),
     (img: 'marshal.jpg',
      title: CL('Mine Road Safety & Signalling',
          'Seguridad Vial en Mina y Señalización',
@@ -66,8 +67,8 @@ class TestuTopicsScreen extends StatelessWidget {
      sub: L('${client.tutor} suggests Learn Mode this week',
          '${client.tutor} sugiere Modo Aprender esta semana'),
      pill: L('Beginner · Needs practice', 'Principiante · Necesita práctica'),
-     pillColor: const Color(0xFFD08B8B),
-     pillBorder: const Color(0xFF6E3535), opens: false, id: null),
+     pillColor: _t.redText,
+     pillBorder: _t.redBorder, opens: false, id: null),
     (img: 'cargo.jpg',
      title: CL('Hazardous Materials Handling',
          'Manejo de Materiales Peligrosos',
@@ -76,8 +77,8 @@ class TestuTopicsScreen extends StatelessWidget {
      sub: L('Recertification due Nov 2026',
          'Recertificación antes de nov 2026'),
      pill: L('Competent · Stable', 'Competente · Estable'),
-     pillColor: const Color(0xFF7DBB9C),
-     pillBorder: const Color(0xFF2F6A4C), opens: false, id: null),
+     pillColor: _t.greenText,
+     pillBorder: _t.greenBorder, opens: false, id: null),
     (img: 'winter.jpg',
      title: CL('Rainy Season Operations',
          'Operación en Temporada de Lluvias',
@@ -85,16 +86,16 @@ class TestuTopicsScreen extends StatelessWidget {
          'Procedimientos de Deshielo'),
      sub: L('Seasonal · opens Oct 1', 'Estacional · abre el 1 oct'),
      pill: L('Not started', 'Sin empezar'),
-     pillColor: const Color(0xFF8B8F98),
-     pillBorder: const Color(0xFF2C2C33), opens: false, id: null),
+     pillColor: _t.mut,
+     pillBorder: _t.line2, opens: false, id: null),
     (img: 'fire.jpg',
      title: L('Emergency Response & Fire Safety',
          'Respuesta a Emergencias y Contra Incendios'),
      sub: L('Annual refresher · due Jan 2027',
          'Repaso anual · antes de ene 2027'),
      pill: L('Competent · Strong', 'Competente · Sólido'),
-     pillColor: const Color(0xFF7DBB9C),
-     pillBorder: const Color(0xFF2F6A4C), opens: false, id: null),
+     pillColor: _t.greenText,
+     pillBorder: _t.greenBorder, opens: false, id: null),
   ];
 
   @override
@@ -119,7 +120,7 @@ class _LiveTopicsState extends State<_LiveTopics> {
         future: _future,
         builder: (context, snap) {
           if (snap.connectionState != ConnectionState.done) {
-            return _topicsBody(context, const []);
+            return _topicsBody(context, const [], loading: true);
           }
           final live = snap.data ?? const <TopicProgress>[];
           if (snap.hasError || live.isEmpty) {
@@ -194,9 +195,9 @@ TestuMastery masteryOf(int right, int total) {
     return (
       label: L('Not started', 'Sin empezar'),
       status: '',
-      color: const Color(0xFF8B8F98),
-      border: const Color(0xFF2C2C33),
-      dot: const Color(0xFF3A3A40),
+      color: _t.mut,
+      border: _t.line2,
+      dot: _t.idle,
       expert: false,
     );
   }
@@ -213,25 +214,25 @@ TestuMastery _masteryStyle(Efficiency level) => switch (level) {
       Efficiency.beginner => (
           label: L('Beginner', 'Principiante'),
           status: L('Needs practice', 'Necesita práctica'),
-          color: const Color(0xFFD08B8B),
-          border: const Color(0xFF6E3535),
-          dot: const Color(0xFFC25555), // TestuTokens.red
+          color: _t.redText,
+          border: _t.redBorder,
+          dot: _t.red,
           expert: false,
         ),
       Efficiency.competent => (
           label: L('Competent', 'Competente'),
           status: L('Review soon', 'Repasar pronto'),
-          color: const Color(0xFFCDB96A),
-          border: const Color(0xFF8A7A3A),
-          dot: const Color(0xFFE8703A), // TestuTokens.orange
+          color: _t.gold,
+          border: _t.goldBorder,
+          dot: _t.orange,
           expert: false,
         ),
       Efficiency.expert => (
           label: L('Expert', 'Experto'),
           status: L('Stable', 'Estable'),
-          color: const Color(0xFF7DBB9C),
-          border: const Color(0xFF2F6A4C),
-          dot: const Color(0xFF4CA97A), // TestuTokens.green
+          color: _t.greenText,
+          border: _t.greenBorder,
+          dot: _t.green,
           expert: true,
         ),
     };
@@ -265,7 +266,8 @@ _Topic _mapTopic(TopicProgress p, int i) {
   );
 }
 
-Widget _topicsBody(BuildContext context, List<_Topic> topics) {
+Widget _topicsBody(BuildContext context, List<_Topic> topics,
+    {bool loading = false}) {
     final t = TestuTokens.of(context);
     // Pinned header; only the topic list scrolls (user-requested cutoff at
     // the header's bottom edge).
@@ -279,14 +281,7 @@ Widget _topicsBody(BuildContext context, List<_Topic> topics) {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(L('Your topics', 'Tus temas'),
-                    style: const TextStyle(
-                      fontFamily: 'Sora',
-                      fontWeight: FontWeight.w700,
-                      fontSize: 21,
-                      letterSpacing: -0.21,
-                      color: Color(0xFFECEBE7),
-                    )),
+                Text(L('Your topics', 'Tus temas'), style: kH1),
                 const SizedBox(height: 4),
                 Text(
                   CL('Operations, Safety Lead · 6 required for your role · 1 seasonal',
@@ -303,6 +298,9 @@ Widget _topicsBody(BuildContext context, List<_Topic> topics) {
             child: ListView(
               padding: const EdgeInsets.only(top: 10, bottom: 110),
               children: [
+                // Live rows on their way: the list's shape, not a blank.
+                if (loading)
+                  for (var i = 0; i < 5; i++) const TestuSkeletonRow(),
                 for (final topic in topics)
                   _TopicRow(
                     topic: topic,
@@ -366,13 +364,7 @@ class _TopicRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(topic.title,
-                      style: const TextStyle(
-                        fontFamily: 'Geist',
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13.5,
-                        color: Color(0xFFECEBE7),
-                      )),
+                  Text(topic.title, style: kRowTitle.copyWith(fontSize: 13.5)),
                   const SizedBox(height: 4),
                   Text(topic.sub,
                       style: kMeta),
@@ -383,7 +375,7 @@ class _TopicRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            Text('›', style: TextStyle(fontSize: 14, color: t.faint)),
+            TestuIcon(TestuGlyph.chevronRight, size: 13, color: t.faint),
           ],
         ),
       ),
@@ -405,8 +397,8 @@ class TestuTopicHomeScreen extends StatefulWidget {
     this.title,
     this.img = 'ramp.jpg',
     this.pill,
-    this.pillColor = const Color(0xFFCDB96A),
-    this.pillBorder = const Color(0xFF8A7A3A),
+    this.pillColor,
+    this.pillBorder,
   });
 
   /// Live topic the session CTAs draw questions from; null → first topic.
@@ -414,8 +406,8 @@ class TestuTopicHomeScreen extends StatefulWidget {
   final String? title; // null → the prototype's Ramp Safety title
   final String img;
   final String? pill; // null → the prototype's pill
-  final Color pillColor;
-  final Color pillBorder;
+  final Color? pillColor; // null → gold, the prototype's pill tone
+  final Color? pillBorder;
 
   @override
   State<TestuTopicHomeScreen> createState() => _TestuTopicHomeScreenState();
@@ -431,6 +423,10 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
   /// in the offline demo, where the prototype's Ramp Safety content stands.
   TopicProgress? _live;
 
+  /// The first load has come back (with a record or without): skeletons
+  /// give way to content, or to an honest "nothing here yet".
+  bool _loaded = false;
+
   @override
   void initState() {
     super.initState();
@@ -442,6 +438,8 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
       if (mounted && p != null) setState(() => _live = p);
     }).catchError((Object e) {
       debugPrint('TestU: topic progress ($e)');
+    }).whenComplete(() {
+      if (mounted) setState(() => _loaded = true);
     });
   }
 
@@ -516,7 +514,7 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
                           fontWeight: FontWeight.w600,
                           fontSize: 12,
                           letterSpacing: 0.24,
-                          color: i == _tab ? const Color(0xFFE9E8E4) : t.faint,
+                          color: i == _tab ? t.ink : t.faint,
                         ),
                       ),
                     ),
@@ -572,11 +570,11 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
                     'Obligatorio para tu rol porque los incidentes en rampa '
                     'son la mayor exposición de seguridad en tierra de la '
                     'aerolínea.'),
-            style: const TextStyle(
+            style: TextStyle(
                 fontFamily: 'Geist',
                 fontSize: 13,
                 height: 1.65,
-                color: Color(0xFFB9B8B4)),
+                color: t.inkDim),
               ),
             ),
           ),
@@ -656,9 +654,7 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
         Padding(
           padding: const EdgeInsets.fromLTRB(18, 12, 18, 0),
           child: Row(children: [
-            TestuPill(L('Certificate · Valid', 'Certificado · Válido'),
-                color: const Color(0xFF7DBB9C),
-                borderColor: const Color(0xFF2F6A4C)),
+            TestuPill.green(L('Certificate · Valid', 'Certificado · Válido')),
             const SizedBox(width: 10),
             // Flexible: Spanish copy is wider than the row at 390pt.
             Flexible(
@@ -818,7 +814,23 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
   }
 
   List<Widget> _subtopics(TestuTokens t) {
-    if (testuLive && _live == null) return const [];
+    if (testuLive && _live == null) {
+      if (!_loaded) {
+        return [
+          for (var i = 0; i < 4; i++)
+            const TestuSkeletonRow(thumb: 8, pill: false),
+        ];
+      }
+      return [
+        Padding(
+          padding: const EdgeInsets.all(18),
+          child: Text(
+              L('No subtopics yet — ${client.tutor} will open them as the content arrives.',
+                  'Aún no hay subtemas — ${client.tutor} los abrirá cuando llegue el contenido.'),
+              style: kMeta),
+        ),
+      ];
+    }
     final groups = testuLive ? _liveGroups : _groups;
     return [
       for (var i = 0; i < groups.length; i++)
@@ -841,6 +853,9 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
           FutureBuilder<List<LiveDoc>>(
             future: _docs ??= loadDocuments(topicId: widget.topicId),
             builder: (context, snap) => Column(children: [
+              if (!snap.hasData && !snap.hasError)
+                for (var i = 0; i < 2; i++)
+                  const TestuSkeletonRow(thumb: 36, pill: false),
               for (final d in snap.data ?? const <LiveDoc>[])
                 _ResRow(
                     icon: d.isVideo ? 'VID' : 'PDF',
@@ -995,27 +1010,12 @@ class _TopicHero extends StatelessWidget {
             ),
           ),
           Positioned(
-            top: topPad + 8,
+            top: topPad + 3,
             // Right side: the pill/title/meta stack owns the hero's left,
             // and in landscape the arrow was crowding it.
-            right: 16 + MediaQuery.paddingOf(context).right,
-            child: TestuPressable(
-              onTap: () => Navigator.of(context).pop(),
-              child: ClipOval(
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                  child: Container(
-                    width: 34,
-                    height: 34,
-                    color: const Color(0x960A0A0B),
-                    alignment: Alignment.center,
-                    child: const Text('‹',
-                        style: TextStyle(
-                            fontSize: 14, color: Color(0xFFECEBE7))),
-                  ),
-                ),
-              ),
-            ),
+            right: 11 + MediaQuery.paddingOf(context).right,
+            child: TestuIconButton(TestuGlyph.chevronLeft,
+                onImage: true, onTap: () => Navigator.of(context).pop()),
           ),
           Positioned(
             left: 18,
@@ -1032,8 +1032,9 @@ class _TopicHero extends StatelessWidget {
                         : home.pill ??
                             L('Competent · Review soon',
                                 'Competente · Repasar pronto'),
-                    color: mastery?.color ?? home.pillColor,
-                    borderColor: mastery?.border ?? home.pillBorder),
+                    color: mastery?.color ?? home.pillColor ?? t.gold,
+                    borderColor:
+                        mastery?.border ?? home.pillBorder ?? t.goldBorder),
                 const SizedBox(height: 12),
                 Text(
                     home.title ??
@@ -1041,14 +1042,7 @@ class _TopicHero extends StatelessWidget {
                             'Derechos Humanos y Debida Diligencia',
                             'Ramp Safety & Aircraft Turnaround',
                             'Seguridad en Rampa y Turnaround'),
-                    style: TextStyle(
-                      fontFamily: 'Sora',
-                      fontWeight: FontWeight.w700,
-                      fontSize: 21,
-                      letterSpacing: -0.21,
-                      height: 1.2,
-                      color: t.ink,
-                    )),
+                    style: kH1.copyWith(height: 1.2)),
                 const SizedBox(height: 8),
                 Row(children: [
                   ClipOval(
@@ -1057,10 +1051,10 @@ class _TopicHero extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   Text(meta,
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontFamily: 'Geist',
                           fontSize: 12,
-                          color: Color(0xFFB5B4B0))),
+                          color: t.inkDim)),
                 ]),
               ],
             ),
@@ -1089,19 +1083,14 @@ class _Fact extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label,
-              style: TextStyle(
-                  fontFamily: 'GeistMono',
-                  fontSize: 9,
-                  letterSpacing: 1.08,
-                  color: t.faint)),
+          TestuEyebrow.kicker(label),
           const SizedBox(height: 5),
           Text(value,
               style: TextStyle(
                   fontFamily: 'Geist',
                   fontWeight: FontWeight.w600,
                   fontSize: 13,
-                  color: valueColor ?? const Color(0xFFE6E4E0))),
+                  color: valueColor ?? t.ink)),
           const SizedBox(height: 3),
           Text(sub,
               style: TextStyle(
@@ -1110,7 +1099,7 @@ class _Fact extends StatelessWidget {
                 color: t.mut,
                 decoration:
                     subUnderline ? TextDecoration.underline : null,
-                decorationColor: const Color(0xFF3A3A40),
+                decorationColor: t.idle,
               )),
         ],
       ),
@@ -1243,9 +1232,8 @@ class _CompetenciesCard extends StatelessWidget {
           ),
           for (var i = 0; i < _cmp.length; i++) ...[
             Container(
-              decoration: const BoxDecoration(
-                  border:
-                      Border(top: BorderSide(color: Color(0xFF17171A)))),
+              decoration:
+                  BoxDecoration(border: Border(top: BorderSide(color: t.card2))),
               child: TestuPressable(
                 onTap: () => onToggle(i),
                 child: Padding(
@@ -1256,12 +1244,7 @@ class _CompetenciesCard extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(_cmp[i].title,
-                              style: const TextStyle(
-                                  fontFamily: 'Geist',
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 12.5,
-                                  color: Color(0xFFECEBE7))),
+                          Text(_cmp[i].title, style: kRowTitle),
                           const SizedBox(height: 2),
                           Text(_cmp[i].sub,
                               style: kMeta),
@@ -1270,19 +1253,15 @@ class _CompetenciesCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 11),
                     _cmp[i].strong
-                        ? TestuPill(_cmp[i].pill,
-                            color: const Color(0xFF7DBB9C),
-                            borderColor: const Color(0xFF2F6A4C))
-                        : TestuPill(_cmp[i].pill,
-                            color: t.amber,
-                            borderColor: const Color(0xFF7A5C1E)),
+                        ? TestuPill.green(_cmp[i].pill)
+                        : TestuPill.amber(_cmp[i].pill),
                     const SizedBox(width: 11),
                     AnimatedRotation(
                       turns: open.contains(i) ? 0.25 : 0,
                       duration: const Duration(milliseconds: 250),
-                      child: Text('›',
-                          style:
-                              TextStyle(fontSize: 13, color: t.faint)),
+                      curve: TestuTokens.curve,
+                      child: TestuIcon(TestuGlyph.chevronRight,
+                          size: 13, color: t.faint),
                     ),
                   ]),
                 ),
@@ -1291,19 +1270,15 @@ class _CompetenciesCard extends StatelessWidget {
             if (open.contains(i))
               Container(
                 width: double.infinity,
-                color: const Color(0xFF0D0D0F),
+                color: t.well,
                 padding: const EdgeInsets.only(top: 2, bottom: 8),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Padding(
                       padding: const EdgeInsets.fromLTRB(43, 8, 16, 4),
-                      child: Text(L('OBSERVABLE BEHAVIORS', 'COMPORTAMIENTOS OBSERVABLES'),
-                          style: TextStyle(
-                              fontFamily: 'GeistMono',
-                              fontSize: 8.5,
-                              letterSpacing: 1.53,
-                              color: t.faint)),
+                      child: TestuEyebrow.tag(L('OBSERVABLE BEHAVIORS',
+                          'COMPORTAMIENTOS OBSERVABLES')),
                     ),
                     for (final b in _cmp[i].kids) _BehaviorRow(b),
                   ],
@@ -1324,12 +1299,26 @@ class _BehaviorRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TestuTokens.of(context);
-    final (String mark, Color fg, Color bg, Color border) = switch (b.st) {
-      _Evidence.ok => ('✓', const Color(0xFF7DBB9C), const Color(0xFF12231B),
-          const Color(0xFF2F6A4C)),
-      _Evidence.mid =>
-        ('·', t.amber, const Color(0xFF291F10), const Color(0xFF7A5C1E)),
-      _Evidence.no => ('–', t.faint, Colors.transparent, t.line2),
+    final (Widget mark, Color bg, Color border) = switch (b.st) {
+      _Evidence.ok => (
+          TestuIcon(TestuGlyph.check, size: 8, color: t.greenText),
+          t.greenTint,
+          t.greenBorder
+        ),
+      _Evidence.mid => (
+          Container(
+              width: 4,
+              height: 4,
+              decoration:
+                  BoxDecoration(color: t.amber, shape: BoxShape.circle)),
+          t.amberTint,
+          t.amberBorder
+        ),
+      _Evidence.no => (
+          TestuIcon(TestuGlyph.minus, size: 8, color: t.faint),
+          Colors.transparent,
+          t.line2
+        ),
     };
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 7, 16, 7),
@@ -1346,8 +1335,7 @@ class _BehaviorRow extends StatelessWidget {
               border: Border.all(color: border),
             ),
             alignment: Alignment.center,
-            child: Text(mark,
-                style: TextStyle(fontSize: 9, height: 1, color: fg)),
+            child: mark,
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -1355,11 +1343,11 @@ class _BehaviorRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(b.text,
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontFamily: 'Geist',
                         fontSize: 11.5,
                         height: 1.5,
-                        color: Color(0xFFC2C1BD))),
+                        color: t.inkDim)),
                 const SizedBox(height: 1),
                 Text(b.sub,
                     style: kCaption),
@@ -1387,7 +1375,7 @@ Color _dotColor(Object d, TestuTokens t) => switch (d) {
       _Dot.green => t.green,
       _Dot.orange => t.orange,
       _Dot.red => t.red,
-      _Dot.idle => const Color(0xFF3A3A40),
+      _Dot.idle => t.idle,
       final Color c => c,
       _ => t.faint,
     };
@@ -1414,8 +1402,8 @@ class _SubGroupWidget extends StatelessWidget {
     return Column(
       children: [
         Container(
-          decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: Color(0xFF17171A)))),
+          decoration:
+              BoxDecoration(border: Border(bottom: BorderSide(color: t.card2))),
           child: TestuPressable(
             onTap: expandable ? onToggle : () => onOpen(group.sectionId),
             child: Padding(
@@ -1435,8 +1423,9 @@ class _SubGroupWidget extends StatelessWidget {
                 AnimatedRotation(
                   turns: open && expandable ? 0.25 : 0,
                   duration: const Duration(milliseconds: 250),
-                  child: Text('›',
-                      style: TextStyle(fontSize: 13, color: t.faint)),
+                  curve: TestuTokens.curve,
+                  child: TestuIcon(TestuGlyph.chevronRight,
+                      size: 13, color: t.faint),
                 ),
               ]),
             ),
@@ -1445,30 +1434,23 @@ class _SubGroupWidget extends StatelessWidget {
         if (open && expandable)
           Container(
             width: double.infinity,
-            decoration: const BoxDecoration(
-              color: Color(0xFF0D0D0F),
-              border: Border(bottom: BorderSide(color: Color(0xFF17171A))),
+            decoration: BoxDecoration(
+              color: t.well,
+              border: Border(bottom: BorderSide(color: t.card2)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(41, 9, 18, 2),
-                  child: Text(L('SKILLS', 'HABILIDADES'),
-                      style: TextStyle(
-                          fontFamily: 'GeistMono',
-                          fontSize: 8.5,
-                          letterSpacing: 1.53,
-                          color: t.faint)),
+                  child: TestuEyebrow.tag(L('SKILLS', 'HABILIDADES')),
                 ),
                 for (final k in group.kids)
                   Container(
                     decoration: BoxDecoration(
                       border: k == group.kids.last
                           ? null
-                          : const Border(
-                              bottom:
-                                  BorderSide(color: Color(0xFF131316))),
+                          : Border(bottom: BorderSide(color: t.card2)),
                     ),
                     padding:
                         const EdgeInsets.fromLTRB(41, 11, 18, 11),
@@ -1506,12 +1488,7 @@ class _SubGroupWidget extends StatelessWidget {
           Text.rich(
             TextSpan(children: [
               TextSpan(
-                  text: title,
-                  style: TextStyle(
-                      fontFamily: 'Geist',
-                      fontWeight: FontWeight.w600,
-                      fontSize: size,
-                      color: const Color(0xFFECEBE7))),
+                  text: title, style: kRowTitle.copyWith(fontSize: size)),
               if (critical)
                 WidgetSpan(
                   alignment: PlaceholderAlignment.middle,
@@ -1520,8 +1497,7 @@ class _SubGroupWidget extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(
                         vertical: 2, horizontal: 6),
                     decoration: BoxDecoration(
-                      border:
-                          Border.all(color: const Color(0xFF7A5C1E)),
+                      border: Border.all(color: t.amberBorder),
                       borderRadius: BorderRadius.circular(99),
                     ),
                     child: Text(L('CRITICAL SKILL', 'HABILIDAD CRÍTICA'),
@@ -1573,8 +1549,7 @@ class _ModeButton extends StatelessWidget {
               fontWeight: FontWeight.w700,
               fontSize: small ? 9.5 : 10.5,
               letterSpacing: 0.42,
-              color:
-                  primary ? t.onPrimaryAction : const Color(0xFFD8D7D3),
+              color: primary ? t.onPrimaryAction : t.ink,
             )),
       ),
     );
@@ -1601,41 +1576,20 @@ class _ResRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = TestuTokens.of(context);
     return Container(
-      decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: Color(0xFF17171A)))),
+      decoration:
+          BoxDecoration(border: Border(bottom: BorderSide(color: t.card2))),
       child: TestuPressable(
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 18),
           child: Row(children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: t.card2,
-                border: Border.all(color: t.line),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              alignment: Alignment.center,
-              child: Text(icon,
-                  style: TextStyle(
-                      fontFamily: 'GeistMono',
-                      fontWeight: FontWeight.w500,
-                      fontSize: 9.5,
-                      letterSpacing: 0.38,
-                      color: t.mut)),
-            ),
+            TestuDocBadge(icon),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title,
-                      style: const TextStyle(
-                          fontFamily: 'Geist',
-                          fontWeight: FontWeight.w600,
-                          fontSize: 12.5,
-                          color: Color(0xFFECEBE7))),
+                  Text(title, style: kRowTitle),
                   const SizedBox(height: 2),
                   Text(sub,
                       style: kMeta),
@@ -1648,9 +1602,7 @@ class _ResRow extends StatelessWidget {
                   const EdgeInsets.symmetric(vertical: 2, horizontal: 7),
               decoration: BoxDecoration(
                 border: Border.all(
-                    color: required
-                        ? const Color(0xFF7A5C1E)
-                        : t.line2),
+                    color: required ? t.amberBorder : t.line2),
                 borderRadius: BorderRadius.circular(99),
               ),
               child: Text(required ? L('REQUIRED', 'OBLIGATORIO') : L('OPTIONAL', 'OPCIONAL'),

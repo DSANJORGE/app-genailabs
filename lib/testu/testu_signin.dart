@@ -187,28 +187,6 @@ class _TestuSigninState extends State<TestuSignin> {
   }
 }
 
-/// Shared field chrome: card fill, hairline border, ink focus ring.
-InputDecoration _fieldDecoration(TestuTokens t, {String? hint}) =>
-    InputDecoration(
-      hintText: hint,
-      hintStyle: TextStyle(
-        fontFamily: 'Geist',
-        fontSize: 15,
-        color: t.faint,
-      ),
-      filled: true,
-      fillColor: t.card,
-      contentPadding: const EdgeInsets.symmetric(vertical: 15, horizontal: 14),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(color: t.line2),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(color: t.primaryAction),
-      ),
-    );
-
 final _fieldStyle = TextStyle(
   fontFamily: 'Geist',
   fontSize: 15,
@@ -257,9 +235,8 @@ class _EmailStage extends StatelessWidget {
                 TextField(
                   controller: s._email,
                   style: _fieldStyle,
-                  decoration:
-                      _fieldDecoration(t,
-                          hint: 'ana.ruiz@${client.wordmark}.com'),
+                  decoration: testuFieldDecoration(t,
+                      hint: 'ana.ruiz@${client.wordmark}.com'),
                   keyboardType: TextInputType.emailAddress,
                   autocorrect: false,
                   textInputAction: TextInputAction.done,

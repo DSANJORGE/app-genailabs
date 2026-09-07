@@ -141,29 +141,15 @@ class _TestuNotificationsScreenState extends State<TestuNotificationsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(18, 10, 8, 4),
+              padding: const EdgeInsets.fromLTRB(18, 4, 4, 4),
               child: Row(
                 children: [
                   Expanded(
-                    child: Text(
-                      L('Notifications', 'Notificaciones'),
-                      style: TextStyle(
-                        fontFamily: 'Sora',
-                        fontWeight: FontWeight.w700,
-                        fontSize: 21,
-                        letterSpacing: -0.21,
-                        color: t.ink,
-                      ),
-                    ),
+                    child: Text(L('Notifications', 'Notificaciones'),
+                        style: kH1),
                   ),
-                  TestuPressable(
-                    onTap: () => Navigator.of(context).pop(),
-                    child: Padding(
-                      padding: const EdgeInsets.all(10),
-                      child:
-                          Text('✕', style: TextStyle(fontSize: 15, color: t.mut)),
-                    ),
-                  ),
+                  TestuIconButton(TestuGlyph.close,
+                      onTap: () => Navigator.of(context).pop()),
                 ],
               ),
             ),

@@ -34,11 +34,8 @@ void showTestuPdf(BuildContext context,
                   'Aircraft Ground Handling and Servicing',
                   'Manipulación y Servicio de Aeronaves en Tierra'))
           .replaceFirst(RegExp(r'^FAA AC 00-34A\s*·\s*'), '');
-  showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    barrierColor: const Color(0xA8000000),
+  showTestuSheet<void>(
+    context,
     builder: (_) => _PdfSheet(page: page, sub: sub, doc: doc, rects: rects),
   );
 }
@@ -114,75 +111,27 @@ class _PdfSheetState extends State<_PdfSheet> {
   /// a row scrolls the viewer to its page.
   void _showToc() {
     final toc = widget.doc!.toc;
-    final t = TestuTokens.of(context);
     HapticFeedback.selectionClick();
     // The entry the current page falls in.
     var here = -1;
     for (final (i, e) in toc.indexed) {
       if (e.page <= _cur) here = i;
     }
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: t.card,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
-      builder: (ctx) => SafeArea(
-        child: SizedBox(
-          height: MediaQuery.sizeOf(ctx).height * 0.7,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
-                child: Text(L('Contents', 'Índice'), style: kLabel),
-              ),
-              Expanded(
-                child: ListView.builder(
-                  controller: ScrollController(
-                      initialScrollOffset: (here - 2).clamp(0, toc.length) * 44.0),
-                  itemCount: toc.length,
-                  itemBuilder: (_, i) {
-                    final e = toc[i];
-                    // ponytail: un-numbered lines are sub-entries → indented.
-                    final sub = !RegExp(r'^(\d|Capítulo|Chapter)').hasMatch(e.name);
-                    return TestuPressable(
-                      onTap: () {
-                        Navigator.of(ctx).pop();
-                        _goTo(e.page);
-                      },
-                      child: Padding(
-                        padding: EdgeInsets.fromLTRB(sub ? 36 : 20, 12, 20, 12),
-                        child: Row(children: [
-                          Expanded(
-                            child: Text(
-                              e.name,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                  fontFamily: 'Geist',
-                                  fontSize: 13,
-                                  color: i == here
-                                      ? t.orange
-                                      : const Color(0xFFD6D4D0)),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Text('p. ${e.page}',
-                              style: TextStyle(
-                                  fontFamily: 'GeistMono',
-                                  fontSize: 10,
-                                  color: i == here ? t.orange : t.mut)),
-                        ]),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
+    showTestuListSheet(
+      context,
+      title: L('CONTENTS', 'ÍNDICE'),
+      rows: [
+        for (final (i, e) in toc.indexed)
+          (
+            tag: null,
+            label: e.name,
+            trailing: 'p. ${e.page}',
+            selected: i == here,
+            // ponytail: un-numbered lines are sub-entries → indented.
+            indent: !RegExp(r'^(\d|Capítulo|Chapter)').hasMatch(e.name),
+            onTap: () => _goTo(e.page),
           ),
-        ),
-      ),
+      ],
     );
   }
 
@@ -220,24 +169,35 @@ class _PdfSheetState extends State<_PdfSheet> {
 
   Future<void> _askPage() async {
     final field = _pageField..clear();
-    final s = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(L('Go to page', 'Ir a la página'), style: kLabel),
-        content: TextField(
-          controller: field,
-          autofocus: true,
-          keyboardType: TextInputType.number,
-          decoration: InputDecoration(hintText: '1 – ${widget.pages}'),
-          onSubmitted: (v) => Navigator.of(ctx).pop(v),
+    final t = TestuTokens.of(context);
+    final s = await showTestuDialog<String>(
+      context,
+      child: Builder(
+        builder: (ctx) => Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TestuEyebrow(widget.title.toUpperCase()),
+            const SizedBox(height: 6),
+            Text(L('Go to page', 'Ir a la página'), style: kSheetTitle),
+            const SizedBox(height: 14),
+            TextField(
+              controller: field,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+              style: TextStyle(
+                  fontFamily: 'GeistMono', fontSize: 15, color: t.ink),
+              decoration: testuFieldDecoration(t,
+                  hint: '1 – ${widget.pages}', fill: t.field),
+              onSubmitted: (v) => Navigator.of(ctx).pop(v),
+            ),
+            const SizedBox(height: 14),
+            // The number pad has no return key; this is its submit.
+            TestuButton(L('Go', 'Ir'),
+                variant: TestuButtonVariant.primary,
+                onTap: () => Navigator.of(ctx).pop(field.text)),
+          ],
         ),
-        // The number pad has no return key; this is its submit.
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(field.text),
-            child: Text(L('Go', 'Ir')),
-          ),
-        ],
       ),
     );
     final page = int.tryParse(s ?? '');
@@ -338,51 +298,20 @@ class _PdfSheetState extends State<_PdfSheet> {
   Widget build(BuildContext context) {
     final t = TestuTokens.of(context);
     final h = MediaQuery.sizeOf(context).height * 0.88;
-    return Container(
+    return SizedBox(
       height: h,
-      decoration: BoxDecoration(
-        color: t.card,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
-        border: Border(top: BorderSide(color: t.line2)),
-      ),
       child: Column(
         children: [
+          const TestuGrabber(),
           Container(
-            width: 36,
-            height: 4,
-            margin: const EdgeInsets.only(top: 14, bottom: 16),
-            decoration: BoxDecoration(
-              color: t.line2,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.fromLTRB(18, 0, 12, 13),
+            padding: const EdgeInsets.fromLTRB(18, 0, 4, 10),
             decoration: BoxDecoration(
               border: Border(bottom: BorderSide(color: t.line)),
             ),
             child: Row(
               children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: t.card2,
-                    border: Border.all(color: t.line),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    'PDF',
-                    style: TextStyle(
-                      fontFamily: 'GeistMono',
-                      fontSize: 8.5,
-                      fontWeight: FontWeight.w500,
-                      color: t.mut,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 11),
+                const TestuDocBadge('PDF'),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -394,8 +323,8 @@ class _PdfSheetState extends State<_PdfSheet> {
                         style: TextStyle(
                           fontFamily: 'Sora',
                           fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                          letterSpacing: -0.14,
+                          fontSize: 15,
+                          letterSpacing: -0.15,
                           color: t.ink,
                         ),
                       ),
@@ -411,9 +340,10 @@ class _PdfSheetState extends State<_PdfSheet> {
                   ),
                 ),
                 if (widget.doc?.toc.isNotEmpty ?? false)
-                  _tool('☰', _showToc, t),
-                _tool('↻', _rotate, t),
-                _tool('✕', () => Navigator.of(context).pop(), t),
+                  TestuIconButton(TestuGlyph.list, onTap: _showToc),
+                TestuIconButton(TestuGlyph.rotate, onTap: _rotate),
+                TestuIconButton(TestuGlyph.close,
+                    onTap: () => Navigator.of(context).pop()),
               ],
             ),
           ),
@@ -482,20 +412,12 @@ class _PdfSheetState extends State<_PdfSheet> {
     );
   }
 
-  /// Header tool glyph (index, rotate, close) — same hit size as the ✕.
-  Widget _tool(String glyph, VoidCallback onTap, TestuTokens t) =>
-      TestuPressable(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
-          child: Text(glyph, style: TextStyle(fontSize: 15, color: t.mut)),
-        ),
-      );
-
   Widget _pageList() => LayoutBuilder(builder: (context, bc) {
         _pageListW = bc.maxWidth;
         return Container(
-          color: const Color(0xFF26272B),
+          // Reading surface: the same grey as the hairline track, so pages
+          // and their shadows lift off it.
+          color: TestuTokens.of(context).track,
           child: ListView.builder(
             controller: _scroll,
             padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
@@ -555,6 +477,7 @@ class _Page extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = TestuTokens.of(context);
     return GestureDetector(
       onTap: () => _zoom(context),
       child: Container(
@@ -577,7 +500,7 @@ class _Page extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(vertical: 2, horizontal: 6),
                 decoration: BoxDecoration(
-                  color: const Color(0xCC0A0A0B),
+                  color: t.scrim,
                   borderRadius: BorderRadius.circular(4),
                 ),
                 // Expand glyph = visible fullscreen affordance (whole page
@@ -585,15 +508,14 @@ class _Page extends StatelessWidget {
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
                   Text(
                     'p. $index / $pages',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: 'GeistMono',
                       fontSize: 9,
-                      color: Color(0xFFD8D7D3),
+                      color: t.inkSoft,
                     ),
                   ),
                   const SizedBox(width: 5),
-                  const TestuIcon(TestuGlyph.expand,
-                      size: 9, color: Color(0xFFD8D7D3)),
+                  TestuIcon(TestuGlyph.expand, size: 9, color: t.inkSoft),
                 ]),
               ),
             ),
@@ -637,7 +559,7 @@ class TestuPageImage extends StatelessWidget {
           aspectRatio: aspect,
           child: Stack(fit: StackFit.expand, children: [
             Container(
-              color: const Color(0xFFF2F1EC),
+              color: t.paper,
               child: Image(image: testuImage(src), fit: BoxFit.contain),
             ),
             if (rects.isNotEmpty)
@@ -668,7 +590,6 @@ void showTestuZoom(BuildContext context,
       opaque: false,
       barrierColor: const Color(0xF20A0A0B),
       pageBuilder: (context, animation, secondaryAnimation) {
-        final t = TestuTokens.of(context);
         var q = turns;
         return StatefulBuilder(
           builder: (context, setState) => Scaffold(
@@ -687,24 +608,12 @@ void showTestuZoom(BuildContext context,
                           ),
                         ),
                       ),
-                      TestuPressable(
-                        onTap: () {
-                          HapticFeedback.selectionClick();
-                          setState(() => q = (q + 1) % 4);
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.all(14),
-                          child: Text('↻',
-                              style: TextStyle(fontSize: 16, color: t.mut)),
-                        ),
-                      ),
-                      TestuPressable(
-                        onTap: () => Navigator.of(context).pop(),
-                        child: Padding(
-                          padding: const EdgeInsets.all(14),
-                          child: Text('✕',
-                              style: TextStyle(fontSize: 16, color: t.mut)),
-                        ),
+                      TestuIconButton(TestuGlyph.rotate,
+                          onTap: () => setState(() => q = (q + 1) % 4)),
+                      Padding(
+                        padding: const EdgeInsets.only(right: 4),
+                        child: TestuIconButton(TestuGlyph.close,
+                            onTap: () => Navigator.of(context).pop()),
                       ),
                     ],
                   ),

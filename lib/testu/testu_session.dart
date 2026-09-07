@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'testu_i18n.dart';
+import 'testu_icons.dart';
 import 'testu_live.dart';
 import 'testu_pdf.dart';
 import 'testu_notifications.dart';
@@ -47,20 +48,22 @@ List<String> get _conf => [
   L('Fairly sure', 'Bastante'),
   L('Certain', G('Seguro', 'Segura')),
 ];
-const _confColors = [
-  Color(0xFFC25555),
-  Color(0xFFD9A23F),
-  Color(0xFF9DB55C),
-  Color(0xFF4CA97A),
+const _t = TestuTokens.instance;
+final _confColors = [
+  _t.confGuessing,
+  _t.confUnsure,
+  _t.confFairlySure,
+  _t.confCertain,
 ];
-const _confSelectedBg = [
-  Color(0xFF2A1516),
-  Color(0xFF291F10),
-  Color(0xFF1D2212),
-  Color(0xFF12231B),
+// Tint behind the tapped level; the olive one is the fairly-sure tint and
+// exists nowhere else.
+final _confSelectedBg = [
+  _t.redTint,
+  _t.amberTint,
+  const Color(0xFF1D2212),
+  _t.greenTint,
 ];
 
-const _ital = TextStyle(fontStyle: FontStyle.italic, color: Color(0xFFA9A8A4));
 const _bold = TextStyle(fontWeight: FontWeight.w700);
 
 /// Learn Mode session — a chat with Sully. Confidence tap IS the submit;
@@ -313,30 +316,8 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
       // Live reply: markdown rendered, citation block, source link.
       return _Rise(child: SullyMessage.reply(text, bottomPadding: 16));
     }
-    final t = TestuTokens.of(context);
-    return _Rise(
-      child: Align(
-        alignment: Alignment.centerRight,
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 16, left: 48),
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1A1A1E),
-            border: Border.all(color: t.line2),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Text(
-            text,
-            style: const TextStyle(
-              fontFamily: 'Geist',
-              fontSize: 13,
-              height: 1.5,
-              color: Color(0xFFE9E8E4),
-            ),
-          ),
-        ),
-      ),
-    );
+    // The shared sent-message bubble — same as the tutor tab and sheets.
+    return _Rise(child: TestuYouMsg(text: text));
   }
 
   /// Question copy resolves `L()` at load time, so a language flip reloads
@@ -457,10 +438,10 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
           TextSpan(
             // ponytail: decorative link — the explanation sheet doesn't exist.
             text: L(' Why this question?', ' ¿Por qué esta pregunta?'),
-            style: const TextStyle(
-              color: Color(0xFF8B8F98),
+            style: TextStyle(
+              color: _t.mut,
               decoration: TextDecoration.underline,
-              decorationColor: Color(0xFF3A3A40),
+              decorationColor: _t.idle,
             ),
           ),
       ];
@@ -515,7 +496,7 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
                   'Puedo darte una pista. Esto marcará el intento como asistido, así que contará menos para tu dominio.\n\n')),
           // Live questions carry no authored hint: Sully's reply follows as a
           // chat bubble instead.
-          if (q.hint != null) TextSpan(text: q.hint, style: _ital),
+          if (q.hint != null) TextSpan(text: q.hint, style: kItalic),
         ],
       );
 
@@ -527,11 +508,11 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
       spans = [
         TextSpan(
             text: '${L('Correct', 'Correcto')} · ${_conf[conf]}\n',
-            style: const TextStyle(
+            style: TextStyle(
                 fontWeight: FontWeight.w700,
                 fontSize: 12.5,
                 letterSpacing: 0.25,
-                color: Color(0xFF7DBB9C))),
+                color: _t.greenText)),
         TextSpan(
             text: conf >= 2
                 ? q.good ??
@@ -546,11 +527,11 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
             text: conf == 3
                 ? '${L('Not quite · you were certain', 'No exactamente · estabas ${G('seguro', 'segura')}')}\n'
                 : '${L('Not quite', 'No exactamente')} · ${_conf[conf]}\n',
-            style: const TextStyle(
+            style: TextStyle(
                 fontWeight: FontWeight.w700,
                 fontSize: 12.5,
                 letterSpacing: 0.25,
-                color: Color(0xFFD08B8B))),
+                color: _t.redText)),
         // Backend questions carry no tailored miss copy — fall back to the
         // rationale-free generic line.
         ...(q.bad ??
@@ -596,7 +577,7 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
         TextSpan(
             text: CL('Due diligence', 'Debida diligencia',
                 'Aircraft arrival & chocking', 'Llegada y calzado'),
-            style: _ital),
+            style: kItalic),
         TextSpan(
             text: L(
                 ' out of "Review soon". Stopping now records a partial session and slows your mastery.',
@@ -638,25 +619,21 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
           SafeArea(
             bottom: false,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(18, 8, 10, 10),
+              padding: const EdgeInsets.fromLTRB(18, 4, 4, 10),
               child: Column(
                 children: [
                   Row(
                     children: [
                       Expanded(
-                        child: Text(
+                        child: TestuEyebrow(
                           '${L('LEARN MODE', 'MODO APRENDER')} · '
                           '${_source.topic.toUpperCase()}',
-                          style: TextStyle(
-                            fontFamily: 'GeistMono',
-                            fontWeight: FontWeight.w500,
-                            fontSize: 10.5,
-                            letterSpacing: 1.47, // +0.14em
-                            color: t.mut,
-                          ),
+                          fontSize: 10.5,
+                          letterSpacing: 1.47, // +0.14em
                         ),
                       ),
-                      TestuPressable(
+                      TestuIconButton(
+                        TestuGlyph.close,
                         onTap: () {
                           // Both exits end a session, so they share one
                           // flow. Nothing answered yet means there is
@@ -666,24 +643,17 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
                             Navigator.of(context).pop();
                           }
                         },
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              vertical: 4, horizontal: 8),
-                          child: Text('✕',
-                              style: TextStyle(fontSize: 16, color: t.faint)),
-                        ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 4),
                   Padding(
-                    padding: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.only(right: 14),
                     child: TweenAnimationBuilder<double>(
                       tween: Tween(end: _controller.progress),
                       duration: const Duration(milliseconds: 600),
                       curve: TestuTokens.curve,
-                      builder: (_, v, child) => TestuHairline(v,
-                          trackColor: const Color(0xFF1E1E23)),
+                      builder: (_, v, child) => TestuHairline(v),
                     ),
                   ),
                 ],
@@ -778,7 +748,7 @@ class _Rise extends StatelessWidget {
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
       duration: const Duration(milliseconds: 400),
-      curve: Curves.easeOut,
+      curve: TestuTokens.curve,
       builder: (_, v, child) => Opacity(
         opacity: v,
         child: Transform.translate(offset: Offset(0, 10 * (1 - v)), child: child),
@@ -832,37 +802,18 @@ class _ChoiceChipsState extends State<_ChoiceChips> {
   @override
   Widget build(BuildContext context) {
     if (_gone) return const SizedBox.shrink();
-    final t = TestuTokens.of(context);
     return Wrap(
       spacing: 8,
       runSpacing: 8,
       children: [
         for (final (label, primary, onTap) in widget.chips)
-          TestuPressable(
+          TestuChip(
+            label,
+            primary: primary,
             onTap: () {
               setState(() => _gone = true);
               onTap();
             },
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(vertical: 8, horizontal: 14),
-              decoration: BoxDecoration(
-                color: primary ? t.primaryAction : null,
-                border:
-                    Border.all(color: primary ? t.primaryAction : t.line2),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontFamily: 'Geist',
-                  fontSize: 11.5,
-                  fontWeight: primary ? FontWeight.w700 : FontWeight.w400,
-                  color:
-                      primary ? t.onPrimaryAction : const Color(0xFFC2C1BD),
-                ),
-              ),
-            ),
           ),
       ],
     );
@@ -899,13 +850,13 @@ class _FakePlayer extends StatelessWidget {
                       width: 44,
                       height: 44,
                       alignment: Alignment.center,
-                      decoration: const BoxDecoration(
-                        color: Color(0x960A0A0B),
+                      decoration: BoxDecoration(
+                        color: t.scrim,
                         shape: BoxShape.circle,
+                        border: Border.all(color: t.onImgLine),
                       ),
-                      child: const Text('▶',
-                          style: TextStyle(
-                              fontSize: 15, color: Color(0xFFECEBE7))),
+                      child:
+                          TestuIcon(TestuGlyph.play, size: 16, color: t.ink),
                     ),
                   ),
                 ],
@@ -1000,21 +951,22 @@ class _QuestionCardState extends State<_QuestionCard> {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontFamily: 'GeistMono',
+                    fontWeight: FontWeight.w500,
                     fontSize: 9,
-                    letterSpacing: 1.26, // +0.14em
+                    letterSpacing: 1.44, // +0.16em, the kicker eyebrow
                     color: t.faint,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   q.text,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontFamily: 'Sora',
                     fontWeight: FontWeight.w700,
                     fontSize: 15.5,
                     letterSpacing: -0.16,
                     height: 1.42,
-                    color: Color(0xFFEFEDEA),
+                    color: t.ink,
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -1028,7 +980,7 @@ class _QuestionCardState extends State<_QuestionCard> {
                             width: double.infinity,
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF2F1EC),
+                              color: t.paper,
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: Image(
@@ -1100,7 +1052,7 @@ class _QuestionCardState extends State<_QuestionCard> {
                           fontSize: 11.5,
                           color: t.mut,
                           decoration: TextDecoration.underline,
-                          decorationColor: const Color(0xFF3A3A40),
+                          decorationColor: t.idle,
                         ),
                       ),
                     ),
@@ -1114,16 +1066,8 @@ class _QuestionCardState extends State<_QuestionCard> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    L('HOW CONFIDENT ARE YOU?',
-                        '¿CUÁN ${G('SEGURO', 'SEGURA')} ESTÁS?'),
-                    style: TextStyle(
-                      fontFamily: 'GeistMono',
-                      fontSize: 9.5,
-                      letterSpacing: 1.33, // +0.14em
-                      color: t.faint,
-                    ),
-                  ),
+                  TestuEyebrow.h4(L('HOW CONFIDENT ARE YOU?',
+                      '¿CUÁN ${G('SEGURO', 'SEGURA')} ESTÁS?')),
                   const SizedBox(height: 8),
                   ClipRRect(
                     borderRadius: BorderRadius.circular(9),
@@ -1213,14 +1157,14 @@ class _Option extends StatelessWidget {
     final Color border;
     final Color? bg;
     if (correct) {
-      border = const Color(0xFF2F6A4C);
-      bg = const Color(0xFF10201A);
+      border = t.greenBorder;
+      bg = t.greenTint;
     } else if (wrong) {
-      border = const Color(0xFF6E3535);
-      bg = const Color(0xFF201113);
+      border = t.redBorder;
+      bg = t.redTint;
     } else if (selected) {
-      border = const Color(0xFFB9B7B2);
-      bg = const Color(0xFF1A1A1E);
+      border = t.selectedBorder;
+      bg = t.raised;
     } else {
       border = t.line2;
       bg = null;
@@ -1228,8 +1172,8 @@ class _Option extends StatelessWidget {
     final radioBorder = correct
         ? t.green
         : selected
-            ? const Color(0xFFE9E8E4)
-            : const Color(0xFF47474E);
+            ? t.ink
+            : t.faint;
     return TestuPressable(
       onTap: onTap,
       child: AnimatedContainer(
@@ -1256,9 +1200,9 @@ class _Option extends StatelessWidget {
                       child: Container(
                         width: 8,
                         height: 8,
-                        decoration: const BoxDecoration(
+                        decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Color(0xFFE9E8E4),
+                          color: t.ink,
                         ),
                       ),
                     )
@@ -1268,11 +1212,11 @@ class _Option extends StatelessWidget {
             Expanded(
               child: Text(
                 text,
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: 'Geist',
                   fontSize: 13,
                   height: 1.5,
-                  color: Color(0xFFD6D4D0),
+                  color: t.inkSoft,
                 ),
               ),
             ),
@@ -1437,11 +1381,10 @@ class _VerdictExtrasState extends State<_VerdictExtras> {
           runSpacing: 8,
           children: [
             if (!_wrongs)
-              _chip(
-                  t,
+              TestuChip(
                   L('Why are the others wrong?',
                       '¿Por qué las otras están mal?'),
-                  () => _tap(() {
+                  onTap: () => _tap(() {
                         _wrongs = true;
                         widget.onAsk(
                             L('Why are the other options wrong?',
@@ -1449,11 +1392,10 @@ class _VerdictExtrasState extends State<_VerdictExtras> {
                             _whyWrong(q));
                       })),
             if (!_proc)
-              _chip(
-                  t,
+              TestuChip(
                   L('Show me the full procedure',
                       'Muéstrame el procedimiento completo'),
-                  () => _tap(() {
+                  onTap: () => _tap(() {
                         _proc = true;
                         widget.onAsk(
                             L('Show me the full procedure.',
@@ -1500,31 +1442,11 @@ class _VerdictExtrasState extends State<_VerdictExtras> {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 10),
         decoration: BoxDecoration(
-          color: const Color(0xFF101013),
+          color: t.field,
           border: Border.all(color: t.line),
           borderRadius: BorderRadius.circular(8),
         ),
         child: child,
-      );
-
-  Widget _chip(TestuTokens t, String label, VoidCallback onTap) =>
-      TestuPressable(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 14),
-          decoration: BoxDecoration(
-            border: Border.all(color: t.line2),
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Text(
-            label,
-            style: const TextStyle(
-              fontFamily: 'Geist',
-              fontSize: 11.5,
-              color: Color(0xFFC2C1BD),
-            ),
-          ),
-        ),
       );
 
   TextStyle _evBold(TestuTokens t) =>
@@ -1535,87 +1457,47 @@ class _VerdictExtrasState extends State<_VerdictExtras> {
 /// Barrier-dismiss does NOT acknowledge — only the button calls [onAck].
 Future<void> _showConfAck(BuildContext context,
     {required VoidCallback onAck}) {
-  final t = TestuTokens.of(context);
-  return showDialog(
-    context: context,
-    barrierColor: const Color(0xA8000000),
-    builder: (context) => Dialog(
-      backgroundColor: t.card,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 22),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: BorderSide(color: t.line2),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ClipOval(
-                  child: Image.asset(client.tutorAvatar,
-                      width: 26, height: 26, fit: BoxFit.cover),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        client.tutor.toUpperCase(),
-                        style: TextStyle(
-                          fontFamily: 'GeistMono',
-                          fontSize: 9,
-                          letterSpacing: 1.44,
-                          color: t.faint,
-                        ),
-                      ),
-                      const SizedBox(height: 5),
-                      Text.rich(
-                        TextSpan(children: [
-                          TextSpan(
-                              text: L(
-                                  'Quick heads-up before your first confidence call: ',
-                                  'Un aviso antes de tu primera llamada de confianza: ')),
-                          TextSpan(
-                              text: L(
-                                  'the moment you tap a level, your answer is submitted',
-                                  'en cuanto toques un nivel, tu respuesta queda enviada'),
-                              style: _bold),
-                          TextSpan(
-                              text: CL(
-                                  ' — there’s no changing it afterwards. Your confidence is part of the answer, so decide it like you would on site.',
-                                  ' — no se puede cambiar después. Tu confianza es parte de la respuesta, así que decídela como lo harías en la mina.',
-                                  ' — there’s no changing it afterwards. Your confidence is part of the answer, so decide it like you would on the ramp.',
-                                  ' — no se puede cambiar después. Tu confianza es parte de la respuesta, así que decídela como lo harías en la rampa.')),
-                        ]),
-                        style: const TextStyle(
-                          fontFamily: 'Geist',
-                          fontSize: 13.5,
-                          height: 1.62,
-                          color: Color(0xFFD6D4D0),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            TestuButton(
-              L('Understood — don’t show this again',
-                  'Entendido — no volver a mostrar'),
-              variant: TestuButtonVariant.primary,
-              onTap: () {
-                onAck();
-                Navigator.of(context).pop();
-              },
-            ),
-          ],
-        ),
+  return showTestuDialog<void>(
+    context,
+    // Spec: the one dialog a backdrop tap must not close.
+    dismissible: false,
+    child: Builder(
+      builder: (context) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // The same bubble the tutor speaks in everywhere else.
+          SullyMessage(
+            delay: 0,
+            spans: [
+              TextSpan(
+                  text: L(
+                      'Quick heads-up before your first confidence call: ',
+                      'Un aviso antes de tu primera llamada de confianza: ')),
+              TextSpan(
+                  text: L(
+                      'the moment you tap a level, your answer is submitted',
+                      'en cuanto toques un nivel, tu respuesta queda enviada'),
+                  style: _bold),
+              TextSpan(
+                  text: CL(
+                      ' — there’s no changing it afterwards. Your confidence is part of the answer, so decide it like you would on site.',
+                      ' — no se puede cambiar después. Tu confianza es parte de la respuesta, así que decídela como lo harías en la mina.',
+                      ' — there’s no changing it afterwards. Your confidence is part of the answer, so decide it like you would on the ramp.',
+                      ' — no se puede cambiar después. Tu confianza es parte de la respuesta, así que decídela como lo harías en la rampa.')),
+            ],
+          ),
+          const SizedBox(height: 14),
+          TestuButton(
+            L('Understood — don’t show this again',
+                'Entendido — no volver a mostrar'),
+            variant: TestuButtonVariant.primary,
+            onTap: () {
+              onAck();
+              Navigator.of(context).pop();
+            },
+          ),
+        ],
       ),
     ),
   );
@@ -1691,7 +1573,7 @@ class TestuDebriefScreen extends StatelessWidget {
                         : L(
                             'We stopped partway — every attempt still counts. You were right ',
                             'Paramos a mitad — cada intento cuenta igualmente. Acertaste ')),
-                TextSpan(text: L('and', 'y'), style: _ital),
+                TextSpan(text: L('and', 'y'), style: kItalic),
                 TextSpan(
                     text: L(' certain on $certainRight of $total. ',
                         ' con seguridad en $certainRight de $total. ')),
@@ -1719,11 +1601,11 @@ class TestuDebriefScreen extends StatelessWidget {
                 _Stat(L('MASTERY', 'DOMINIO'),
                     child: Text(
                       L('Competent · Strong ↑', 'Competente · Sólido ↑'),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'Geist',
                         fontWeight: FontWeight.w600,
                         fontSize: 12,
-                        color: Color(0xFF7DBB9C),
+                        color: t.greenText,
                       ),
                     )),
             ]),
@@ -1745,16 +1627,8 @@ class TestuDebriefScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    '${L('MASTERY', 'DOMINIO')} · ${topic.toUpperCase()}',
-                    style: TextStyle(
-                      fontFamily: 'GeistMono',
-                      fontWeight: FontWeight.w500,
-                      fontSize: 9,
-                      letterSpacing: 1.26,
-                      color: t.faint,
-                    ),
-                  ),
+                  TestuEyebrow.h4(
+                      '${L('MASTERY', 'DOMINIO')} · ${topic.toUpperCase()}'),
                   const SizedBox(height: 10),
                   LayoutBuilder(
                     builder: (_, box) => CustomPaint(
@@ -1789,25 +1663,25 @@ class TestuDebriefScreen extends StatelessWidget {
         : '';
     final (color, title, body) = switch ((a.correct, a.confidence)) {
       (true, >= 2) => (
-          const Color(0xFF4CA97A),
+          _t.green,
           L('Reinforced', 'Reforzado'),
           L('Certain and correct — consolidating.',
               'Segura y correcta — consolidándose.'),
         ),
       (true, _) => (
-          const Color(0xFFE8703A),
+          _t.orange,
           L('Fragile', 'Frágil'),
           L('Correct, but you marked it "${_conf[a.confidence]}". This knowledge may not be fully consolidated yet.',
               'Correcta, pero la marcaste como «${_conf[a.confidence]}». Puede que este conocimiento aún no esté consolidado.'),
         ),
       (false, 3) => (
-          const Color(0xFFC25555),
+          _t.red,
           L('Misconception', 'Concepto erróneo'),
           L('Incorrect while certain — marked priority to revisit.',
               'Incorrecta estando ${G('seguro', 'segura')} — marcada como prioridad para repasar.'),
         ),
       (false, _) => (
-          const Color(0xFFC25555),
+          _t.red,
           L('To review', 'Para repasar'),
           L('Incorrect. You marked it "${_conf[a.confidence]}".',
               'Incorrecta. La marcaste como «${_conf[a.confidence]}».'),
@@ -1877,21 +1751,12 @@ class _Stat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = TestuTokens.of(context);
     return TestuCard(
       padding: const EdgeInsets.fromLTRB(12, 13, 12, 13),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontFamily: 'GeistMono',
-              fontSize: 8.5,
-              letterSpacing: 1.02, // +0.12em
-              color: t.faint,
-            ),
-          ),
+          TestuEyebrow.tag(label),
           const SizedBox(height: 6),
           child,
         ],
@@ -1915,12 +1780,12 @@ class _DebriefRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = TestuTokens.of(context);
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: last
           ? null
-          : const BoxDecoration(
-              border: Border(bottom: BorderSide(color: Color(0xFF17171A)))),
+          : BoxDecoration(border: Border(bottom: BorderSide(color: t.card2))),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1935,15 +1800,7 @@ class _DebriefRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontFamily: 'Geist',
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12.5,
-                    color: Color(0xFFE9E8E4),
-                  ),
-                ),
+                Text(title, style: kRowTitle),
                 const SizedBox(height: 2),
                 Text(
                   body,
@@ -1975,7 +1832,7 @@ class _CurvePainter extends CustomPainter {
           style: TextStyle(
             fontFamily: 'Geist',
             fontSize: fs * s,
-            color: const Color(0xFF5C6068),
+            color: _t.faint,
           ),
         ),
         textDirection: TextDirection.ltr,
@@ -1993,7 +1850,7 @@ class _CurvePainter extends CustomPainter {
         right: true);
 
     final dash = Paint()
-      ..color = const Color(0xFF26262C)
+      ..color = _t.track
       ..strokeWidth = 1;
     var x = 58.0 * s;
     while (x < 320 * s) {
@@ -2012,10 +1869,10 @@ class _CurvePainter extends CustomPainter {
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2 * s
-        ..color = const Color(0xFF4CA97A),
+        ..color = _t.green,
     );
-    canvas.drawCircle(Offset(288 * s, 34 * s), 4.5 * s,
-        Paint()..color = const Color(0xFFE8703A));
+    canvas.drawCircle(
+        Offset(288 * s, 34 * s), 4.5 * s, Paint()..color = _t.orange);
   }
 
   @override
