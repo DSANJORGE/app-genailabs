@@ -8,6 +8,7 @@ import 'admin_api.dart';
 import 'admin_mastery.dart';
 import 'admin_models.dart';
 import 'admin_nav.dart';
+import 'admin_overview.dart';
 import 'admin_people.dart';
 import 'admin_teams.dart';
 import 'admin_ui.dart';
@@ -198,10 +199,11 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
 
   /// Every route resolves here, and nowhere else.
   Widget _page(ConsoleRoute route) => switch (route.section) {
-    // Tasks 11-14 replace these four with AdminOverview, AdminActivity,
+    // Tasks 12-14 replace these three with AdminActivity,
     // AdminPerson(userId: route.entityId!) and AdminTeamPage(teamId: …),
     // each taking api, me, filters and nav.
-    'overview' => _notYet(_label('overview')),
+    'overview' =>
+      AdminOverview(api: widget.api, me: widget.me, filters: _filters, nav: _nav),
     'activity' => _notYet(_label('activity')),
     'person' => _notYet(_label('person')),
     'team' => _notYet(_label('team')),

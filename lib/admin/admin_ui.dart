@@ -728,7 +728,11 @@ class ChartCard extends StatelessWidget {
   final List<(Color, String)> legend;
   final Widget child;
   final String? footnote;
-  final double height;
+
+  /// Fixed chart area. Null lets the child size itself -- what a card full of
+  /// rows or a table needs, where the content decides the height and a fixed
+  /// one would clip the moment a Spanish label wraps.
+  final double? height;
   final Widget? trailing;
 
   @override
@@ -760,7 +764,7 @@ class ChartCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          SizedBox(height: height, child: child),
+          if (height == null) child else SizedBox(height: height, child: child),
           if (footnote != null) ...[
             const SizedBox(height: 10),
             Text(footnote!, style: AdminTokens.footnote),
@@ -1210,12 +1214,18 @@ class _HeaderCell<T> extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              column.label,
-              style: hovered || sorted
-                  ? AdminTokens.tableHead
-                      .copyWith(color: TestuTokens.of(context).ink)
-                  : AdminTokens.tableHead,
+            // Flexible, so a narrow column ellipsises its header instead of
+            // painting the overflow stripes over the row beneath it.
+            Flexible(
+              child: Text(
+                column.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: hovered || sorted
+                    ? AdminTokens.tableHead
+                        .copyWith(color: TestuTokens.of(context).ink)
+                    : AdminTokens.tableHead,
+              ),
             ),
             if (sorted) ...[
               const SizedBox(width: 5),

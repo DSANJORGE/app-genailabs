@@ -329,8 +329,8 @@ class Calibration {
 }
 
 /// One row of `overview.gaps[]`. The server sends more keys than this model
-/// keeps (`levels`, `helpfulShare`); `topicId` is the one addition beyond
-/// the brief's field list -- everything else beyond that is left unparsed.
+/// keeps (`helpfulShare`); `topicId` and `levels` are the two additions
+/// beyond the brief's field list -- everything else is left unparsed.
 class Gap {
   Gap(
     this.section,
@@ -343,10 +343,15 @@ class Gap {
     this.misconceptions,
     this.unanswered,
     this.people,
+    this.levels,
   );
   final String section, name, topic, topicId;
   final double score;
   final int beginners, questions, misconceptions, unanswered, people;
+
+  /// Headcount per level for this subtopic, so a gap row carries the same
+  /// stacked bar a topic row does instead of inferring one from [beginners].
+  final Levels levels;
 
   factory Gap.fromJson(Map j) => Gap(
         '${j['section'] ?? ''}',
@@ -359,6 +364,7 @@ class Gap {
         (j['misconceptions'] as num?)?.toInt() ?? 0,
         (j['unanswered'] as num?)?.toInt() ?? 0,
         (j['people'] as num?)?.toInt() ?? 0,
+        Levels.fromJson(j['levels'] as Map? ?? {}),
       );
 }
 
