@@ -18,8 +18,9 @@ final testuUsage = TestuUsage(
 
 /// Foreground-time and tutor-rating events for the console's usage analytics.
 /// Queue in shared_preferences, flushed in batches; silent on failure.
-/// Events recorded while signed out are rejected (401/403) and stay queued
-/// until a signed-in flush ships them — that is intended.
+/// The server takes the user from the session, so the queue belongs to
+/// whoever is signed in: [signOut] ships it and empties it before the
+/// credentials go, and nothing is recorded until an [open].
 /// ponytail: one JSON list in prefs, dropped past 500 events; a real store if it ever matters.
 class TestuUsage {
   TestuUsage({EmeHttp? http, required this.platform, required this.appVersion})
@@ -30,26 +31,39 @@ class TestuUsage {
   String? _session;
   Stopwatch? _fg;
 
-  /// A launch (or a fresh sign-in). Ships whatever the last run left behind
-  /// first — the flush is for the old queue, so the new `open` rides along
-  /// with the next `pause` instead of costing a request of its own.
-  Future<void> open() async {
-    await flush();
-    _start();
-    await _enqueue({'type': 'open'});
-  }
+  /// Every public call runs in turn: enqueue and flush are a read-modify-write
+  /// on one prefs key, and interleaving them loses events. A flush that
+  /// overlaps a retry is harmless — the server dedupes on the event key.
+  Future<void> _chain = Future.value();
+  Future<void> _run(Future<void> Function() body) =>
+      _chain = _chain.then((_) => body()).catchError((Object e) {
+            debugPrint('TestU usage failed ($e)');
+          });
 
-  Future<void> resume() async {
-    _start();
-    await _enqueue({'type': 'resume'});
-  }
+  /// A launch (or a fresh sign-in). Starts the session first, then ships
+  /// whatever the last run left behind — so the new `open` rides along with
+  /// the next `pause` instead of costing a request of its own.
+  Future<void> open() => _run(() async {
+        _start();
+        await _flush();
+        await _enqueue({'type': 'open'});
+      });
 
-  Future<void> pause() async {
-    final s = _fg;
-    _fg = null;
-    await _enqueue({'type': 'pause', 'seconds': s?.elapsed.inSeconds ?? 0});
-    await flush();
-  }
+  Future<void> resume() => _run(() async {
+        // Nothing to resume before an [open] — the sign-in screen going in
+        // and out of the background is not usage.
+        if (_session == null) return;
+        _start();
+        await _enqueue({'type': 'resume'});
+      });
+
+  Future<void> pause() => _run(() async {
+        final s = _fg;
+        if (s == null) return; // never opened, or already paused
+        _fg = null;
+        await _enqueue({'type': 'pause', 'seconds': s.elapsed.inSeconds});
+        await _flush();
+      });
 
   Future<void> rate({
     required String channel,
@@ -57,16 +71,30 @@ class TestuUsage {
     String? questionId,
     required bool helpful,
   }) =>
-      _enqueue({
-        'type': 'iris_rate',
-        'channel': channel,
-        'componentsection': sectionId,
-        'entityquestion': questionId ?? '',
-        'rating': helpful ? 'helpful' : 'nothelpful',
+      _run(() => _enqueue({
+            'type': 'iris_rate',
+            'channel': channel,
+            'componentsection': sectionId,
+            'entityquestion': questionId ?? '',
+            'rating': helpful ? 'helpful' : 'nothelpful',
+          }));
+
+  /// Called from [TestuAuth.signOut] while the cookie is still good: ship
+  /// this learner's events, then drop whatever is left. The queue is
+  /// device-global, so anything surviving here would be posted on the next
+  /// account's session and counted as theirs.
+  Future<void> signOut() => _run(() async {
+        await _flush();
+        await _save([]);
+        _session = null;
+        _fg = null;
       });
 
+  Future<void> flush() => _run(_flush);
+
   void _start() {
-    _session = '${DateTime.now().microsecondsSinceEpoch}-${identityHashCode(Object())}';
+    _session =
+        '${DateTime.now().microsecondsSinceEpoch}-${identityHashCode(Object())}';
     _fg = Stopwatch()..start();
   }
 
@@ -96,7 +124,7 @@ class TestuUsage {
 
   Future<int> pending() async => (await _queue()).length;
 
-  Future<void> flush() async {
+  Future<void> _flush() async {
     final q = await _queue();
     if (q.isEmpty) return;
     try {
