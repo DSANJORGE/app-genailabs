@@ -80,9 +80,9 @@ class _InteractiveState extends State<_Interactive> {
         ButtonActivateIntent: CallbackAction<ButtonActivateIntent>(
             onInvoke: (_) => _activate()),
       },
-      // onTap here as well as on the GestureDetector: assistive technology
-      // presses the node that carries the label, and a node announced as a
-      // button with no action on it is one a screen reader cannot activate.
+      // One node per interactive element: the Semantics carries the name, the
+      // button flag AND the tap, and the GestureDetector is excluded so it
+      // cannot contribute a second, separately tappable node underneath.
       child: Semantics(
         button: enabled,
         label: widget.semanticLabel,
@@ -90,6 +90,7 @@ class _InteractiveState extends State<_Interactive> {
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: widget.onTap,
+          excludeFromSemantics: true,
           child: child,
         ),
       ),
@@ -1736,7 +1737,10 @@ class CitationChip extends StatelessWidget {
       onTap: onTap,
       radius: 999,
       semanticLabel: '$index · ${citation.label}',
-      builder: (context, hovered) => AnimatedContainer(
+      // The chip's own text is the label word for word; leaving it in the
+      // tree would announce the citation twice.
+      builder: (context, hovered) => ExcludeSemantics(
+        child: AnimatedContainer(
         duration: AdminTokens.dur(context, 200),
         curve: TestuTokens.curve,
         padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 9),
@@ -1760,6 +1764,7 @@ class CitationChip extends StatelessWidget {
             color: hovered ? t.ink : t.mut,
           ),
         ),
+        ),
       ),
     );
   }
@@ -1780,20 +1785,25 @@ class ConsoleChip extends StatelessWidget {
     return _Interactive(
       onTap: onTap,
       radius: 999,
-      builder: (context, hovered) => AnimatedContainer(
-        duration: AdminTokens.dur(context, 200),
-        curve: TestuTokens.curve,
-        padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 11),
-        decoration: BoxDecoration(
-          border: Border.all(color: hovered ? t.mut : t.line2),
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontFamily: 'Geist',
-            fontSize: 11,
-            color: hovered ? t.ink : t.mut,
+      // The question itself is the name. Stated here rather than left to the
+      // child Text, which is excluded so the chip is one node, not two.
+      semanticLabel: label,
+      builder: (context, hovered) => ExcludeSemantics(
+        child: AnimatedContainer(
+          duration: AdminTokens.dur(context, 200),
+          curve: TestuTokens.curve,
+          padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 11),
+          decoration: BoxDecoration(
+            border: Border.all(color: hovered ? t.mut : t.line2),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontFamily: 'Geist',
+              fontSize: 11,
+              color: hovered ? t.ink : t.mut,
+            ),
           ),
         ),
       ),
@@ -1826,13 +1836,16 @@ class ConsoleIconButton extends StatelessWidget {
       onTap: onTap,
       radius: 8,
       semanticLabel: label,
-      builder: (context, hovered) => SizedBox(
-        width: 40,
-        height: 40,
-        child: Center(
-          child: Text(
-            glyph,
-            style: TextStyle(fontSize: 13, color: hovered ? t.ink : t.mut),
+      // The glyph is decoration -- "Close" is the name, "✕" is not.
+      builder: (context, hovered) => ExcludeSemantics(
+        child: SizedBox(
+          width: 40,
+          height: 40,
+          child: Center(
+            child: Text(
+              glyph,
+              style: TextStyle(fontSize: 13, color: hovered ? t.ink : t.mut),
+            ),
           ),
         ),
       ),

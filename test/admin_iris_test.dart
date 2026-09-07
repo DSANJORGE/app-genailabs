@@ -341,11 +341,15 @@ void main() {
     expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isTrue,
         reason: 'announced as a button, so it has to be pressable as one');
 
+    // Press it the way assistive technology does, then the way a pointer does.
+    tester.semantics.tap(find.semantics.byLabel('Close'));
+    await tester.pump();
+    expect(closed, 1);
     handle.dispose();
 
     await tester.tap(find.byType(ConsoleIconButton));
     await tester.pump();
-    expect(closed, 1);
+    expect(closed, 2);
   });
 
   testWidgets('disposing the thread mid-question is not an error',

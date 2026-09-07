@@ -1,5 +1,6 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart' show SemanticsAction, SemanticsNode;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genai_labs/admin/admin_charts.dart';
 import 'package:genai_labs/admin/admin_models.dart';
@@ -260,6 +261,48 @@ void main() {
 
     await tester.pump(const Duration(milliseconds: 1600));
     expect(ring(), Colors.transparent);
+  });
+
+
+  // Assistive technology presses ONE node per control. A GestureDetector or a
+  // visible label left in the tree under the labelled node gives a screen
+  // reader a second, differently-named thing to press for the same control.
+  testWidgets('every console control is exactly one semantics node',
+      (tester) async {
+    int tapNodes(SemanticsNode node) {
+      var n = node.getSemanticsData().hasAction(SemanticsAction.tap) ? 1 : 0;
+      node.visitChildren((child) {
+        n += tapNodes(child);
+        return true;
+      });
+      return n;
+    }
+
+    final handle = tester.ensureSemantics();
+    for (final (widget, name) in <(Widget, String)>[
+      (
+        ConsoleIconButton(glyph: '✕', label: 'Close', onTap: () {}),
+        'Close',
+      ),
+      (
+        CitationChip(
+          index: 1,
+          citation:
+              Citation('f1', 'Sin actividad: Jorge', 'x', 'person', const {}),
+          onTap: () {},
+        ),
+        '1 · Sin actividad: Jorge',
+      ),
+      (ConsoleChip('Compare the teams', onTap: () {}), 'Compare the teams'),
+    ]) {
+      await tester.pumpWidget(_app(Center(child: widget)));
+      await tester.pump();
+      final node = tester.getSemantics(find.bySemanticsLabel(name));
+      expect(node.label, name);
+      expect(tapNodes(node), 1,
+          reason: '${widget.runtimeType} announces more than one thing to tap');
+    }
+    handle.dispose();
   });
 
 }
