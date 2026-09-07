@@ -116,11 +116,19 @@ class AnalyticsFilters extends ChangeNotifier {
 /// Where the content column is pointed: a section id, optionally a drill-down
 /// entity, optionally the element an Iris citation asked us to pulse.
 class ConsoleRoute {
-  const ConsoleRoute(this.section, {this.entityId, this.highlight});
+  const ConsoleRoute(this.section,
+      {this.entityId, this.highlight, this.stamp = 0});
 
   final String section;
   final String? entityId;
   final String? highlight;
+
+  /// Which citation this is, counting from the start of the session. The
+  /// highlight vocabulary is small (`stat`, `topic`, `iris`, ...), so two
+  /// citations in a row often carry the same [highlight]; without a value
+  /// that always changes, the second one would look like no change at all
+  /// and its element would never pulse.
+  final int stamp;
 }
 
 /// The console's router. Deliberately without value equality: navigating to
@@ -129,6 +137,9 @@ class ConsoleRoute {
 class ConsoleNav extends ValueNotifier<ConsoleRoute> {
   ConsoleNav([super.value = const ConsoleRoute('resumen')]);
 
+  int _stamp = 0;
+
   void go(String section, {String? entityId, String? highlight}) =>
-      value = ConsoleRoute(section, entityId: entityId, highlight: highlight);
+      value = ConsoleRoute(section,
+          entityId: entityId, highlight: highlight, stamp: ++_stamp);
 }

@@ -20,17 +20,28 @@ String loadError(Object e) {
       : L('Could not load ($code).', 'No se pudo cargar ($code).');
 }
 
-/// True when an Iris citation is pointing at [what].
+/// Wraps the element an Iris citation may be pointing at, so it rings when
+/// cited.
 ///
 /// Fact ids are opaque (`f1`..`fN`), so a citation cannot name an element by
 /// id. `ask.groovy` gives every fact a `focus` key from one small vocabulary
-/// instead -- `stat`, `topic`, `weakest`, `grid`, `gap`, `team`, `inactive`,
-/// `iris` -- and each screen wraps exactly those elements in a [Pulse]. The
-/// match is therefore equality, not a substring guess.
+/// instead -- `stat`, `topic`, `weakest`, `grid`, `gap`, `inactive`, `iris`
+/// -- and each screen wraps exactly those elements here. A few elements
+/// answer to more than one key, which is why this takes a set.
+///
+/// Carrying [ConsoleRoute.stamp] through is the whole reason this exists
+/// rather than a bare `Pulse`: the vocabulary is small enough that two
+/// citations in a row usually share a key, and a [Pulse] that only watched
+/// `active` would ring once and then sit still.
 ///
 /// A top-level function rather than a mixin method: Dominio runs its own
-/// fetch machine and needs the same vocabulary.
-bool points(String? highlight, String what) => highlight == what;
+/// fetch machine and needs the same wiring.
+Widget pulse(ConsoleRoute route, Set<String> keys, {required Widget child}) =>
+    Pulse(
+      active: keys.contains(route.highlight),
+      stamp: route.stamp,
+      child: child,
+    );
 
 /// The fetch half of an analytics screen (spec analytics-v1 §6), shared by
 /// Resumen, Actividad, Persona and Equipo.
@@ -119,12 +130,12 @@ mixin FilteredFetch<T, W extends StatefulWidget> on State<W> {
   }
 
   /// Skeleton, error panel or [page] — the one state machine every analytics
-  /// screen renders. The highlight is a per-citation thing, so only the page
-  /// body rebuilds on it: not the fetch, not the filters.
-  Widget fetched(Widget Function(BuildContext, T data, String? highlight) page) =>
+  /// screen renders. The route is a per-citation thing, so only the page body
+  /// rebuilds on it: not the fetch, not the filters.
+  Widget fetched(Widget Function(BuildContext, T data, ConsoleRoute route) page) =>
       crossfade(_state(page));
 
-  Widget _state(Widget Function(BuildContext, T, String?) page) {
+  Widget _state(Widget Function(BuildContext, T, ConsoleRoute) page) {
     final e = error;
     if (e != null) {
       return ConsolePanelError(
@@ -134,7 +145,7 @@ mixin FilteredFetch<T, W extends StatefulWidget> on State<W> {
     if (loading || d == null) return const Skeleton(lines: 6, height: 22);
     return ValueListenableBuilder<ConsoleRoute>(
       valueListenable: nav,
-      builder: (context, route, _) => page(context, d, route.highlight),
+      builder: (context, route, _) => page(context, d, route),
     );
   }
 }

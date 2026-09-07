@@ -129,9 +129,14 @@ class _Crossfade extends StatelessWidget {
 /// One 600 ms `focus` ring when [active] turns true — how an Iris citation
 /// points at the element it is quoting.
 class Pulse extends StatefulWidget {
-  const Pulse({super.key, required this.active, required this.child});
+  const Pulse(
+      {super.key, required this.active, this.stamp = 0, required this.child});
 
   final bool active;
+
+  /// [ConsoleRoute.stamp]: a new value on an already-active pulse means a
+  /// second citation landed on the same element, and it has to ring again.
+  final int stamp;
   final Widget child;
 
   @override
@@ -150,7 +155,7 @@ class _PulseState extends State<Pulse> {
   @override
   void didUpdateWidget(Pulse old) {
     super.didUpdateWidget(old);
-    if (widget.active && !old.active) _arm();
+    if (widget.active && (!old.active || widget.stamp != old.stamp)) _arm();
   }
 
   /// Ring on instantly, then fade out over 600 ms — the fade is the pulse.
@@ -1764,7 +1769,47 @@ class ConsoleChip extends StatelessWidget {
           style: TextStyle(
             fontFamily: 'Geist',
             fontSize: 11,
-            color: hovered ? t.ink : const Color(0xFFD8D7D3),
+            color: hovered ? t.ink : t.mut,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A bare glyph button — the Iris panel's ✕ today. `_Interactive` gives it the
+/// console's hover, Enter/Space and focus ring; the 40 px box is the tap
+/// target, deliberately much larger than the glyph inside it.
+class ConsoleIconButton extends StatelessWidget {
+  const ConsoleIconButton({
+    super.key,
+    required this.glyph,
+    required this.label,
+    required this.onTap,
+  });
+
+  final String glyph;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TestuTokens.of(context);
+    return Semantics(
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      child: _Interactive(
+        onTap: onTap,
+        radius: 8,
+        builder: (context, hovered) => SizedBox(
+          width: 40,
+          height: 40,
+          child: Center(
+            child: Text(
+              glyph,
+              style: TextStyle(fontSize: 13, color: hovered ? t.ink : t.mut),
+            ),
           ),
         ),
       ),

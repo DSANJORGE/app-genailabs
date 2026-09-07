@@ -97,12 +97,12 @@ class _AdminPersonState extends State<AdminPerson>
 
   String get _tutor => personaName(widget.me);
 
-  Widget _page(BuildContext context, _PersonData d, String? highlight) {
+  Widget _page(BuildContext context, _PersonData d, ConsoleRoute route) {
     final p = d.person;
     return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Pulse(active: points(highlight, 'stat'), child: _header(d)),
+          pulse(route, {'stat', 'inactive'}, child: _header(d)),
           const SizedBox(height: 20),
           Reading(
             personaName: _tutor,
@@ -110,13 +110,13 @@ class _AdminPersonState extends State<AdminPerson>
             sentences: personReading(p),
           ),
           const SizedBox(height: 22),
-          Pulse(active: points(highlight, 'topic'), child: _pair(context, p)),
+          pulse(route, {'topic'}, child: _pair(context, p)),
           const SizedBox(height: 16),
           _week(p),
           const SizedBox(height: 16),
-          Pulse(active: points(highlight, 'iris'), child: _usage(p)),
+          pulse(route, {'iris'}, child: _usage(p)),
           const SizedBox(height: 16),
-          Pulse(active: points(highlight, 'grid'), child: _table(p)),
+          _table(p),
         ],
       );
   }

@@ -63,7 +63,7 @@ class _AdminActivityState extends State<AdminActivity>
 
   String get _persona => personaName(widget.me);
 
-  Widget _page(BuildContext context, Activity a, String? highlight) {
+  Widget _page(BuildContext context, Activity a, ConsoleRoute route) {
     // `funnel` is the screen's own cohort: activityReading reads the same
     // five numbers, so both come from one place.
     final answered = a.funnel['answered'] ?? 0;
@@ -84,7 +84,7 @@ class _AdminActivityState extends State<AdminActivity>
         const SizedBox(height: 22),
         // Adoption reads even at zero -- it is the one card that explains an
         // empty screen, so it never hides behind the empty state.
-        Pulse(active: points(highlight, 'stat'), child: _adoption(a)),
+        _adoption(a),
         const SizedBox(height: 16),
         if (answered == 0)
           EmptyState(
@@ -101,12 +101,12 @@ class _AdminActivityState extends State<AdminActivity>
           const SizedBox(height: 16),
           _hours(a),
           const SizedBox(height: 16),
-          Pulse(active: points(highlight, 'iris'), child: _irisPair(context, a)),
+          pulse(route, {'iris'}, child: _irisPair(context, a)),
           const SizedBox(height: 16),
-          Pulse(active: points(highlight, 'iris'), child: _themes(context, a)),
+          pulse(route, {'iris'}, child: _themes(context, a)),
         ],
         const SizedBox(height: 16),
-        Pulse(active: points(highlight, 'inactive'), child: _inactive(a)),
+        pulse(route, {'inactive'}, child: _inactive(a)),
       ],
     );
   }

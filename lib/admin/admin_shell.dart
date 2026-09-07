@@ -91,7 +91,7 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
   /// panel: the panel state is session-scoped (spec §6.7), and a new sign-in
   /// builds a new shell, which is what starts it clean.
   bool _iris = false;
-  final _thread = <IrisTurn>[];
+  final _thread = IrisThread();
 
   /// Where Iris has anything to say: the analytics screens and their two
   /// drill-downs. The roster screens are administration, not analysis.
@@ -142,6 +142,7 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
     _nav.removeListener(_pushHistory);
     _nav.dispose();
     _filters.dispose();
+    _thread.dispose();
     super.dispose();
   }
 
@@ -288,6 +289,8 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
           const SingleActivator(LogicalKeyboardKey.slash, control: true):
               _toggleIris,
         },
+        // autofocus is what gives CallbackShortcuts a focus scope to live
+        // in; nothing else on the console asks for initial focus.
         child: Focus(
           autofocus: true,
           child: ValueListenableBuilder<ConsoleRoute>(

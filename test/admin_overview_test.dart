@@ -5,6 +5,7 @@ import 'package:genai_labs/admin/admin_api.dart';
 import 'package:genai_labs/admin/admin_models.dart';
 import 'package:genai_labs/admin/admin_nav.dart';
 import 'package:genai_labs/admin/admin_overview.dart';
+import 'package:genai_labs/admin/admin_theme.dart';
 import 'package:genai_labs/admin/admin_ui.dart';
 import 'package:genai_labs/testu/testu_i18n.dart';
 import 'package:genai_labs/testu/testu_theme.dart';
@@ -275,10 +276,26 @@ void main() {
   // A citation lights the ONE element it quotes. Pulsing the stat row for
   // every highlight would make the ring mean "something over there", which
   // is the opposite of a citation.
-  bool pulsing(WidgetTester tester, Finder inner) => tester
-      .widget<Pulse>(
-          find.ancestor(of: inner, matching: find.byType(Pulse)).first)
-      .active;
+  bool pulsing(WidgetTester tester, Finder inner) {
+    final pulse = find.ancestor(of: inner, matching: find.byType(Pulse));
+    // An element no fact can cite is deliberately not wrapped at all.
+    return pulse.evaluate().isNotEmpty &&
+        tester.widget<Pulse>(pulse.first).active;
+  }
+
+  /// True while the [Pulse] wrapping [inner] is showing its focus ring. The
+  /// widget's `active` flag is not enough: it stays true for as long as the
+  /// citation points here, and what this task is about is the ring firing
+  /// *again* for a second citation carrying the same key.
+  bool ringing(WidgetTester tester, Finder inner) {
+    final pulse = find.ancestor(of: inner, matching: find.byType(Pulse));
+    if (pulse.evaluate().isEmpty) return false;
+    final box = find
+        .descendant(of: pulse.first, matching: find.byType(AnimatedContainer))
+        .first;
+    final d = tester.widget<AnimatedContainer>(box).decoration as BoxDecoration;
+    return d.border?.top.color == AdminTokens.focus;
+  }
 
   testWidgets('a stat citation pulses the stat row and nothing else',
       (tester) async {
@@ -297,10 +314,31 @@ void main() {
     expect(pulsing(tester, find.byType(AdminTable<TeamStat>)), isFalse);
   });
 
-  testWidgets('a team citation pulses the teams table', (tester) async {
+  // Every team fact opens the team page, so nothing on Resumen can be cited
+  // with 'team' -- the teams table is deliberately unwrapped.
+  testWidgets('the teams table is not a citation target', (tester) async {
     await _pump(tester, canned: _canned(), highlight: 'team');
 
-    expect(pulsing(tester, find.byType(AdminTable<TeamStat>)), isTrue);
+    expect(pulsing(tester, find.byType(AdminTable<TeamStat>)), isFalse);
     expect(pulsing(tester, find.byType(StatRow)), isFalse);
+  });
+
+  // The focus vocabulary is small, so two citations in a row usually carry
+  // the same key. The second one still has to ring.
+  testWidgets('a second citation on the same element rings again',
+      (tester) async {
+    final (_, _, nav) = await _pump(tester, canned: _canned());
+
+    nav.go('overview', highlight: 'stat');
+    await tester.pump();
+    expect(ringing(tester, find.byType(StatRow)), isTrue);
+
+    await tester.pumpAndSettle();
+    expect(ringing(tester, find.byType(StatRow)), isFalse);
+
+    nav.go('overview', highlight: 'stat');
+    await tester.pump();
+    expect(ringing(tester, find.byType(StatRow)), isTrue,
+        reason: 'the same highlight twice is still two citations');
   });
 }

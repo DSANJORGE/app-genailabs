@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genai_labs/admin/admin_api.dart';
 import 'package:genai_labs/admin/admin_mastery.dart';
+import 'package:genai_labs/admin/admin_heatmap.dart';
+import 'package:genai_labs/admin/admin_ui.dart';
 import 'package:genai_labs/admin/admin_models.dart';
 import 'package:genai_labs/admin/admin_nav.dart';
 import 'package:genai_labs/admin/admin_theme.dart';
@@ -288,4 +290,22 @@ void main() {
       expect(csv.split('\r\n')[1].split(','), contains('Ana Quispe'));
     });
   });
+
+  // Section facts and a topic's weakest subtopic both open Dominio, and the
+  // grid is the only thing here either can be about.
+  testWidgets('a weakest-subtopic citation pulses the grid', (tester) async {
+    final nav = await _pump(tester);
+
+    nav.go('mastery', highlight: 'weakest');
+    await tester.pump();
+    expect(
+        tester
+            .widget<Pulse>(find
+                .ancestor(
+                    of: find.byType(HeatmapGrid), matching: find.byType(Pulse))
+                .first)
+            .active,
+        isTrue);
+  });
+
 }

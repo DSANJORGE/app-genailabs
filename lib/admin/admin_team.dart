@@ -128,7 +128,7 @@ class _AdminTeamPageState extends State<AdminTeamPage>
         team?.members ?? 0, 0, 0, const Levels(), null);
   }
 
-  Widget _page(BuildContext context, _TeamData d, String? highlight) {
+  Widget _page(BuildContext context, _TeamData d, ConsoleRoute route) {
     final team = _team(d);
     final stat = _stat(d, team);
     final members = _members(d);
@@ -143,15 +143,13 @@ class _AdminTeamPageState extends State<AdminTeamPage>
           sentences: teamReading(stat, d.org),
         ),
         const SizedBox(height: 22),
-        Pulse(active: points(highlight, 'stat'), child: _stats(d, stat)),
+        pulse(route, {'stat', 'team'}, child: _stats(d, stat)),
         const SizedBox(height: 22),
         _activity(d),
         const SizedBox(height: 16),
-        Pulse(active: points(highlight, 'iris'), child: _asked(d)),
+        _asked(d),
         const SizedBox(height: 16),
-        Pulse(
-            active: points(highlight, 'team'),
-            child: _roster(members, d.report.rows.isEmpty)),
+        _roster(members, d.report.rows.isEmpty),
       ],
     );
   }

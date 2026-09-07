@@ -11,7 +11,7 @@ import 'admin_heatmap.dart';
 import 'admin_models.dart';
 import 'admin_nav.dart';
 import 'admin_reading.dart';
-import 'admin_screen.dart' show points;
+import 'admin_screen.dart' show pulse;
 import 'admin_theme.dart';
 import 'admin_ui.dart';
 
@@ -310,11 +310,11 @@ class _AdminMasteryState extends State<AdminMastery> {
     // itself -- only the page body rebuilds on it, never the fetch.
     return ValueListenableBuilder<ConsoleRoute>(
       valueListenable: widget.nav,
-      builder: (context, route, _) => _page(context, report, route.highlight),
+      builder: (context, route, _) => _page(context, report, route),
     );
   }
 
-  Widget _page(BuildContext context, AdminReport report, String? highlight) {
+  Widget _page(BuildContext context, AdminReport report, ConsoleRoute route) {
     final grid = _Grid.of(report, _teamLabel, byTeam: _byTeam, sort: _sort);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -340,8 +340,9 @@ class _AdminMasteryState extends State<AdminMastery> {
         else
           // A cited subtopic and a cited "weakest subtopic" both mean the
           // grid: it is the only thing on Dominio that carries either.
-          Pulse(
-            active: points(highlight, 'grid') || points(highlight, 'weakest'),
+          pulse(
+            route,
+            {'grid', 'weakest'},
             child: ChartCard(
               eyebrow: L('People × subtopics', 'Personas × subtemas'),
               height: null,

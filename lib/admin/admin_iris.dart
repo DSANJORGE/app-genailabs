@@ -35,6 +35,88 @@ class IrisTurn {
   final bool failed;
 }
 
+/// The Iris conversation, owned by the shell rather than the panel.
+///
+/// A question takes 5-15 s and a manager can close the panel — or leave the
+/// analytics screens entirely — in the middle of one. Keeping the turns AND
+/// the in-flight state out here means the answer still lands: reopening the
+/// panel shows the dots, then the reply, instead of an orphaned question with
+/// no answer and no way to retry.
+class IrisThread extends ChangeNotifier {
+  final turns = <IrisTurn>[];
+
+  /// One question in flight per user; the composer is inert meanwhile.
+  bool busy = false;
+
+  /// Guards a reply that lands after [retry] moved the thread on.
+  int _request = 0;
+
+  /// The last six live turns as `{role, text}` — the only conversation the
+  /// server ever sees, and it is built before the new question joins it. A
+  /// failed turn is never sent: the model must not be told it said nothing.
+  List<Map<String, String>> _history() {
+    final live = [for (final t in turns) if (!t.failed) t];
+    return [
+      for (final t in live.skip(live.length <= 6 ? 0 : live.length - 6))
+        {
+          'role': t.reply == null ? 'user' : 'assistant',
+          'text': t.reply?.answer ?? t.text,
+        },
+    ];
+  }
+
+  Future<void> ask(
+    AdminApi api, {
+    required String question,
+    required String screen,
+    String? user,
+    Map<String, String> q = const {},
+  }) async {
+    if (busy) return;
+    final history = _history();
+    final mine = ++_request;
+    turns.add(IrisTurn.you(question));
+    busy = true;
+    notifyListeners();
+    IrisTurn landed;
+    try {
+      landed = IrisTurn.iris(await api.ask(
+        question: question,
+        screen: screen,
+        user: user,
+        history: history,
+        q: q,
+      ));
+    } catch (_) {
+      // Every failure is the same failure to a reader: the tutor is not
+      // answering. AdminApi.ask has already folded 503 and `ok:false` into
+      // AskUnavailable, and the console data is untouched either way.
+      landed = IrisTurn.down();
+    }
+    if (mine != _request) return;
+    turns.add(landed);
+    busy = false;
+    notifyListeners();
+  }
+
+  /// Retry drops the failed turn AND the question above it, then asks again —
+  /// so a recovered server leaves one clean exchange, not three entries.
+  void retry(
+    AdminApi api,
+    int index, {
+    required String screen,
+    String? user,
+    Map<String, String> q = const {},
+  }) {
+    // Before the removal, not after: a busy thread must lose nothing.
+    if (busy || index == 0) return;
+    final question = turns[index - 1].text;
+    if (question.isEmpty) return;
+    turns.removeRange(index - 1, index + 1);
+    ask(api, question: question, screen: screen, user: user, q: q);
+  }
+}
+
 /// The org's tutor as the console's analyst (spec analytics-v1 §6.7): a
 /// 360 px right-side panel that answers from the server-built fact sheet and
 /// cites every figure back to the view it was measured in.
@@ -71,9 +153,9 @@ class IrisPanel extends StatefulWidget {
   /// server adds that person's own facts to the sheet.
   final String? selectedUser;
 
-  /// Owned by the shell, so one thread follows the user across screens and
-  /// survives closing the panel. The panel appends; nothing else writes it.
-  final List<IrisTurn> thread;
+  /// Owned by the shell, so one conversation follows the user across screens
+  /// and survives closing the panel mid-question.
+  final IrisThread thread;
 
   final VoidCallback onClose;
 
@@ -82,88 +164,52 @@ class IrisPanel extends StatefulWidget {
 }
 
 class _IrisPanelState extends State<IrisPanel> {
-  /// One question in flight per user (the LLM takes 5-15 s): the composer is
-  /// inert until the answer lands.
-  bool _busy = false;
-
   /// Turns whose "see the data used" list is open, by identity — the thread
   /// only ever grows, but identity survives a retry that removes two entries.
   final _open = <IrisTurn>{};
 
   final _scroll = ScrollController();
 
-  /// Guards against a reply landing after the panel moved on.
-  int _request = 0;
+  @override
+  void initState() {
+    super.initState();
+    widget.thread.addListener(_onThread);
+  }
 
   @override
   void dispose() {
+    widget.thread.removeListener(_onThread);
     _scroll.dispose();
     super.dispose();
   }
 
+  void _onThread() {
+    if (mounted) setState(_toBottom);
+  }
+
   String get _name => personaNameOf(widget.persona);
 
-  List<IrisTurn> get _thread => widget.thread;
+  List<IrisTurn> get _thread => widget.thread.turns;
+
+  bool get _busy => widget.thread.busy;
 
   // ------------------------------------------------------------------- ask
 
-  /// The last six live turns as `{role, text}` — the only conversation the
-  /// server ever sees, and it is built before the new question joins it.
-  List<Map<String, String>> _history() {
-    final live = [for (final t in _thread) if (!t.failed) t];
-    return [
-      for (final t in live.skip(live.length <= 6 ? 0 : live.length - 6))
-        {
-          'role': t.reply == null ? 'user' : 'assistant',
-          'text': t.reply?.answer ?? t.text,
-        },
-    ];
-  }
-
-  Future<void> _ask(String question) async {
-    if (_busy) return;
-    final history = _history();
-    final mine = ++_request;
-    setState(() {
-      _thread.add(IrisTurn.you(question));
-      _busy = true;
-    });
-    _toBottom();
-    try {
-      final reply = await widget.api.ask(
+  void _ask(String question) => widget.thread.ask(
+        widget.api,
         question: question,
         screen: widget.screen,
         user: widget.selectedUser,
-        history: history,
         q: widget.filters.query,
       );
-      if (!mounted || mine != _request) return;
-      setState(() {
-        _thread.add(IrisTurn.iris(reply));
-        _busy = false;
-      });
-    } catch (_) {
-      // Every failure is the same failure to a reader: the tutor is not
-      // answering. AdminApi.ask has already folded 503 and `ok:false` into
-      // AskUnavailable, and the console data is untouched either way.
-      if (!mounted || mine != _request) return;
-      setState(() {
-        _thread.add(IrisTurn.down());
-        _busy = false;
-      });
-    }
-    _toBottom();
-  }
 
-  /// Retry drops the failed turn AND the question above it, then asks again —
-  /// so a recovered server leaves one clean exchange, not three entries.
-  void _retry(int index) {
-    if (index == 0) return;
-    final question = _thread[index - 1].text;
-    if (question.isEmpty) return;
-    setState(() => _thread.removeRange(index - 1, index + 1));
-    _ask(question);
-  }
+  void _retry(int index) => widget.thread.retry(
+        widget.api,
+        index,
+        screen: widget.screen,
+        user: widget.selectedUser,
+        q: widget.filters.query,
+      );
 
   void _toBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -185,7 +231,13 @@ class _IrisPanelState extends State<IrisPanel> {
     );
     widget.nav.go(
       c.view,
-      entityId: _some(f['user']) ?? _some(f['team']),
+      // Only the two drill-downs take an entity; putting one on `overview`
+      // would write an id into the URL that no screen there reads.
+      entityId: switch (c.view) {
+        'person' => _some(f['user']),
+        'team' => _some(f['team']),
+        _ => null,
+      },
       // Fact ids are opaque, so `focus` is what a screen can match on; the id
       // is the fallback for a server that predates the key.
       highlight: c.focus.isNotEmpty ? c.focus : c.id,
@@ -289,7 +341,7 @@ class _IrisPanelState extends State<IrisPanel> {
   }
 
   Widget _header(TestuTokens t) => Container(
-        padding: const EdgeInsets.fromLTRB(18, 16, 14, 16),
+        padding: const EdgeInsets.fromLTRB(18, 12, 8, 12),
         decoration: BoxDecoration(
           border: Border(bottom: BorderSide(color: t.line)),
         ),
@@ -303,29 +355,26 @@ class _IrisPanelState extends State<IrisPanel> {
                 children: [
                   Text(
                     _name,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: 'Sora',
                       fontWeight: FontWeight.w600,
                       fontSize: 13,
-                      color: Color(0xFFECEBE7),
+                      color: t.ink,
                     ),
                   ),
                   const SizedBox(height: 2),
-                  Text(_subtitle, style: kNote, maxLines: 2),
+                  // Running copy, so `mut` rather than kNote's `faint`
+                  // (3.7:1 on card). The privacy line below keeps kNote: it
+                  // is one pinned sentence, read once.
+                  Text(_subtitle, style: AdminTokens.footnote, maxLines: 2),
                 ],
               ),
             ),
             const SizedBox(width: 8),
-            TestuPressable(
+            ConsoleIconButton(
+              glyph: '✕',
+              label: L('Close', 'Cerrar'),
               onTap: widget.onClose,
-              child: Padding(
-                padding: const EdgeInsets.all(4),
-                child: Semantics(
-                  button: true,
-                  label: L('Close', 'Cerrar'),
-                  child: Text('✕', style: TextStyle(fontSize: 12, color: t.mut)),
-                ),
-              ),
             ),
           ],
         ),
@@ -488,24 +537,39 @@ List<InlineSpan> _answerSpans(AskReply reply) {
   final number = {
     for (final (i, c) in reply.citations.indexed) c.id: i + 1,
   };
-  final out = <InlineSpan>[];
-  var last = 0;
-  for (final m in RegExp(r' ?\[(f\d+)\]').allMatches(reply.answer)) {
-    if (m.start > last) {
-      out.addAll(mdSpans(reply.answer.substring(last, m.start)));
-    }
+  // Substitute first, parse once. Handing mdSpans one fragment per marker
+  // would cut `**bold**` runs in half and let a fragment starting " * Marta"
+  // be read as a bullet; a sentinel no markdown syntax can contain survives
+  // the parse and is split out of the finished spans instead.
+  const sentinel = '\u0000';
+  final marks = <int>[];
+  final text = reply.answer.replaceAllMapped(RegExp(r' ?\[(f\d+)\]'), (m) {
     final n = number[m[1]];
-    if (n != null) {
-      out.add(TextSpan(
-        text: ' [$n]',
-        style: TextStyle(
-            color: AdminTokens.focus, fontWeight: FontWeight.w600),
-      ));
+    if (n == null) return '';
+    marks.add(n);
+    return sentinel;
+  });
+
+  final out = <InlineSpan>[];
+  var next = 0;
+  for (final span in mdSpans(text)) {
+    final body = span is TextSpan ? (span.text ?? '') : '';
+    if (!body.contains(sentinel)) {
+      out.add(span);
+      continue;
     }
-    last = m.end;
-  }
-  if (last < reply.answer.length) {
-    out.addAll(mdSpans(reply.answer.substring(last)));
+    for (final (i, part) in body.split(sentinel).indexed) {
+      if (i > 0 && next < marks.length) {
+        out.add(TextSpan(
+          text: ' [${marks[next++]}]',
+          style: TextStyle(
+              color: AdminTokens.focus, fontWeight: FontWeight.w600),
+        ));
+      }
+      if (part.isNotEmpty) {
+        out.add(TextSpan(text: part, style: (span as TextSpan).style));
+      }
+    }
   }
   return out;
 }

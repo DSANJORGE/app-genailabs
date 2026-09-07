@@ -55,7 +55,7 @@ class _AdminOverviewState extends State<AdminOverview>
   @override
   Widget build(BuildContext context) => fetched(_page);
 
-  Widget _page(BuildContext context, Overview o, String? highlight) {
+  Widget _page(BuildContext context, Overview o, ConsoleRoute route) {
     // Nobody has answered: the reading says when data appears and the stat
     // row still renders its zeros, so the shape of the screen is learnable
     // before there is anything in it.
@@ -69,7 +69,7 @@ class _AdminOverviewState extends State<AdminOverview>
           sentences: overviewReading(o),
         ),
         const SizedBox(height: 22),
-        Pulse(active: points(highlight, 'stat'), child: _stats(o)),
+        pulse(route, {'stat'}, child: _stats(o)),
         const SizedBox(height: 22),
         if (empty)
           EmptyState(
@@ -84,11 +84,11 @@ class _AdminOverviewState extends State<AdminOverview>
         else ...[
           _activity(context, o),
           const SizedBox(height: 16),
-          Pulse(active: points(highlight, 'topic'), child: _pair(context, o)),
+          pulse(route, {'topic'}, child: _pair(context, o)),
           const SizedBox(height: 16),
-          Pulse(active: points(highlight, 'gap'), child: _gaps(o)),
+          pulse(route, {'gap'}, child: _gaps(o)),
           const SizedBox(height: 16),
-          Pulse(active: points(highlight, 'team'), child: _teams(o)),
+          _teams(o),
         ],
       ],
     );

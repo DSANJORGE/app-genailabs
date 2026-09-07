@@ -314,4 +314,22 @@ void main() {
     expect(find.text('mediana de la organización 48 %'), findsOneWidget);
     expect(find.text('ACTIVOS 7 D'), findsOneWidget);
   });
+
+  // The team aggregate fact opens this page, and what it describes is the
+  // stat row -- so the row answers to `team` as well as `stat`.
+  testWidgets('a team citation pulses the stat row', (tester) async {
+    final (_, _, nav) = await _pump(tester);
+
+    nav.go('team', entityId: 'team-pisco', highlight: 'team');
+    await tester.pump();
+    expect(
+        tester
+            .widget<Pulse>(find
+                .ancestor(
+                    of: find.byType(StatRow), matching: find.byType(Pulse))
+                .first)
+            .active,
+        isTrue);
+  });
+
 }

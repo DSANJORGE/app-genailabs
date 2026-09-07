@@ -288,9 +288,13 @@ void main() {
     );
   });
 
-  bool pulsing(WidgetTester tester, Finder inner) => tester
-      .widget<Pulse>(find.ancestor(of: inner, matching: find.byType(Pulse)).first)
-      .active;
+  bool pulsing(WidgetTester tester, Finder inner) {
+    final pulse = find.ancestor(of: inner, matching: find.byType(Pulse));
+    // The adoption funnel is cohort data, and every cohort fact opens
+    // Resumen -- so nothing here can cite it, and it is left unwrapped.
+    return pulse.evaluate().isNotEmpty &&
+        tester.widget<Pulse>(pulse.first).active;
+  }
 
   testWidgets('an Iris citation pulses the Iris cards and nothing else',
       (tester) async {

@@ -296,4 +296,20 @@ void main() {
     expect(find.text('Competente · Repasar pronto'), findsOneWidget);
     expect(find.text('4 sesiones · 37 min · 3 días activos'), findsOneWidget);
   });
+
+  // 43 of the fact sheet's 98 facts are `view:person` + `focus:inactive`
+  // (the inactive list and the people at risk). What they are about --
+  // "última actividad" -- is in the header, so the header answers to both
+  // that key and the selected person's own `stat`.
+  testWidgets('an inactivity citation pulses the header', (tester) async {
+    final (_, nav) = await _pump(tester, canned: _canned());
+
+    nav.go('person', entityId: 'u1', highlight: 'inactive');
+    await tester.pump();
+    final pulse = tester.widget<Pulse>(
+        find.ancestor(of: find.text('Ana Quispe'), matching: find.byType(Pulse))
+            .first);
+    expect(pulse.active, isTrue);
+  });
+
 }
