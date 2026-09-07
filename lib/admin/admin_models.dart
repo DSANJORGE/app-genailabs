@@ -168,6 +168,10 @@ class MasteryRow {
   String get topicId => '${j['entitytopic'] ?? ''}';
   String get topic => '${j['topic'] ?? j['entitytopic'] ?? ''}';
   String get section => '${j['section'] ?? j['componentsection'] ?? ''}';
+
+  /// Subtopic identity. Section ids are catalog-wide ordinals ("5"), so the
+  /// topic has to be part of the key or two topics would share one column.
+  String get sectionKey => '$topicId/${j['componentsection']}';
   int get questions => (j['questions'] as num?)?.toInt() ?? 0;
   int get answered => (j['answered'] as num?)?.toInt() ?? 0;
   int get mastered => (j['mastered'] as num?)?.toInt() ?? 0;

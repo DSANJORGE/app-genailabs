@@ -159,9 +159,8 @@ List<String> masteryReading(AdminReport r) {
   final sectionName = <String, String>{};
   for (final row in r.rows) {
     topicName[row.topicId] = row.topic;
-    final sectionKey = '${row.topicId}/${row.j['componentsection']}';
-    sectionName[sectionKey] = _section(row);
-    for (final (map, key) in [(byTopic, row.topicId), (bySection, sectionKey)]) {
+    sectionName[row.sectionKey] = _section(row);
+    for (final (map, key) in [(byTopic, row.topicId), (bySection, row.sectionKey)]) {
       final tally = map.putIfAbsent(key, () => {}).putIfAbsent(row.user, () => [0, 0]);
       tally[0] += row.mastered;
       tally[1] += row.answered;
@@ -200,15 +199,7 @@ List<String> masteryReading(AdminReport r) {
     ),
   ];
 
-  String? worstSection;
-  var sectionCount = 0;
-  for (final key in bySection.keys) {
-    final n = beginners(bySection, key);
-    if (n > sectionCount) {
-      sectionCount = n;
-      worstSection = key;
-    }
-  }
+  final worstSection = weakestSubtopic(r.rows);
   if (worstSection != null) {
     out.add(L(
       '\u201C${sectionName[worstSection]}\u201D is the cohort\u2019s weakest subtopic.',
@@ -216,6 +207,40 @@ List<String> masteryReading(AdminReport r) {
     ));
   }
   return out;
+}
+
+/// The subtopic the cohort is weakest at: the one where the most PEOPLE are
+/// at Beginner, returned as [MasteryRow.sectionKey].
+///
+/// Ties break on the lowest `"<topic> <section title>"` — the order the
+/// Dominio grid lays its columns out in — so the sentence this feeds and the
+/// column the summary strip underlines can never name different subtopics.
+String? weakestSubtopic(List<MasteryRow> rows) {
+  final tallies = <String, Map<String, List<int>>>{};
+  final order = <String, String>{};
+  for (final r in rows) {
+    order[r.sectionKey] = '${r.topic} ${r.section}';
+    final t = tallies
+        .putIfAbsent(r.sectionKey, () => {})
+        .putIfAbsent(r.user, () => [0, 0]);
+    t[0] += r.mastered;
+    t[1] += r.answered;
+  }
+  String? worst;
+  var count = 0;
+  final keys = tallies.keys.toList()
+    ..sort((a, b) => order[a]!.compareTo(order[b]!));
+  for (final k in keys) {
+    final n = tallies[k]!
+        .values
+        .where((t) => levelOf(t[0], t[1]) == 'beginner')
+        .length;
+    if (n > count) {
+      count = n;
+      worst = k;
+    }
+  }
+  return worst;
 }
 
 /// Equipo (§6.5): the team's active share, against the organisation median

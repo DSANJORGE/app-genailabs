@@ -39,10 +39,12 @@ String _levelLabel(String? level) => switch (level) {
 /// has no room for the ordinal and the topic header already gives the order.
 String _sectionName(String raw) => raw.replaceFirst(RegExp(r'^\d+\.\s*'), '');
 
-String _date(DateTime? d) => d == null
-    ? '—'
-    : '${d.toLocal().day.toString().padLeft(2, '0')}-'
-        '${d.toLocal().month.toString().padLeft(2, '0')}';
+String _date(DateTime? d) {
+  if (d == null) return '—';
+  final l = d.toLocal();
+  return '${l.year}-${l.month.toString().padLeft(2, '0')}-'
+      '${l.day.toString().padLeft(2, '0')}';
+}
 
 /// Today's report as a CSV — the columns the console has always exported,
 /// plus the four calibration counters report.json started sending with them.
@@ -108,7 +110,7 @@ Map<String, _Person> _people(List<MasteryRow> rows) {
 Map<String, Map<String, _Tally>> _byUserSection(List<MasteryRow> rows) {
   final out = <String, Map<String, _Tally>>{};
   for (final r in rows) {
-    _add(out.putIfAbsent(r.user, () => {}).putIfAbsent(_colKey(r), () => _Tally()), r);
+    _add(out.putIfAbsent(r.user, () => {}).putIfAbsent(r.sectionKey, () => _Tally()), r);
   }
   return out;
 }
@@ -121,10 +123,6 @@ void _add(_Tally t, MasteryRow r) {
   final la = r.lastActivity;
   if (la != null && (t.last == null || la.isAfter(t.last!))) t.last = la;
 }
-
-/// Section ids are catalog-wide ordinals ("5"), so the topic has to be part
-/// of the column identity or two topics would share a column.
-String _colKey(MasteryRow r) => '${r.topicId}/${r.j['componentsection']}';
 
 /// topic id -> display name, preferring the report's topic list and
 /// falling back to whatever name a row itself carries.
@@ -260,6 +258,9 @@ class _AdminMasteryState extends State<AdminMastery> {
   /// say plainly when the wait ran out rather than claiming success.
   Future<void> _recompute() async {
     final before = _stamp(_report);
+    // The poll rides the same request stamp as _fetch: a filter change during
+    // the wait wins, and its answer must not be overwritten by ours.
+    final mine = ++_request;
     setState(() => _recomputing = true);
     try {
       await widget.api.recompute();
@@ -267,9 +268,9 @@ class _AdminMasteryState extends State<AdminMastery> {
         // No timer to cancel: every hop back checks mounted before it touches
         // the tree, which is what dispose during a poll needs.
         await Future<void>.delayed(const Duration(seconds: 5));
-        if (!mounted) return;
+        if (!mounted || mine != _request) return;
         final r = await _fetchReport();
-        if (!mounted) return;
+        if (!mounted || mine != _request) return;
         if (_stamp(r) != before) {
           setState(() {
             _report = r;
@@ -280,7 +281,7 @@ class _AdminMasteryState extends State<AdminMastery> {
           return;
         }
       }
-      if (mounted) {
+      if (mounted && mine == _request) {
         showToast(
           context,
           L('Still recomputing. Reload in a minute.',
@@ -288,7 +289,7 @@ class _AdminMasteryState extends State<AdminMastery> {
         );
       }
     } catch (e) {
-      if (mounted) showToast(context, errText(e), error: true);
+      if (mounted && mine == _request) showToast(context, errText(e), error: true);
     } finally {
       if (mounted) setState(() => _recomputing = false);
     }
@@ -386,11 +387,13 @@ class _AdminMasteryState extends State<AdminMastery> {
   }
 
   /// Row ids carry their kind, so one callback serves people and teams
-  /// without the grid knowing either exists.
-  void _open(String id) => widget.nav.go(
-        id.startsWith('u:') ? 'person' : 'team',
-        entityId: id.substring(2),
-      );
+  /// without the grid knowing either exists. "Sin equipo" is a bucket rather
+  /// than a team, so its group row leads nowhere.
+  void _open(String id) {
+    final entityId = id.substring(2);
+    if (entityId.isEmpty) return;
+    widget.nav.go(id.startsWith('u:') ? 'person' : 'team', entityId: entityId);
+  }
 
   Widget _actions() => Wrap(
         spacing: 10,
@@ -447,7 +450,7 @@ class _Grid {
     final colName = <String, String>{};
     final colOrder = <String, String>{};
     for (final r in data) {
-      final key = _colKey(r);
+      final key = r.sectionKey;
       colTopic[key] = topicNames[r.topicId] ?? r.topic;
       colName[key] = _sectionName(r.section);
       colOrder[key] = '${colTopic[key]} ${r.section}';
@@ -484,15 +487,9 @@ class _Grid {
 
     final everyone = people.keys.toList();
     final summary = [for (final c in colKeys) levelsOf(everyone, c)];
-    // The weakest column is the one the reading names; the strip underlines
-    // it so the sentence and the picture point at the same thing.
-    var worst = 0;
-    for (var i = 0; i < summary.length; i++) {
-      if ((summary[i]['beginner'] ?? 0) > (summary[worst]['beginner'] ?? 0)) {
-        worst = i;
-      }
-    }
-    final anyBeginner = summary.any((m) => (m['beginner'] ?? 0) > 0);
+    // The underlined column is whatever the reading named -- one ranking, so
+    // the sentence and the picture can never point at different subtopics.
+    final worst = colKeys.indexOf(weakestSubtopic(data) ?? '');
 
     HeatCell groupCell(String title, Map<String, int> levels,
             {bool mark = false}) =>
@@ -565,7 +562,7 @@ class _Grid {
             groupCell(
               '${colTopic[colKeys[i]]} · ${colName[colKeys[i]]}',
               summary[i],
-              mark: anyBeginner && i == worst,
+              mark: i == worst,
             ),
         ],
       ),

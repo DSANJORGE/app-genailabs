@@ -219,6 +219,20 @@ void main() {
       ]);
     });
 
+    test('a tie breaks on the column order, not on map insertion order', () {
+      // One Beginner each. "Ciberseguridad 1. Phishing" sorts before
+      // "Derechos Humanos 1. Principios", so the sentence names Phishing --
+      // whatever order the server happened to send the rows in, which is the
+      // order the Dominio grid draws its columns in too.
+      final r = report([
+        row('a', 'Derechos Humanos', '1. Principios', mastered: 1, answered: 5),
+        row('b', 'Ciberseguridad', '1. Phishing', mastered: 1, answered: 5),
+      ]);
+      expect(masteryReading(r).last,
+          '\u201CPhishing\u201D is the cohort\u2019s weakest subtopic.');
+      expect(weakestSubtopic(r.rows), 'ciberseguridad/1. phishing');
+    });
+
     test('nothing answered yet says so instead of naming a winner', () {
       expect(masteryReading(report([])), [
         'Nobody has answered anything yet, so there is no mastery to read.',

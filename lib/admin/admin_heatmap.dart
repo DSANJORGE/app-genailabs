@@ -301,18 +301,24 @@ class _CellState extends State<_Cell> {
                   ),
           );
 
-    // The weakest column carries a `focus` underline inside its own height:
-    // the strip and the reading then point at the same subtopic.
+    // The weakest column carries a `focus` underline, painted OVER the cell
+    // rather than taking height off it -- a Column here shortened the face,
+    // and a group row's 6 px LevelBar rendered half height in the one column
+    // the reader is meant to look at.
     final Widget body = cell != null && cell.highlight
-        ? Column(
-            mainAxisSize: MainAxisSize.min,
+        ? Stack(
             children: [
-              SizedBox(width: _cellW, height: _cellH - 3, child: face),
-              const SizedBox(height: 1),
-              Container(width: _cellW, height: 2, color: AdminTokens.focus),
+              Positioned.fill(child: face),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: 2,
+                child: Container(color: AdminTokens.focus),
+              ),
             ],
           )
-        : SizedBox(width: _cellW, height: _cellH, child: face);
+        : face;
 
     // Hover rides a plain MouseRegion rather than FocusableActionDetector's
     // onShowHoverHighlight: that one is gated on the focus highlight mode, so
@@ -352,7 +358,15 @@ class _CellState extends State<_Cell> {
       decoration: _tipBox(t),
       child: out,
     );
-    return Semantics(label: _semantics(cell), child: out);
+    // excludeSemantics: a group cell wraps a LevelBar, which publishes its own
+    // distribution label -- without this the screen reader says it twice.
+    return Semantics(
+      label: _semantics(cell),
+      button: widget.onTap != null,
+      onTap: widget.onTap,
+      excludeSemantics: true,
+      child: out,
+    );
   }
 
   /// A tint plus a hover count is nothing to a screen reader: every cell says

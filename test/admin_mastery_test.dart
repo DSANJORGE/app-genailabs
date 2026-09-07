@@ -6,6 +6,7 @@ import 'package:genai_labs/admin/admin_api.dart';
 import 'package:genai_labs/admin/admin_mastery.dart';
 import 'package:genai_labs/admin/admin_models.dart';
 import 'package:genai_labs/admin/admin_nav.dart';
+import 'package:genai_labs/admin/admin_theme.dart';
 import 'package:genai_labs/testu/testu_i18n.dart';
 import 'package:genai_labs/testu/testu_theme.dart';
 
@@ -65,7 +66,7 @@ Map<String, Object?> _report(List<Map<String, Object?>> rows) => {
       ],
     };
 
-AdminApi _api(List<Map<String, Object?>> rows) {
+FakeEmeHttp _http(List<Map<String, Object?>> rows) {
   final http = FakeEmeHttp();
   http.canned['services/testu/analytics/report.json'] = _report(rows);
   http.canned['services/testu/personas/teams.json'] = {
@@ -74,14 +75,19 @@ AdminApi _api(List<Map<String, Object?>> rows) {
       {'id': 'mant', 'name': 'Mantenimiento'},
     ],
   };
-  return AdminApi(http: http);
+  http.canned['services/testu/analytics/recompute.json'] = {'ok': true};
+  return http;
 }
 
-final _me = AdminMe('orgadmin', 'admin@minsur.test', 'Admin', 'orgadmin',
-    {'analytics_view'}, const []);
+AdminMe _admin({bool operate = false}) => AdminMe(
+      'orgadmin', 'admin@minsur.test', 'Admin', 'orgadmin',
+      {'analytics_view', if (operate) 'analytics_operate'}, const []);
 
 Future<ConsoleNav> _pump(WidgetTester tester,
-    {List<Map<String, Object?>>? rows, double width = 1400}) async {
+    {List<Map<String, Object?>>? rows,
+    double width = 1400,
+    FakeEmeHttp? http,
+    bool operate = false}) async {
   tester.view.physicalSize = Size(width, 2400);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -96,8 +102,8 @@ Future<ConsoleNav> _pump(WidgetTester tester,
       // to size itself in unbounded height, not assume a viewport.
       body: ListView(children: [
         AdminMastery(
-          api: _api(rows ?? _cohort),
-          me: _me,
+          api: AdminApi(http: http ?? _http(rows ?? _cohort)),
+          me: _admin(operate: operate),
           filters: filters,
           nav: nav,
         ),
@@ -139,6 +145,22 @@ void main() {
     // And the people themselves.
     expect(find.text('Ana Quispe'), findsOneWidget);
     expect(find.text('Luis Huamán'), findsOneWidget);
+
+    // Ana is the only Beginner in both Principios and Debida diligencia: a
+    // real tie, broken on the column order, so the underlined column is the
+    // one masteryReading's sentence names and not whichever came first out
+    // of a map.
+    final underline = find.byWidgetPredicate(
+        (w) => w is Container && w.color == AdminTokens.focus);
+    expect(underline, findsOneWidget);
+    expect(
+      tester.getCenter(underline).dx,
+      moreOrLessEquals(
+          tester
+              .getCenter(find.bySemanticsLabel(RegExp(r'Ana Quispe · Principios')))
+              .dx,
+          epsilon: 0.5),
+    );
 
     // The pinned name column and the scrolling cells are two separate
     // widget subtrees: if their row heights ever drift apart, every name
@@ -199,7 +221,7 @@ void main() {
   testWidgets('the empty state stands in for the grid', (tester) async {
     await _pump(tester, rows: const []);
     expect(find.text('Ana Quispe'), findsNothing);
-    expect(find.textContaining('answered'), findsWidgets);
+    expect(find.text('NO MASTERY YET'), findsOneWidget);
   });
 
   // 1024 px of window minus the 220 px nav and the 24 px gutters is the
@@ -218,6 +240,41 @@ void main() {
     expect(find.text('Por equipo'), findsOneWidget);
     expect(find.text('Orden: equipo'), findsOneWidget);
     expect(find.textContaining('Dominio acumulado'), findsOneWidget);
+  });
+
+  testWidgets('Recalcular polls until computedat moves', (tester) async {
+    final http = _http(_cohort);
+    await _pump(tester, http: http, operate: true);
+    expect(find.textContaining('Recomputing'), findsNothing);
+
+    await tester.tap(find.text('Recompute'));
+    await tester.pump();
+    expect(http.posted.single.path, 'services/testu/analytics/recompute.json');
+    expect(find.textContaining('Recomputing'), findsOneWidget);
+
+    // First poll: the rollup has not landed, so nothing changes.
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Recomputing'), findsOneWidget);
+    expect(find.text('Rosa Nueva'), findsNothing);
+
+    // Second poll: a newer computedat, and the screen swaps to it.
+    http.canned['services/testu/analytics/report.json'] = _report([
+      ..._cohort,
+      {
+        ..._row('rosa', 'Rosa Nueva', 'ops', 't1', 'Derechos Humanos', 's1',
+            '1. Principios'),
+        'computedat': '2026-09-06T00:00:00Z',
+      },
+    ]);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Rosa Nueva'), findsOneWidget);
+    expect(find.textContaining('Recomputing'), findsNothing);
+    expect(find.text('Mastery recomputed.'), findsOneWidget);
+    // Let the toast retire so the test leaves no timer behind.
+    await tester.pump(const Duration(seconds: 5));
   });
 
   group('masteryCsv', () {
