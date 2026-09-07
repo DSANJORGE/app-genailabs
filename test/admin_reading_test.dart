@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genai_labs/admin/admin_models.dart';
 import 'package:genai_labs/admin/admin_reading.dart';
+import 'package:genai_labs/testu/testu_i18n.dart';
 
 /// Overview fixtures go through fromJson rather than the constructor: the
 /// reading rules read the same keys the server sends, so a fixture that
@@ -26,6 +27,19 @@ Map<String, Object?> _topic(String name, {String? weakest, int beginners = 0}) =
       if (weakest != null)
         'weakest': {'section': 's1', 'name': weakest, 'beginners': beginners},
     };
+
+/// One team, used by both team-reading tests.
+class TestuTeamFixture {
+  static TeamStat get pisco => TeamStat.fromJson({
+        'id': 't1',
+        'name': 'Operaciones Pisco',
+        'members': 9,
+        'activated': 8,
+        'active7d': 6,
+        'levels': {'beginner': 2, 'competent': 4, 'expert': 2},
+        'weakest': 'Ciberseguridad',
+      });
+}
 
 void main() {
   group('overviewReading', () {
@@ -113,15 +127,7 @@ void main() {
   });
 
   test('teamReading compares the active share with the organisation median', () {
-    final t = TeamStat.fromJson({
-      'id': 't1',
-      'name': 'Operaciones Pisco',
-      'members': 9,
-      'activated': 8,
-      'active7d': 6,
-      'levels': {'beginner': 2, 'competent': 4, 'expert': 2},
-      'weakest': 'Ciberseguridad',
-    });
+    final t = TestuTeamFixture.pisco;
     final o = Overview.fromJson({
       'cohort': {'total': 24, 'activated': 20, 'active7d': 12},
       'median': {'activeShare': 0.48, 'expertShare': 0.2},
@@ -130,6 +136,18 @@ void main() {
         'Operaciones Pisco: 6 of 9 people active this week, 67%.');
     expect(teamReading(t, o),
         contains('That is above the organisation median of 48%.'));
+  });
+
+  // Spanish is the shipping language and "más débil" is the console's one
+  // word for weakness -- the teams column and the topic rows both use it.
+  test('the Spanish team reading says «más débil», never «más flojo»', () {
+    testuLang.value = 'es';
+    addTearDown(() => testuLang.value = 'en');
+    final t = TestuTeamFixture.pisco;
+    final o = Overview.fromJson({'cohort': {'total': 24, 'activated': 20, 'active7d': 12}});
+    final r = teamReading(t, o);
+    expect(r, contains('El tema más débil es Ciberseguridad.'));
+    expect(r.first, 'Operaciones Pisco: 6 de 9 personas activas esta semana, 67 %.');
   });
 
   test('personReading mirrors the tutor greeting: last worked, then weakest', () {

@@ -170,7 +170,7 @@ List<String> teamReading(TeamStat t, Overview o) {
 
   final weak = t.weakest;
   if (weak != null && weak.isNotEmpty) {
-    out.add(L('The weakest topic is $weak.', 'El tema más flojo es $weak.'));
+    out.add(L('The weakest topic is $weak.', 'El tema más débil es $weak.'));
   }
   return out.take(3).toList();
 }

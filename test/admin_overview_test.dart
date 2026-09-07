@@ -31,6 +31,17 @@ Map<String, dynamic> _canned({int activated = 20, int active7d = 12}) => {
             'questions': 2,
           },
       ],
+      'previousSeries': [
+        for (var i = 0; i < 7; i++)
+          {
+            'day': '2026-08-2${i + 1}',
+            'people': 3 + i,
+            'answers': 60 + i * 10,
+            'minutes': 120 + i * 5,
+            'certainwrong': 1,
+            'questions': 1,
+          },
+      ],
       'levels': {'notstarted': 4, 'beginner': 6, 'competent': 9, 'expert': 5},
       'topics': [
         {
@@ -147,6 +158,26 @@ void main() {
     // Period sums off the series, not off the cumulative blocks.
     expect(find.text('910'), findsOneWidget, reason: 'answers = sum of the series');
     expect(find.text('42'), findsOneWidget, reason: 'iris questions');
+    // 1505 minutes over the 20 people who have ever answered -- NOT over the
+    // 12 active this week, which would inflate it on a 30 or 90 day window.
+    expect(find.text('≈ 75 min per person'), findsOneWidget);
+    // previousSeries arrived, so the chart claims its ghost line.
+    expect(find.text('Previous period'), findsOneWidget);
+    expect(
+      tester.widget<ChartCard>(find.widgetWithText(ChartCard, 'DAILY ACTIVITY')).legend.length,
+      3,
+    );
+  });
+
+  testWidgets('a server without previousSeries claims no ghost line', (tester) async {
+    final canned = _canned()..remove('previousSeries');
+    await _pump(tester, canned: canned);
+
+    expect(find.text('Previous period'), findsNothing);
+    expect(
+      tester.widget<ChartCard>(find.widgetWithText(ChartCard, 'DAILY ACTIVITY')).legend.length,
+      2,
+    );
   });
 
   testWidgets('a team row drills into that team', (tester) async {
@@ -241,11 +272,35 @@ void main() {
     expect(find.text('Sin equipo'), findsOneWidget);
   });
 
-  testWidgets('a citation highlight pulses the stat row', (tester) async {
-    await _pump(tester, canned: _canned(), highlight: 'stats');
-    expect(
-      tester.widgetList<Pulse>(find.byType(Pulse)).any((p) => p.active),
-      isTrue,
-    );
+  // A citation lights the ONE element it quotes. Pulsing the stat row for
+  // every highlight would make the ring mean "something over there", which
+  // is the opposite of a citation.
+  bool pulsing(WidgetTester tester, Finder inner) => tester
+      .widget<Pulse>(
+          find.ancestor(of: inner, matching: find.byType(Pulse)).first)
+      .active;
+
+  testWidgets('a stat citation pulses the stat row and nothing else',
+      (tester) async {
+    await _pump(tester, canned: _canned(), highlight: 'stats.active7d');
+
+    expect(pulsing(tester, find.byType(StatRow)), isTrue);
+    expect(pulsing(tester, find.byType(AdminTable<TeamStat>)), isFalse);
+    expect(pulsing(tester, find.byType(AdminTable<Gap>)), isFalse);
+  });
+
+  testWidgets('a gap citation leaves the stat row alone', (tester) async {
+    await _pump(tester, canned: _canned(), highlight: 'gap.debida-diligencia');
+
+    expect(pulsing(tester, find.byType(StatRow)), isFalse);
+    expect(pulsing(tester, find.byType(AdminTable<Gap>)), isTrue);
+    expect(pulsing(tester, find.byType(AdminTable<TeamStat>)), isFalse);
+  });
+
+  testWidgets('a team citation pulses the teams table', (tester) async {
+    await _pump(tester, canned: _canned(), highlight: 'teams.team-pisco');
+
+    expect(pulsing(tester, find.byType(AdminTable<TeamStat>)), isTrue);
+    expect(pulsing(tester, find.byType(StatRow)), isFalse);
   });
 }

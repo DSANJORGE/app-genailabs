@@ -116,8 +116,10 @@ class _AdminOverviewState extends State<AdminOverview> {
   }
 
   /// True when an Iris citation is pointing at [what]. Citation ids name the
-  /// element they quote ("teams.pisco", "gap.phishing"), so a prefix match is
-  /// what connects one to a panel.
+  /// element they quote ("stats.active7d", "teams.pisco", "gap.phishing"), so
+  /// a substring match is what connects one to a panel.
+  // TODO(task-16): swap the substring match for the citation id vocabulary
+  // the Iris panel actually emits, once Task 16 fixes it.
   bool _points(String? highlight, String what) =>
       highlight != null && highlight.toLowerCase().contains(what);
 
@@ -135,7 +137,7 @@ class _AdminOverviewState extends State<AdminOverview> {
           sentences: overviewReading(o),
         ),
         const SizedBox(height: 22),
-        Pulse(active: highlight != null, child: _stats(o)),
+        Pulse(active: _points(highlight, 'stat'), child: _stats(o)),
         const SizedBox(height: 22),
         if (empty)
           EmptyState(
@@ -182,6 +184,7 @@ class _AdminOverviewState extends State<AdminOverview> {
     final minutes = sum((d) => d.minutes);
     final wrong = sum((d) => d.certainwrong);
     final active = o.cohort.active7d;
+    final started = o.cohort.activated;
     final previous = o.previous;
 
     return StatRow([
@@ -203,10 +206,12 @@ class _AdminOverviewState extends State<AdminOverview> {
         label: L('Minutes in the app', 'Minutos en la app'),
         value: _grouped(minutes),
         // Minutes have no good direction -- more is not better -- so this
-        // one carries the per-person reading instead of a delta.
+        // one carries the per-person reading instead of a delta. The
+        // denominator is everyone who has ever answered, not the 7-day
+        // headcount: on a 30 or 90 day window that would inflate the figure.
         delta: L(
-          '≈ ${active == 0 ? 0 : (minutes / active).round()} min per active person',
-          '≈ ${active == 0 ? 0 : (minutes / active).round()} min por persona activa',
+          '≈ ${started == 0 ? 0 : (minutes / started).round()} min per person',
+          '≈ ${started == 0 ? 0 : (minutes / started).round()} min por persona',
         ),
         spark: spark((d) => d.minutes),
       ),
@@ -243,19 +248,29 @@ class _AdminOverviewState extends State<AdminOverview> {
 
   Widget _activity(BuildContext context, Overview o) {
     final t = TestuTokens.of(context);
+    // A server that predates `previousSeries` sends none: draw no ghost line
+    // and claim none in the legend, rather than a flat zero comparison.
+    final ghost = o.previousSeries.isEmpty ? null : o.previousSeries;
     return ChartCard(
       eyebrow: L('Daily activity', 'Actividad diaria'),
       legend: [
         (AdminTokens.focus, L('Active people', 'Personas activas')),
         (t.mut, L('Answers', 'Respuestas')),
+        if (ghost != null)
+          (AdminTokens.compare, L('Previous period', 'Periodo anterior')),
       ],
-      footnote: L('Active people = at least one answer that day.',
-          'Personas activas = al menos una respuesta ese día.'),
-      // ponytail: no previous-period ghost line. overview.json sends the
-      // previous window as sums, not as a series, so there is nothing to
-      // draw -- the stat-row deltas carry that comparison instead.
+      footnote: ghost == null
+          ? L('Active people = at least one answer that day.',
+              'Personas activas = al menos una respuesta ese día.')
+          : L(
+              'Active people = at least one answer that day. The previous '
+                  'period is the same span immediately before this one.',
+              'Personas activas = al menos una respuesta ese día. El periodo '
+                  'anterior es la misma duración antes del inicio.',
+            ),
       child: activityChart(
         series: o.series,
+        previous: ghost,
         peopleLabel: L('active people', 'personas activas'),
         answersLabel: L('answers', 'respuestas'),
       ),
@@ -342,7 +357,9 @@ class _AdminOverviewState extends State<AdminOverview> {
         footnote: L('The five subtopics with the weakest signal.',
             'Los cinco subtemas con la señal más débil.'),
         child: AdminTable<Gap>(
-          rows: o.gaps,
+          // The footnote says five; the server caps at five, but the screen
+          // is what has to be true.
+          rows: o.gaps.take(5).toList(),
           emptyText: L('No gap stands out yet.',
               'Todavía no destaca ninguna brecha.'),
           onTap: (g) {

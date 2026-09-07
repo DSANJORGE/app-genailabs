@@ -444,6 +444,7 @@ class Overview {
   Overview({
     required this.cohort,
     required this.series,
+    this.previousSeries = const [],
     required this.levels,
     required this.topics,
     required this.calibration,
@@ -455,6 +456,11 @@ class Overview {
   });
   final Cohort cohort;
   final List<DayPoint> series;
+
+  /// The same window immediately before [series], for the activity chart's
+  /// ghost line. Empty on a server that predates it -- the chart then draws
+  /// no comparison rather than a flat zero line.
+  final List<DayPoint> previousSeries;
   final Levels levels;
   final List<TopicStat> topics;
   final Calibration calibration;
@@ -472,6 +478,10 @@ class Overview {
       cohort: Cohort.fromJson(j['cohort'] as Map? ?? {}),
       series: [
         for (final d in (j['series'] as List? ?? [])) DayPoint.fromJson(d as Map),
+      ],
+      previousSeries: [
+        for (final d in (j['previousSeries'] as List? ?? []))
+          DayPoint.fromJson(d as Map),
       ],
       levels: Levels.fromJson(j['levels'] as Map? ?? {}),
       topics: [
