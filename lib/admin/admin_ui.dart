@@ -234,6 +234,7 @@ class AdminScaffold extends StatelessWidget {
     required this.title,
     required this.body,
     this.contextBar,
+    this.titleAction,
     this.endPanel,
     required this.onSignOut,
   });
@@ -247,6 +248,9 @@ class AdminScaffold extends StatelessWidget {
   final String title;
   final Widget body;
   final Widget? contextBar;
+
+  /// Sits at the right of the title row — the Iris toggle, today the only one.
+  final Widget? titleAction;
   final Widget? endPanel;
   final VoidCallback onSignOut;
 
@@ -271,15 +275,20 @@ class AdminScaffold extends StatelessWidget {
                 onSignOut: onSignOut,
               ),
               Expanded(child: _content(context)),
-              if (endPanel != null)
-                Container(
-                  width: 360,
-                  decoration: BoxDecoration(
-                    color: t.card,
-                    border: Border(left: BorderSide(color: t.line)),
-                  ),
-                  child: endPanel,
-                ),
+              // Crossfade rather than a hard cut: the panel is a companion,
+              // and it arrives the way every other state change here does.
+              crossfade(
+                endPanel == null
+                    ? const SizedBox.shrink()
+                    : Container(
+                        width: 360,
+                        decoration: BoxDecoration(
+                          color: t.card,
+                          border: Border(left: BorderSide(color: t.line)),
+                        ),
+                        child: endPanel,
+                      ),
+              ),
             ],
           );
         },
@@ -298,7 +307,19 @@ class AdminScaffold extends StatelessWidget {
               // instead of collapsing to its widest child.
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(title, style: AdminTokens.title),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(title,
+                          style: AdminTokens.title,
+                          overflow: TextOverflow.ellipsis),
+                    ),
+                    if (titleAction != null) ...[
+                      const SizedBox(width: 16),
+                      titleAction!,
+                    ],
+                  ],
+                ),
                 const SizedBox(height: 16),
                 if (contextBar != null) ...[
                   contextBar!,
@@ -543,6 +564,33 @@ class ContextBar extends StatelessWidget {
 
 // --------------------------------------------------------------- components
 
+/// The tutor's face: a 26 px circle, `card2` when the server has no avatar
+/// for the persona. The reading header, the Iris toggle and the panel header
+/// all wear the same one.
+class PersonaAvatar extends StatelessWidget {
+  const PersonaAvatar({super.key, this.url, this.size = 26});
+
+  final String? url;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TestuTokens.of(context);
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: t.card2,
+        shape: BoxShape.circle,
+        border: Border.all(color: t.line),
+        image: url == null
+            ? null
+            : DecorationImage(image: NetworkImage(url!), fit: BoxFit.cover),
+      ),
+    );
+  }
+}
+
 /// The interpretation header every analytics screen opens with: the tutor
 /// says what the numbers mean before the numbers appear.
 class Reading extends StatelessWidget {
@@ -559,23 +607,10 @@ class Reading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = TestuTokens.of(context);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          width: 26,
-          height: 26,
-          decoration: BoxDecoration(
-            color: t.card2,
-            shape: BoxShape.circle,
-            border: Border.all(color: t.line),
-            image: avatarUrl == null
-                ? null
-                : DecorationImage(
-                    image: NetworkImage(avatarUrl!), fit: BoxFit.cover),
-          ),
-        ),
+        PersonaAvatar(url: avatarUrl),
         const SizedBox(width: 12),
         Expanded(
           child: ConstrainedBox(
@@ -1642,6 +1677,95 @@ class ConsolePanelError extends StatelessWidget {
               ),
             ],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// One numbered source under an Iris answer: the number the answer carries in
+/// `focus`, then the fact's label. Tapping it opens the view the fact came
+/// from, which is the whole promise of the panel — no figure without a way
+/// back to where it was measured.
+class CitationChip extends StatelessWidget {
+  const CitationChip({
+    super.key,
+    required this.index,
+    required this.citation,
+    required this.onTap,
+  });
+
+  /// 1-based, matching the `[n]` marker in the answer.
+  final int index;
+  final Citation citation;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TestuTokens.of(context);
+    return _Interactive(
+      onTap: onTap,
+      radius: 999,
+      semanticLabel: '$index · ${citation.label}',
+      builder: (context, hovered) => AnimatedContainer(
+        duration: AdminTokens.dur(context, 200),
+        curve: TestuTokens.curve,
+        padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 9),
+        decoration: BoxDecoration(
+          border:
+              Border.all(color: hovered ? AdminTokens.focus : t.line2),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text.rich(
+          TextSpan(children: [
+            TextSpan(
+              text: '$index',
+              style: TextStyle(
+                  color: AdminTokens.focus, fontWeight: FontWeight.w600),
+            ),
+            TextSpan(text: ' · ${citation.label}'),
+          ]),
+          style: TextStyle(
+            fontFamily: 'Geist',
+            fontSize: 10.5,
+            color: hovered ? t.ink : t.mut,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A quiet tappable chip — Iris's suggestion openers and follow-up
+/// questions. `TestuPill`'s grammar, made interactive the console's way, so
+/// it answers to Enter and shows the same focus ring as everything else here.
+class ConsoleChip extends StatelessWidget {
+  const ConsoleChip(this.label, {super.key, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TestuTokens.of(context);
+    return _Interactive(
+      onTap: onTap,
+      radius: 999,
+      builder: (context, hovered) => AnimatedContainer(
+        duration: AdminTokens.dur(context, 200),
+        curve: TestuTokens.curve,
+        padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 11),
+        decoration: BoxDecoration(
+          border: Border.all(color: hovered ? t.mut : t.line2),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'Geist',
+            fontSize: 11,
+            color: hovered ? t.ink : const Color(0xFFD8D7D3),
+          ),
         ),
       ),
     );

@@ -1,13 +1,20 @@
 import 'package:eme_app_package/testing/fake_eme_http.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genai_labs/admin/admin_api.dart';
+import 'package:genai_labs/admin/admin_iris.dart';
 import 'package:genai_labs/admin/admin_models.dart';
 import 'package:genai_labs/admin/admin_shell.dart';
 import 'package:genai_labs/testu/testu_theme.dart';
+import 'package:genai_labs/testu/testu_widgets.dart';
 
-AdminMe _me(Set<String> perms, {bool personas = true, bool analytics = true}) => AdminMe('m', 'm@x', 'M', 'x', perms,
-    [SuiteModule('personas', 'Personas', ['web'], personas), SuiteModule('analytics', 'Analytics', ['web'], analytics)]);
+AdminMe _me(Set<String> perms,
+        {bool personas = true, bool analytics = true, AdminPersona? persona}) =>
+    AdminMe('m', 'm@x', 'M', 'x', perms, [
+      SuiteModule('personas', 'Personas', ['web'], personas),
+      SuiteModule('analytics', 'Analytics', ['web'], analytics),
+    ], persona: persona);
 
 void main() {
   test('a manager sees the three analytics screens and people, never teams', () {
@@ -64,6 +71,72 @@ void main() {
       expect(find.text(label), findsWidgets, reason: '$label is missing from the nav');
     }
     expect(find.text('Teams'), findsNothing);
+  });
+
+  group('the Iris panel', () {
+    /// A shell with the analytics trio, its label fetches canned, and one
+    /// canned answer waiting behind ask.json.
+    Future<FakeEmeHttp> pump(WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final http = FakeEmeHttp()
+        ..canned['services/testu/analytics/report.json'] =
+            {'rows': [], 'summary': {}, 'topics': []}
+        ..canned['services/testu/personas/teams.json'] = {'teams': []}
+        ..canned['services/testu/analytics/overview.json'] = {'ok': true}
+        ..canned['services/testu/analytics/activity.json'] = {'ok': true}
+        ..canned['services/testu/analytics/ask.json'] = {
+          'ok': true,
+          'answer': 'Doce personas activas.',
+          'citations': const [],
+          'followups': const [],
+        };
+      await tester.pumpWidget(MaterialApp(
+        theme: testuTheme(),
+        home: AdminShell(
+          me: _me({'analytics_view'},
+              persona: AdminPersona('Iris', organization: 'Minsur')),
+          api: AdminApi(http: http),
+          onSignOut: () {},
+        ),
+      ));
+      await tester.pumpAndSettle();
+      return http;
+    }
+
+    testWidgets('opens from the title row and closes on Ctrl-/', (tester) async {
+      await pump(tester);
+      expect(find.byType(IrisPanel), findsNothing);
+
+      await tester.tap(find.widgetWithText(TestuPressable, 'Iris'));
+      await tester.pumpAndSettle();
+      expect(find.byType(IrisPanel), findsOneWidget);
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.slash);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpAndSettle();
+      expect(find.byType(IrisPanel), findsNothing);
+    });
+
+    testWidgets('keeps its thread across a section change', (tester) async {
+      await pump(tester);
+      await tester.tap(find.widgetWithText(TestuPressable, 'Iris'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField), '¿Cuántas activas?');
+      await tester.testTextInput.receiveAction(TextInputAction.send);
+      await tester.pumpAndSettle();
+      expect(find.text('Doce personas activas.', findRichText: true),
+          findsOneWidget);
+
+      await tester.tap(find.text('Activity').first);
+      await tester.pumpAndSettle();
+      expect(find.text('Doce personas activas.', findRichText: true),
+          findsOneWidget,
+          reason: 'the thread lives in the shell, not in the screen');
+    });
   });
 
   testWidgets('the no-access screen can sign out', (tester) async {

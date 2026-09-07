@@ -150,7 +150,7 @@ class _AdminTeamPageState extends State<AdminTeamPage>
         Pulse(active: points(highlight, 'iris'), child: _asked(d)),
         const SizedBox(height: 16),
         Pulse(
-            active: points(highlight, 'member'),
+            active: points(highlight, 'team'),
             child: _roster(members, d.report.rows.isEmpty)),
       ],
     );

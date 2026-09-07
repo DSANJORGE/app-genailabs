@@ -84,7 +84,7 @@ class _AdminActivityState extends State<AdminActivity>
         const SizedBox(height: 22),
         // Adoption reads even at zero -- it is the one card that explains an
         // empty screen, so it never hides behind the empty state.
-        Pulse(active: points(highlight, 'funnel'), child: _adoption(a)),
+        Pulse(active: points(highlight, 'stat'), child: _adoption(a)),
         const SizedBox(height: 16),
         if (answered == 0)
           EmptyState(

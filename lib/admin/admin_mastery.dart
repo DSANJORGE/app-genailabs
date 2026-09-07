@@ -11,6 +11,7 @@ import 'admin_heatmap.dart';
 import 'admin_models.dart';
 import 'admin_nav.dart';
 import 'admin_reading.dart';
+import 'admin_screen.dart' show points;
 import 'admin_theme.dart';
 import 'admin_ui.dart';
 
@@ -305,10 +306,15 @@ class _AdminMasteryState extends State<AdminMastery> {
     }
     final report = _report;
     if (_loading || report == null) return const Skeleton(lines: 6, height: 22);
-    return _page(context, report);
+    // Dominio runs its own fetch machine, so it reads the citation highlight
+    // itself -- only the page body rebuilds on it, never the fetch.
+    return ValueListenableBuilder<ConsoleRoute>(
+      valueListenable: widget.nav,
+      builder: (context, route, _) => _page(context, report, route.highlight),
+    );
   }
 
-  Widget _page(BuildContext context, AdminReport report) {
+  Widget _page(BuildContext context, AdminReport report, String? highlight) {
     final grid = _Grid.of(report, _teamLabel, byTeam: _byTeam, sort: _sort);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -332,40 +338,45 @@ class _AdminMasteryState extends State<AdminMastery> {
             ),
           )
         else
-          ChartCard(
-            eyebrow: L('People × subtopics', 'Personas × subtemas'),
-            height: null,
-            trailing: Segmented<bool>(
-              value: _byTeam,
-              items: [
-                (false, L('By person', 'Por persona')),
-                (true, L('By team', 'Por equipo')),
-              ],
-              onChanged: (v) => setState(() => _byTeam = v),
-            ),
-            footnote: L(
-              'Cell = right answers over the questions answered in that '
-                  'subtopic (last attempt per question); the count is on '
-                  'hover, clicking opens the person. Cumulative mastery, not '
-                  'limited to the selected period.',
-              'Celda = aciertos sobre las preguntas respondidas del subtema '
-                  '(último intento por pregunta); el recuento aparece al pasar '
-                  'el ratón y al hacer clic se abre la persona. Dominio '
-                  'acumulado, no limitado al periodo seleccionado.',
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const LevelLegend(),
-                const SizedBox(height: 14),
-                HeatmapGrid(
-                  cols: grid.cols,
-                  rows: grid.rows,
-                  rowHeader:
-                      _byTeam ? L('Team', 'Equipo') : L('Person', 'Persona'),
-                  onRow: _open,
-                ),
-              ],
+          // A cited subtopic and a cited "weakest subtopic" both mean the
+          // grid: it is the only thing on Dominio that carries either.
+          Pulse(
+            active: points(highlight, 'grid') || points(highlight, 'weakest'),
+            child: ChartCard(
+              eyebrow: L('People × subtopics', 'Personas × subtemas'),
+              height: null,
+              trailing: Segmented<bool>(
+                value: _byTeam,
+                items: [
+                  (false, L('By person', 'Por persona')),
+                  (true, L('By team', 'Por equipo')),
+                ],
+                onChanged: (v) => setState(() => _byTeam = v),
+              ),
+              footnote: L(
+                'Cell = right answers over the questions answered in that '
+                    'subtopic (last attempt per question); the count is on '
+                    'hover, clicking opens the person. Cumulative mastery, not '
+                    'limited to the selected period.',
+                'Celda = aciertos sobre las preguntas respondidas del subtema '
+                    '(último intento por pregunta); el recuento aparece al pasar '
+                    'el ratón y al hacer clic se abre la persona. Dominio '
+                    'acumulado, no limitado al periodo seleccionado.',
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const LevelLegend(),
+                  const SizedBox(height: 14),
+                  HeatmapGrid(
+                    cols: grid.cols,
+                    rows: grid.rows,
+                    rowHeader:
+                        _byTeam ? L('Team', 'Equipo') : L('Person', 'Persona'),
+                    onRow: _open,
+                  ),
+                ],
+              ),
             ),
           ),
       ],

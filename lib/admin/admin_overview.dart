@@ -84,7 +84,7 @@ class _AdminOverviewState extends State<AdminOverview>
         else ...[
           _activity(context, o),
           const SizedBox(height: 16),
-          _pair(context, o),
+          Pulse(active: points(highlight, 'topic'), child: _pair(context, o)),
           const SizedBox(height: 16),
           Pulse(active: points(highlight, 'gap'), child: _gaps(o)),
           const SizedBox(height: 16),

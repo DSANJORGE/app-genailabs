@@ -20,6 +20,18 @@ String loadError(Object e) {
       : L('Could not load ($code).', 'No se pudo cargar ($code).');
 }
 
+/// True when an Iris citation is pointing at [what].
+///
+/// Fact ids are opaque (`f1`..`fN`), so a citation cannot name an element by
+/// id. `ask.groovy` gives every fact a `focus` key from one small vocabulary
+/// instead -- `stat`, `topic`, `weakest`, `grid`, `gap`, `team`, `inactive`,
+/// `iris` -- and each screen wraps exactly those elements in a [Pulse]. The
+/// match is therefore equality, not a substring guess.
+///
+/// A top-level function rather than a mixin method: Dominio runs its own
+/// fetch machine and needs the same vocabulary.
+bool points(String? highlight, String what) => highlight == what;
+
 /// The fetch half of an analytics screen (spec analytics-v1 §6), shared by
 /// Resumen, Actividad, Persona and Equipo.
 ///
@@ -105,14 +117,6 @@ mixin FilteredFetch<T, W extends StatefulWidget> on State<W> {
       });
     }
   }
-
-  /// True when an Iris citation is pointing at [what]. Citation ids name the
-  /// element they quote ("stats.active7d", "teams.pisco", "gap.phishing"), so
-  /// a substring match is what connects one to a panel.
-  // TODO(task-16): swap the substring match for the citation id vocabulary
-  // the Iris panel actually emits, once Task 16 fixes it.
-  bool points(String? highlight, String what) =>
-      highlight != null && highlight.toLowerCase().contains(what);
 
   /// Skeleton, error panel or [page] — the one state machine every analytics
   /// screen renders. The highlight is a per-citation thing, so only the page

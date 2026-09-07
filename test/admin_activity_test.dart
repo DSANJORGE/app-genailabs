@@ -294,7 +294,7 @@ void main() {
 
   testWidgets('an Iris citation pulses the Iris cards and nothing else',
       (tester) async {
-    await _pump(tester, canned: _canned(), highlight: 'iris.themes.concept');
+    await _pump(tester, canned: _canned(), highlight: 'iris');
 
     expect(pulsing(tester, find.byType(Funnel)), isFalse);
     expect(pulsing(tester, find.byType(AdminTable<InactivePerson>)), isFalse);
@@ -302,7 +302,7 @@ void main() {
   });
 
   testWidgets('an inactivity citation pulses the list', (tester) async {
-    await _pump(tester, canned: _canned(), highlight: 'inactive.u-luis');
+    await _pump(tester, canned: _canned(), highlight: 'inactive');
 
     expect(pulsing(tester, find.byType(AdminTable<InactivePerson>)), isTrue);
     expect(pulsing(tester, find.byType(Funnel)), isFalse);

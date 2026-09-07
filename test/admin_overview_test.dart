@@ -282,7 +282,7 @@ void main() {
 
   testWidgets('a stat citation pulses the stat row and nothing else',
       (tester) async {
-    await _pump(tester, canned: _canned(), highlight: 'stats.active7d');
+    await _pump(tester, canned: _canned(), highlight: 'stat');
 
     expect(pulsing(tester, find.byType(StatRow)), isTrue);
     expect(pulsing(tester, find.byType(AdminTable<TeamStat>)), isFalse);
@@ -290,7 +290,7 @@ void main() {
   });
 
   testWidgets('a gap citation leaves the stat row alone', (tester) async {
-    await _pump(tester, canned: _canned(), highlight: 'gap.debida-diligencia');
+    await _pump(tester, canned: _canned(), highlight: 'gap');
 
     expect(pulsing(tester, find.byType(StatRow)), isFalse);
     expect(pulsing(tester, find.byType(AdminTable<Gap>)), isTrue);
@@ -298,7 +298,7 @@ void main() {
   });
 
   testWidgets('a team citation pulses the teams table', (tester) async {
-    await _pump(tester, canned: _canned(), highlight: 'teams.team-pisco');
+    await _pump(tester, canned: _canned(), highlight: 'team');
 
     expect(pulsing(tester, find.byType(AdminTable<TeamStat>)), isTrue);
     expect(pulsing(tester, find.byType(StatRow)), isFalse);

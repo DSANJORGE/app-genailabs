@@ -1,18 +1,23 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show SystemNavigator;
+import 'package:flutter/services.dart'
+    show LogicalKeyboardKey, SystemNavigator;
 
 import '../testu/testu_i18n.dart';
 import '../testu/testu_theme.dart';
+import '../testu/testu_widgets.dart';
 import 'admin_activity.dart';
 import 'admin_api.dart';
+import 'admin_iris.dart';
 import 'admin_mastery.dart';
 import 'admin_models.dart';
 import 'admin_nav.dart';
 import 'admin_overview.dart';
 import 'admin_people.dart';
 import 'admin_person.dart';
+import 'admin_reading.dart';
 import 'admin_team.dart';
+import 'admin_theme.dart';
 import 'admin_teams.dart';
 import 'admin_ui.dart';
 
@@ -81,10 +86,16 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
   Map<String, String> _topics = const {};
   List<AdminTeam> _teams = const [];
 
-  /// The Iris panel toggle. Task 16 puts the panel behind it; keeping the
-  /// state here is what will let one thread follow the user across screens.
-  // ignore: prefer_final_fields -- Task 16 flips this from the top bar.
+  /// The Iris panel toggle, and the thread behind it. Both live here so one
+  /// conversation follows the user across screens and survives closing the
+  /// panel: the panel state is session-scoped (spec §6.7), and a new sign-in
+  /// builds a new shell, which is what starts it clean.
   bool _iris = false;
+  final _thread = <IrisTurn>[];
+
+  /// Where Iris has anything to say: the analytics screens and their two
+  /// drill-downs. The roster screens are administration, not analysis.
+  static const _withIris = {'overview', 'activity', 'mastery', 'person', 'team'};
 
   /// True while a browser back/forward is being applied, so the resulting
   /// route change does not push the entry we are already standing on.
@@ -268,28 +279,84 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
     }
     return Scaffold(
       backgroundColor: t.bg,
-      body: ValueListenableBuilder<ConsoleRoute>(
-        valueListenable: _nav,
-        builder: (context, route, _) {
-          // A route the user may not open (a stale link, a revoked
-          // permission) shows their first section rather than an error.
-          final r = _canOpen(route) ? route : ConsoleRoute(_sections.first.id);
-          return AdminScaffold(
-            org: widget.me.organization,
-            me: widget.me,
-            sections: [for (final s in _sections) (s.id, s.label)],
-            nav: _nav,
-            title: _label(r.section),
-            contextBar: _withContextBar.contains(r.section)
-                ? ContextBar(filters: _filters, topics: _topics, teams: _teams)
-                : null,
-            // Task 16 swaps the placeholder for IrisPanel(...); nothing
-            // flips the toggle yet, so the console has no end panel today.
-            endPanel: _iris ? const SizedBox.shrink() : null,
-            onSignOut: widget.onSignOut,
-            body: _page(r),
-          );
+      // Cmd-/ on a Mac, Ctrl-/ everywhere else: the panel is a companion to
+      // whatever is on screen, so it opens without leaving the keyboard.
+      body: CallbackShortcuts(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.slash, meta: true):
+              _toggleIris,
+          const SingleActivator(LogicalKeyboardKey.slash, control: true):
+              _toggleIris,
         },
+        child: Focus(
+          autofocus: true,
+          child: ValueListenableBuilder<ConsoleRoute>(
+            valueListenable: _nav,
+            builder: (context, route, _) {
+              // A route the user may not open (a stale link, a revoked
+              // permission) shows their first section rather than an error.
+              final r = _canOpen(route) ? route : ConsoleRoute(_sections.first.id);
+              return AdminScaffold(
+                org: widget.me.organization,
+                me: widget.me,
+                sections: [for (final s in _sections) (s.id, s.label)],
+                nav: _nav,
+                title: _label(r.section),
+                contextBar: _withContextBar.contains(r.section)
+                    ? ContextBar(filters: _filters, topics: _topics, teams: _teams)
+                    : null,
+                titleAction:
+                    _withIris.contains(r.section) ? _irisToggle(t) : null,
+                endPanel: _iris && _withIris.contains(r.section)
+                    ? IrisPanel(
+                        api: widget.api,
+                        nav: _nav,
+                        filters: _filters,
+                        persona: widget.me.persona,
+                        screen: r.section,
+                        selectedUser: r.section == 'person' ? r.entityId : null,
+                        thread: _thread,
+                        onClose: () => setState(() => _iris = false),
+                      )
+                    : null,
+                onSignOut: widget.onSignOut,
+                body: _page(r),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _toggleIris() => setState(() => _iris = !_iris);
+
+  /// The persona's own face, at the right of the title row: the tutor is
+  /// present on every screen (law 4), and this is where she is on a laptop.
+  Widget _irisToggle(TestuTokens t) {
+    final name = personaName(widget.me);
+    final avatar = widget.me.persona?.avatar;
+    return TestuPressable(
+      onTap: _toggleIris,
+      child: Semantics(
+        button: true,
+        toggled: _iris,
+        label: L('Ask $name', 'Pregunta a $name'),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(6, 5, 12, 5),
+          decoration: BoxDecoration(
+            border: Border.all(color: _iris ? AdminTokens.focus : t.line2),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              PersonaAvatar(url: avatar),
+              const SizedBox(width: 8),
+              Text(name, style: kLabel),
+            ],
+          ),
+        ),
       ),
     );
   }

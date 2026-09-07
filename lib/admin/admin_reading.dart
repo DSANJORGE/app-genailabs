@@ -31,8 +31,12 @@ String sectionName(String raw) => raw.replaceFirst(RegExp(r'^\d+\.\s*'), '');
 
 /// The tutor's name, or the product's default. Every analytics screen signs
 /// its reading with it and names it in its Iris copy.
-String personaName(AdminMe me) {
-  final name = me.persona?.name ?? '';
+String personaName(AdminMe me) => personaNameOf(me.persona);
+
+/// The same fallback for a caller that was handed the persona alone (the
+/// Iris panel), so the console never invents a second default name.
+String personaNameOf(AdminPersona? persona) {
+  final name = persona?.name ?? '';
   return name.isEmpty ? 'Iris' : name;
 }
 

@@ -694,9 +694,15 @@ class PersonReport {
 /// String here: numbers/strings pass through as-is, maps/lists are
 /// compact-JSON-encoded (the server may send any of the four).
 class Citation {
-  Citation(this.id, this.label, this.value, this.view, this.filters);
+  Citation(this.id, this.label, this.value, this.view, this.filters,
+      {this.focus = ''});
   final String id, label, value, view;
   final Map<String, String> filters;
+
+  /// The element the cited view should pulse — `stat`, `topic`, `weakest`,
+  /// `grid`, `gap`, `team`, `inactive` or `iris` (ask.groovy's `focus`).
+  /// Empty on a server that predates the key; the panel falls back to [id].
+  final String focus;
 
   factory Citation.fromJson(Map j) {
     final v = j['value'];
@@ -715,6 +721,7 @@ class Citation {
         for (final e in ((j['filters'] as Map?) ?? {}).entries)
           '${e.key}': '${e.value}',
       },
+      focus: '${j['focus'] ?? ''}',
     );
   }
 }

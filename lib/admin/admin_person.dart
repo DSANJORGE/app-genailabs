@@ -102,7 +102,7 @@ class _AdminPersonState extends State<AdminPerson>
     return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _header(d),
+          Pulse(active: points(highlight, 'stat'), child: _header(d)),
           const SizedBox(height: 20),
           Reading(
             personaName: _tutor,
@@ -114,9 +114,9 @@ class _AdminPersonState extends State<AdminPerson>
           const SizedBox(height: 16),
           _week(p),
           const SizedBox(height: 16),
-          _usage(p),
+          Pulse(active: points(highlight, 'iris'), child: _usage(p)),
           const SizedBox(height: 16),
-          Pulse(active: points(highlight, 'subtopic'), child: _table(p)),
+          Pulse(active: points(highlight, 'grid'), child: _table(p)),
         ],
       );
   }
