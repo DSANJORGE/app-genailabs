@@ -234,7 +234,7 @@ class _TestuTodayScreenState extends State<TestuTodayScreen> {
       return SafeArea(
         bottom: false,
         child: ListView(
-          padding: const EdgeInsets.only(bottom: 110),
+          padding: EdgeInsets.only(bottom: testuBottomPad(context)),
           children: [
             const _TodayHeader(),
             const SizedBox(height: 12),
@@ -257,7 +257,8 @@ class _TestuTodayScreenState extends State<TestuTodayScreen> {
             child: Stack(
               children: [
                 ListView(
-                  padding: const EdgeInsets.fromLTRB(18, 12, 18, 110),
+                  padding:
+                      EdgeInsets.fromLTRB(18, 12, 18, testuBottomPad(context)),
                   children: _cards,
                 ),
                 // Cards fade out as they slide under the pinned header.
@@ -294,7 +295,7 @@ class _TodayHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = TestuTokens.of(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 14, 18, 6),
+      padding: EdgeInsets.fromLTRB(18, testuTopPad(context), 18, 6),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

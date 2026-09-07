@@ -65,7 +65,8 @@ class _TestuDashboardScreenState extends State<TestuDashboardScreen> {
     return SafeArea(
       bottom: false,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(18, 14, 18, 110),
+        padding: EdgeInsets.fromLTRB(
+            18, testuTopPad(context), 18, testuBottomPad(context)),
         children: [
           Text(L('Your readiness', 'Tu preparación'), style: kH1),
           const SizedBox(height: 12),

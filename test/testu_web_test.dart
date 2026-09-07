@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:genai_labs/testu/testu_notifications.dart';
 import 'package:genai_labs/testu/testu_pdf.dart';
 import 'package:genai_labs/testu/testu_resources.dart';
 import 'package:genai_labs/testu/testu_schedule_sheet.dart';
@@ -132,6 +133,38 @@ void main() {
       expect(find.byType(TestuRail), findsNothing);
       expect(find.byType(TestuNav), findsOneWidget);
       expect(tester.getSize(find.byType(TestuShell)).width, 390);
+    });
+
+    testWidgets("desktop window: the frame's screen padding, not the phone's",
+        (tester) async {
+      await pumpShell(tester, desktop);
+      TestuShell.tabRequest.value = 3;
+      await tester.pump();
+      // Title lines up with the rail's logo; no bottom-nav reserve.
+      expect(tester.getTopLeft(find.text('Your readiness')).dy, 26);
+      final list = tester.widget<ListView>(find.ancestor(
+          of: find.text('Your readiness'), matching: find.byType(ListView)));
+      expect((list.padding! as EdgeInsets).bottom, 32);
+      // The tutor thread sinks to the composer instead of hanging under the
+      // header: its last line ends where the ask bar's room begins.
+      TestuShell.tabRequest.value = 2;
+      await tester.pump(const Duration(seconds: 2));
+      expect(tester.getBottomLeft(find.textContaining('Private to you')).dy,
+          800 - 100);
+    });
+
+    testWidgets('phone window: screen padding untouched', (tester) async {
+      await pumpShell(tester, phone);
+      // Today, not Dashboard: in the test font the prototype Dashboard
+      // overflows a 390 column, which fails the test when it is painted.
+      expect(tester.getTopLeft(find.byType(TestuBell)).dy, 14);
+      final list = tester.widget<ListView>(find.descendant(
+          of: find.byType(TestuTodayScreen), matching: find.byType(ListView)));
+      expect((list.padding! as EdgeInsets).bottom, 110);
+      TestuShell.tabRequest.value = 2;
+      await tester.pump();
+      expect(tester.getBottomLeft(find.textContaining('Private to you')).dy,
+          lessThan(844 - 130));
     });
 
     testWidgets('a rail tap reports the tab; the shell publishes its tab',

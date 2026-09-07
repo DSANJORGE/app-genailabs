@@ -277,7 +277,7 @@ Widget _topicsBody(BuildContext context, List<_Topic> topics,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(18, 14, 18, 8),
+            padding: EdgeInsets.fromLTRB(18, testuTopPad(context), 18, 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -296,7 +296,8 @@ Widget _topicsBody(BuildContext context, List<_Topic> topics,
           ),
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.only(top: 10, bottom: 110),
+              padding:
+                  EdgeInsets.only(top: 10, bottom: testuBottomPad(context)),
               children: [
                 // Live rows on their way: the list's shape, not a blank.
                 if (loading)

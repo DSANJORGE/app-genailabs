@@ -32,6 +32,13 @@ bool testuDesktop = kIsWeb;
 bool testuWide(BuildContext context) =>
     testuDesktop && MediaQuery.sizeOf(context).width >= kTestuWide;
 
+/// Screen padding. The phone trusts the status bar for top air (14 below
+/// it) and reserves the translucent bottom nav under the scrolling content
+/// (110); the desktop frame has neither, so the title lines up with the
+/// rail's logo (26) and the list ends a normal margin above the window edge.
+double testuTopPad(BuildContext context) => testuWide(context) ? 26 : 14;
+double testuBottomPad(BuildContext context) => testuWide(context) ? 32 : 110;
+
 /// Press feedback per spec: opacity .75 + scale .985 + selectionClick haptic.
 class TestuPressable extends StatefulWidget {
   const TestuPressable({super.key, required this.child, this.onTap});
