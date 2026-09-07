@@ -1,7 +1,7 @@
 name: genai_labs
 description: "A new Flutter project."
 publish_to: "none"
-version: 1.0.3+4
+version: 1.1.0+5
 
 environment:
   sdk: ^3.12.2
@@ -18,11 +18,13 @@ dependencies:
     path: ../eme_app_package/packages/openinsitute_core
   flutter_riverpod: ^2.6.1
   http: ^1.2.0
+  dio: ^5.11.0
   image_picker: ^1.2.3
   path_provider: ^2.1.0
   shared_preferences: ^2.5.5
   video_player: ^2.14.0
   local_auth: ^3.0.2
+  web: ^1.1.1
 
 dev_dependencies:
   flutter_test:

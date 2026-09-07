@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "330649053865",
-    "project_id": "genai-labs-testu",
-    "storage_bucket": "genai-labs-testu.firebasestorage.app"
+    "project_number": "207657765804",
+    "project_id": "testu-learn",
+    "storage_bucket": "testu-learn.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:330649053865:android:94bbaee221d5d6ab2017b8",
+        "mobilesdk_app_id": "1:207657765804:android:aae12986f0d08c8efbc809",
         "android_client_info": {
           "package_name": "world.eme.genailabs"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyB2eMIA-xk_uBSsfDEavkMBRsgLDOsLkXk"
+          "current_key": "AIzaSyDnNWERmfHTryjsjFLvmCutlfcNlgVD8WU"
         }
       ],
       "services": {
