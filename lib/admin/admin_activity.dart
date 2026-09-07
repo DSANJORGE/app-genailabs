@@ -261,12 +261,12 @@ class _AdminActivityState extends State<AdminActivity>
         (_themePalette[i], _themeLabel(_themeKeys[i]), counts[i]),
     ];
     final labels = a.iris.labels;
-    // Nobody has asked anything: a bar with no segments and a legend with no
-    // entries is a card that says nothing at all. Guarded on the question
-    // count, not on the theme totals -- a period WITH questions whose themes
-    // the classifier has not written yet is a different state, and it keeps
-    // its bar (everything lands in "Otro").
-    if (a.iris.questions == 0) {
+    // A bar with no segments and a legend with no entries is a card that says
+    // nothing at all. Both ways in: no questions in the period, and questions
+    // the server sent no theme split for at all. (Questions the CLASSIFIER has
+    // not reached are not this case -- `unclassified` folds into "Otro", so
+    // the segments are non-zero and the bar stays.)
+    if (a.iris.questions == 0 || segments.every((s) => s.$3 == 0)) {
       return ChartCard(
         eyebrow: L('Question themes', 'Temas de las preguntas'),
         height: null,

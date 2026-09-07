@@ -554,4 +554,55 @@ void main() {
         reason: 'the ring belongs to keyboard focus, not to the mouse');
   });
 
+
+  // The tooltip appears exactly when the label stops fitting, and "exactly"
+  // is one constant: _selectChrome, the padding + gap + caret a Select spends
+  // on everything that is not its label. Sized at the boundary, so a drift in
+  // any of the three flips one of these two.
+  testWidgets('the Select tooltip turns on where the label stops fitting',
+      (tester) async {
+    const label = 'Operaciones Pisco';
+
+    // Measured the way the control measures it: the resolved style, inside
+    // the same theme. A bare TextSpan misses what DefaultTextStyle adds.
+    late double labelW;
+    await tester.pumpWidget(_app(Builder(builder: (context) {
+      final painter = TextPainter(
+        text: TextSpan(
+          text: label,
+          style: DefaultTextStyle.of(context).style.merge(
+              const TextStyle(fontFamily: 'Geist', fontSize: 11.5)),
+        ),
+        textDirection: TextDirection.ltr,
+        textScaler: MediaQuery.textScalerOf(context),
+      )..layout();
+      labelW = painter.width;
+      painter.dispose();
+      return const SizedBox.shrink();
+    })));
+
+    Future<void> pumpAt(double width) async {
+      await tester.pumpWidget(_app(Align(
+        alignment: Alignment.topLeft,
+        child: SizedBox(
+          width: width,
+          child: Select<String>(
+            value: 'a',
+            items: const [('a', label)],
+            onChanged: (_) {},
+          ),
+        ),
+      )));
+      await tester.pumpAndSettle();
+    }
+
+    // 46 px of chrome plus the label, and two pixels of room: it fits.
+    await pumpAt(labelW + 48);
+    expect(find.byTooltip(label), findsNothing);
+
+    // Two pixels short of it: it does not.
+    await pumpAt(labelW + 44);
+    expect(find.byTooltip(label), findsOneWidget);
+  });
+
 }

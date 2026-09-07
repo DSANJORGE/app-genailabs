@@ -118,10 +118,26 @@ class HScroll extends StatefulWidget {
 class _HScrollState extends State<HScroll> {
   final _controller = ScrollController();
 
+  /// Whether there is anything to scroll. The gutter the thumb sits in is
+  /// reserved only then -- the heatmap grid usually fits its card, and 10 px
+  /// of empty space under it is a hole nobody asked for.
+  bool _scrolls = false;
+
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  bool _onMetrics(ScrollMetricsNotification n) {
+    final scrolls = n.metrics.maxScrollExtent > 0;
+    if (scrolls != _scrolls) {
+      // The notification arrives during layout; the rebuild waits for it.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _scrolls = scrolls);
+      });
+    }
+    return false;
   }
 
   @override
@@ -142,13 +158,16 @@ class _HScrollState extends State<HScroll> {
       child: Scrollbar(
         controller: _controller,
         thumbVisibility: true,
-        child: Padding(
-          // Room for the thumb, so it never sits on the last row's hairline.
-          padding: const EdgeInsets.only(bottom: 10),
-          child: SingleChildScrollView(
-            controller: _controller,
-            scrollDirection: Axis.horizontal,
-            child: widget.child,
+        child: NotificationListener<ScrollMetricsNotification>(
+          onNotification: _onMetrics,
+          child: Padding(
+            // Room for the thumb, so it never sits on the last row's hairline.
+            padding: EdgeInsets.only(bottom: _scrolls ? 10 : 0),
+            child: SingleChildScrollView(
+              controller: _controller,
+              scrollDirection: Axis.horizontal,
+              child: widget.child,
+            ),
           ),
         ),
       ),
@@ -368,10 +387,14 @@ class AdminScaffold extends StatelessWidget {
                   width: _panelW,
                   decoration: BoxDecoration(
                     color: t.card,
-                    border: Border(left: BorderSide(color: t.line)),
-                    // The one shadow in the console, and only when the panel
-                    // is over the content rather than beside it: without it a
-                    // floating panel reads as a clipped column.
+                    // A floating panel needs an edge that reads: one step up
+                    // the line vocabulary (`line2` over the usual `line`),
+                    // plus the console's only shadow. The shadow alone is not
+                    // enough -- black on near-black is nothing, and
+                    // flutter_test drops shadows entirely, so the goldens
+                    // would show a column that looks clipped.
+                    border: Border(
+                        left: BorderSide(color: float ? t.line2 : t.line)),
                     boxShadow: float
                         ? [
                             BoxShadow(
@@ -382,7 +405,18 @@ class AdminScaffold extends StatelessWidget {
                           ]
                         : null,
                   ),
-                  child: endPanel,
+                  child: float
+                      // The inner hairline: two lines a pixel apart is what
+                      // separates "in front of" from "next to" on a surface
+                      // with no depth of its own.
+                      ? DecoratedBox(
+                          decoration: BoxDecoration(
+                            border:
+                                Border(left: BorderSide(color: t.line)),
+                          ),
+                          child: endPanel,
+                        )
+                      : endPanel,
                 );
           return Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -999,40 +1033,41 @@ class LevelBar extends StatelessWidget {
       for (final k in _order)
         if ((levels[k] ?? 0) > 0) k,
     ];
-    final reading = [
-      for (final k in present) '${_levelLabel(k)} ${levels[k]}',
-    ].join(', ');
+    // An empty bar still says something: "Sin datos", to both readers.
+    final reading = present.isEmpty
+        ? _levelLabel(null)
+        : [for (final k in present) '${_levelLabel(k)} ${levels[k]}'].join(', ');
     return Semantics(
       label: reading,
       child: Tooltip(
         // The same sentence the screen reader gets: four colours in a 6 px bar
         // are not a reading for anybody, sighted or not.
-        message: reading.isEmpty ? _levelLabel(null) : reading,
+        message: reading,
         waitDuration: Duration.zero,
         textStyle: AdminTokens.mono(11),
         decoration: AdminTokens.tip,
         child: ClipRRect(
-        borderRadius: BorderRadius.circular(height / 2),
-        child: SizedBox(
-          height: height,
-          child: present.isEmpty
-              ? const ColoredBox(color: AdminTokens.levelNone)
-              : Row(
-                  // stretch, not the default centre: a ColoredBox with no
-                  // child takes the SMALLEST size its constraints allow, so a
-                  // loose cross axis paints every segment 0 px high -- the bar
-                  // lays out at its full width and shows nothing at all.
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (final k in present)
-                      Expanded(
-                        key: ValueKey('level.$k'),
-                        flex: levels[k]!,
-                        child: ColoredBox(color: AdminTokens.level(k)),
-                      ),
-                  ],
-                ),
-        ),
+          borderRadius: BorderRadius.circular(height / 2),
+          child: SizedBox(
+            height: height,
+            child: present.isEmpty
+                ? const ColoredBox(color: AdminTokens.levelNone)
+                : Row(
+                    // stretch, not the default centre: a ColoredBox with no
+                    // child takes the SMALLEST size its constraints allow, so
+                    // a loose cross axis paints every segment 0 px high -- the
+                    // bar lays out at its full width and shows nothing at all.
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (final k in present)
+                        Expanded(
+                          key: ValueKey('level.$k'),
+                          flex: levels[k]!,
+                          child: ColoredBox(color: AdminTokens.level(k)),
+                        ),
+                    ],
+                  ),
+          ),
         ),
       ),
     );
@@ -1721,15 +1756,20 @@ class Select<T> extends StatelessWidget {
               style: style,
             );
             // "Operacione…" with the rest of the name nowhere on screen is
-            // what a fixed table cell does to a Spanish team name. Measure it,
-            // and hand the whole label to a tooltip when it does not fit.
+            // what a fixed table cell does to a Spanish team name. Measure it
+            // the way the framework will paint it -- resolved style, the
+            // reader's own text scale -- and hand the whole label to a tooltip
+            // when it does not fit.
+            final painter = TextPainter(
+              text: TextSpan(
+                  text: label,
+                  style: DefaultTextStyle.of(context).style.merge(style)),
+              textDirection: TextDirection.ltr,
+              textScaler: MediaQuery.textScalerOf(context),
+            )..layout();
             final clipped = box.maxWidth.isFinite &&
-                (TextPainter(
-                          text: TextSpan(text: label, style: style),
-                          textDirection: TextDirection.ltr,
-                        )..layout())
-                        .width >
-                    box.maxWidth - _selectChrome;
+                painter.width > box.maxWidth - _selectChrome;
+            painter.dispose();
             return Container(
               padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
               decoration: BoxDecoration(

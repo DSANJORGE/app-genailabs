@@ -341,4 +341,49 @@ void main() {
     expect(ringing(tester, find.byType(StatRow)), isTrue,
         reason: 'the same highlight twice is still two citations');
   });
+
+  // "1 conceptos erróneos" is the kind of thing a training lead screenshots.
+  testWidgets('the gap sentence counts in singular and in plural',
+      (tester) async {
+    final canned = _canned();
+    // Replace the list rather than an element of it: the literal in _canned
+    // is a List<Map<String, Object>> and will not take a dynamic map.
+    canned['gaps'] = [
+      {
+        ...(canned['gaps'] as List).first as Map,
+        'questions': 1,
+        'misconceptions': 1,
+      },
+    ];
+    await _pump(tester, canned: canned);
+    expect(find.text('6 at Beginner, 1 question to Iris, 1 misconception'),
+        findsOneWidget);
+
+    testuLang.value = 'es';
+    addTearDown(() => testuLang.value = 'en');
+    await _pump(tester, canned: canned);
+    expect(
+      find.text('6 en Principiante, 1 pregunta a Iris, 1 concepto erróneo'),
+      findsOneWidget,
+    );
+
+  });
+
+  // The plural side of the same sentence, in its own test: re-pumping the
+  // screen reuses its State (and therefore its already-fetched data), so one
+  // test cannot show two different replies.
+  testWidgets('and in plural, with the numbers the server sent',
+      (tester) async {
+    testuLang.value = 'es';
+    addTearDown(() => testuLang.value = 'en');
+
+    await _pump(tester, canned: _canned());
+
+    expect(
+      find.text('6 en Principiante, 14 preguntas a Iris, 3 conceptos erróneos'),
+      findsOneWidget,
+    );
+  });
+
 }
+

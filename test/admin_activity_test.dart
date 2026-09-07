@@ -343,9 +343,24 @@ void main() {
         findsOneWidget);
   });
 
+  // The other way into the same empty card: the period HAS questions, and the
+  // server sent no theme split for them at all. A bar of zeros under a heading
+  // is what this guard exists to prevent.
+  testWidgets('questions with no theme split at all still read as empty',
+      (tester) async {
+    final canned = _canned();
+    (canned['iris'] as Map)['themes'] = [];
+    (canned['iris'] as Map)['labels'] = [];
+    await _pump(tester, canned: canned);
+
+    expect((canned['iris'] as Map)['questions'], 42, reason: 'not the zero case');
+    expect(find.byType(StackedBar), findsNothing);
+    expect(find.text('NO QUESTIONS YET'), findsOneWidget);
+  });
+
   // Questions with no theme split yet (the classifier runs on its own clock)
-  // is not the same state as no questions: the bar stays, everything in it
-  // lands in "Other".
+  // is not the same state as no themes at all: `unclassified` folds into
+  // "Other", so the segments are non-zero and the bar stays.
   testWidgets('questions the classifier has not reached keep their bar',
       (tester) async {
     final canned = _canned();
