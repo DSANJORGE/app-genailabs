@@ -25,6 +25,25 @@ void main() {
     expect(sectionsFor(_me({})), isEmpty);
   });
 
+  group('routeFromUri', () {
+    // Flutter web's default strategy puts our route in the fragment; a
+    // console served under usePathUrlStrategy() puts it in the path.
+    test('reads a hash URL', () {
+      final r = routeFromUri(Uri.parse('http://x/admin/#/person?id=u42'))!;
+      expect(r.section, 'person');
+      expect(r.entityId, 'u42');
+    });
+    test('reads a path URL', () {
+      final r = routeFromUri(Uri.parse('http://x/activity'))!;
+      expect(r.section, 'activity');
+      expect(r.entityId, isNull);
+    });
+    test('an addressless load has no route', () {
+      expect(routeFromUri(Uri.parse('http://x/')), isNull);
+      expect(routeFromUri(Uri.parse('http://x/admin/#/')), isNull);
+    });
+  });
+
   testWidgets('the nav lists exactly what the manager may open', (tester) async {
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;

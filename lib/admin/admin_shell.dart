@@ -39,6 +39,21 @@ List<AdminSection> sectionsFor(AdminMe me) {
   ];
 }
 
+/// The route a console URL points at, or null when it names none.
+///
+/// Flutter web's default strategy keeps the route in the fragment
+/// (`/admin/#/person?id=u42`); a console served with `usePathUrlStrategy()`
+/// keeps it in the path. Read whichever one carries it, so a reload or a
+/// pasted link lands where it says. Permission is not this function's
+/// business -- [_AdminShellState._canOpen] decides that.
+ConsoleRoute? routeFromUri(Uri uri) {
+  final inner = uri.hasFragment ? Uri.tryParse(uri.fragment) : null;
+  final u = inner ?? uri;
+  final segments = u.pathSegments.where((s) => s.isNotEmpty);
+  if (segments.isEmpty) return null;
+  return ConsoleRoute(segments.last, entityId: u.queryParameters['id']);
+}
+
 /// The console frame. It owns the three pieces every screen shares -- one
 /// [ConsoleNav], one [AnalyticsFilters], and one cache of topic and team
 /// names for the context bar -- so no two screens can disagree about where
@@ -64,19 +79,27 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
 
   /// The Iris panel toggle. Task 16 puts the panel behind it; keeping the
   /// state here is what will let one thread follow the user across screens.
-  final bool _iris = false;
+  // ignore: prefer_final_fields -- Task 16 flips this from the top bar.
+  bool _iris = false;
 
   /// True while a browser back/forward is being applied, so the resulting
   /// route change does not push the entry we are already standing on.
   bool _syncing = false;
 
-  /// Drill pages are analytics, so they need the same permission the
-  /// analytics sections do -- and an entity to be about.
-  bool get _drill => _sections.any((s) => s.id == 'overview');
+  /// The address the browser is already on. [ConsoleNav] deliberately has no
+  /// value equality (a citation re-pulses the view it cites), so without this
+  /// re-tapping the current section would stack identical history entries and
+  /// Back would need several presses to leave the page.
+  Uri? _here;
+
+  /// Whether this user's nav carries [id] -- module enabled AND the verb.
+  bool _has(String id) => _sections.any((s) => s.id == id);
 
   bool _canOpen(ConsoleRoute r) => switch (r.section) {
-    'person' || 'team' => _drill && (r.entityId ?? '').isNotEmpty,
-    _ => _sections.any((s) => s.id == r.section),
+    // Drill pages are analytics: same gate as the analytics sections, plus
+    // an entity to be about.
+    'person' || 'team' => _has('overview') && (r.entityId ?? '').isNotEmpty,
+    _ => _has(r.section),
   };
 
   @override
@@ -90,7 +113,8 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
     // Give the first entry a real address, so browser back from the first
     // drill lands on a URL this shell can read again.
     if (kIsWeb) {
-      SystemNavigator.routeInformationUpdated(uri: _uriOf(_nav.value), replace: true);
+      _here = _uriOf(_nav.value);
+      SystemNavigator.routeInformationUpdated(uri: _here!, replace: true);
     }
     _nav.addListener(_pushHistory);
     WidgetsBinding.instance.addObserver(this);
@@ -113,7 +137,10 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
   /// pays for itself once the console has nested routes.
   void _pushHistory() {
     if (!kIsWeb || _syncing) return;
-    SystemNavigator.routeInformationUpdated(uri: _uriOf(_nav.value));
+    final uri = _uriOf(_nav.value);
+    if (uri == _here) return;
+    _here = uri;
+    SystemNavigator.routeInformationUpdated(uri: uri);
   }
 
   Uri _uriOf(ConsoleRoute r) => Uri(
@@ -130,14 +157,13 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
     _syncing = true;
     _nav.value = route;
     _syncing = false;
+    _here = _uriOf(route);
     return true;
   }
 
   ConsoleRoute? _fromUri(Uri uri) {
-    final segments = uri.pathSegments.where((s) => s.isNotEmpty);
-    if (segments.isEmpty) return null;
-    final route = ConsoleRoute(segments.last, entityId: uri.queryParameters['id']);
-    return _canOpen(route) ? route : null;
+    final route = routeFromUri(uri);
+    return route != null && _canOpen(route) ? route : null;
   }
 
   // ----------------------------------------------------------------- data
@@ -150,10 +176,10 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
   /// topic list; it also carries every mastery row, which this does not need.
   /// Read the names off Resumen's own overview fetch if that ever costs.
   void _loadLabels() {
-    if (widget.me.can('analytics_view')) {
+    if (_has('overview')) {
       widget.api.report().then((r) => _keep(() => _topics = r.topics), onError: (_) {});
     }
-    if (widget.me.can('personas_view')) {
+    if (_has('people')) {
       widget.api.teams().then((t) => _keep(() => _teams = t), onError: (_) {});
     }
   }
