@@ -42,7 +42,7 @@ Map<String, dynamic> _canned({Map<String, dynamic>? iris}) => {
         'id': 'u1',
         'name': 'Ana Quispe',
         'team': 'team-pisco',
-        'role': 'manager',
+        'role': 'training',
         'enabled': true,
         'lastlogin': '2026-09-05 22:55:49 -0300',
       },
@@ -209,6 +209,8 @@ void main() {
 
     // person.json sends a flat `name`, not firstName/lastName.
     expect(find.text('Ana Quispe'), findsOneWidget);
+    // eMe's four roles, worded the way Colaboradores words them.
+    expect(find.text('Training / L&D'), findsOneWidget);
     // The app's dashboard wording, verbatim -- console and app must never
     // call the same level two different things.
     expect(find.text('Competent · Review soon'), findsOneWidget);
@@ -245,11 +247,40 @@ void main() {
     expect(find.text('5/8/10'), findsOneWidget);
   });
 
-  testWidgets('a 403 says the person is outside your scope', (tester) async {
+  testWidgets('a 403 says the person is outside your scope, with nothing to '
+      'retry', (tester) async {
     await _pump(tester, http: _Forbidden());
 
     expect(find.byType(ConsolePanelError), findsOneWidget);
     expect(find.text('Outside your scope.'), findsOneWidget);
+    // Retrying a scope rule just fails again.
+    expect(find.text('Retry'), findsNothing);
+  });
+
+  testWidgets('a failure that might pass next time keeps its Retry',
+      (tester) async {
+    await _pump(tester);
+
+    expect(find.text('Retry'), findsOneWidget);
+  });
+
+  testWidgets('the 30-day chart puts its totals in the footnote', (tester) async {
+    await _pump(tester, canned: _canned());
+
+    // series: answers 4..10 = 49, correct 2..8 = 35.
+    expect(find.textContaining('35 correct · 14 incorrect in 30 days'),
+        findsOneWidget);
+  });
+
+  testWidgets('a person with no answers gets a line, not an empty chart',
+      (tester) async {
+    final canned = _canned()
+      ..['series'] = [
+        {'day': '2026-09-01', 'answers': 0, 'correct': 0},
+      ];
+    await _pump(tester, canned: canned);
+
+    expect(find.text('Nothing answered yet.'), findsWidgets);
   });
 
   // 1024 px of window minus the 220 px nav and the 24 px gutters is the

@@ -272,6 +272,22 @@ void main() {
     expect(find.text('Your account cannot list people.'), findsOneWidget);
   });
 
+  testWidgets('the level bar and the started column read per person',
+      (tester) async {
+    final semantics = tester.ensureSemantics();
+    await _pump(tester);
+
+    // u1 has answered two subtopics, one of each level; u2 has a row but no
+    // answers, so nothing has started for them.
+    expect(find.bySemanticsLabel(RegExp('Beginner 1, Competent 1')),
+        findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('No data 1')), findsOneWidget);
+    // Han empezado / Activos 7 d, two members: yes-yes and no-no.
+    expect(find.text('Yes'), findsNWidgets(2));
+    expect(find.text('No'), findsNWidgets(2));
+    semantics.dispose();
+  });
+
   testWidgets('a member row drills into that person', (tester) async {
     final (_, _, nav) = await _pump(tester);
 

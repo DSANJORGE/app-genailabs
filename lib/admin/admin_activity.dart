@@ -61,10 +61,7 @@ class _AdminActivityState extends State<AdminActivity>
   @override
   Widget build(BuildContext context) => fetched(_page);
 
-  String get _persona {
-    final name = widget.me.persona?.name ?? '';
-    return name.isEmpty ? 'Iris' : name;
-  }
+  String get _persona => personaName(widget.me);
 
   Widget _page(BuildContext context, Activity a, String? highlight) {
     // `funnel` is the screen's own cohort: activityReading reads the same

@@ -90,12 +90,12 @@ class _AdminPersonState extends State<AdminPerson>
       : loadError(e);
 
   @override
+  bool canRetry(Object e) => !(e is EmeHttpException && e.statusCode == 403);
+
+  @override
   Widget build(BuildContext context) => fetched(_page);
 
-  String get _persona {
-    final name = widget.me.persona?.name ?? '';
-    return name.isEmpty ? 'Iris' : name;
-  }
+  String get _tutor => personaName(widget.me);
 
   Widget _page(BuildContext context, _PersonData d, String? highlight) {
     final p = d.person;
@@ -105,7 +105,7 @@ class _AdminPersonState extends State<AdminPerson>
           _header(d),
           const SizedBox(height: 20),
           Reading(
-            personaName: _persona,
+            personaName: _tutor,
             avatarUrl: widget.me.persona?.avatar,
             sentences: personReading(p),
           ),
@@ -145,7 +145,7 @@ class _AdminPersonState extends State<AdminPerson>
                   style: AdminTokens.title, overflow: TextOverflow.ellipsis),
             ),
             const SizedBox(width: 12),
-            TestuPill(_role(u.role), color: t.mut, borderColor: t.line2),
+            TestuPill(roleLabel(u.role), color: t.mut, borderColor: t.line2),
           ],
         ),
         if (meta.isNotEmpty) ...[
@@ -165,12 +165,6 @@ class _AdminPersonState extends State<AdminPerson>
     return id;
   }
 
-  static String _role(String role) => switch (role) {
-        'admin' || 'orgadmin' => L('Admin', 'Admin'),
-        'manager' => L('Manager', 'Responsable'),
-        _ => L('Member', 'Miembro'),
-      };
-
   /// The freshest thing the reply knows about. person.json's `user` carries
   /// no `lastactivity`, so the mastery rows are what answer it; [
   /// AdminUser.lastlogin] is eMe's RAW string (not ISO-8601) and is printed
@@ -181,7 +175,7 @@ class _AdminPersonState extends State<AdminPerson>
       final d = r.lastActivity;
       if (d != null && (at == null || d.isAfter(at))) at = d;
     }
-    return at == null ? p.user.lastlogin : _date(at);
+    return at == null ? p.user.lastlogin : date(at);
   }
 
   // ------------------------------------------------------- mastery + quad
@@ -240,8 +234,10 @@ class _AdminPersonState extends State<AdminPerson>
           (share == null ? '' : ' · ${pct(share)}'),
       height: null,
       footnote: L(
-        'Calibration = answers where confidence matched the result.',
-        'Calibración = respuestas donde la confianza coincidió con el resultado.',
+        'Calibration = answers where confidence matched the result. '
+            'Cumulative, not just the selected period.',
+        'Calibración = respuestas donde la confianza coincidió con el '
+            'resultado. Acumulado, no solo del periodo seleccionado.',
       ),
       child: Quad(
         cc: p.calibration.cc,
@@ -254,27 +250,46 @@ class _AdminPersonState extends State<AdminPerson>
 
   // ------------------------------------------------------------ the period
 
-  Widget _week(PersonReport p) => ChartCard(
-        eyebrow: L('Last 30 days', 'Últimos 30 días'),
-        legend: [
-          (AdminTokens.seriesPositive, L('Correct', 'Correctas')),
-          (AdminTokens.seriesNegative, L('Incorrect', 'Incorrectas')),
-        ],
-        footnote: L(
-          'The last 30 days, whatever period the rest of the console is on.',
-          'Los últimos 30 días, sea cual sea el periodo del resto de la consola.',
+  Widget _week(PersonReport p) {
+    final days = [
+      for (final d in p.series)
+        (
+          label: dm(d.day),
+          correct: d.correct,
+          // The server sends the day's total and how many were right; a
+          // reply that ever disagrees must not draw a negative bar.
+          incorrect: d.answers - d.correct < 0 ? 0 : d.answers - d.correct,
         ),
-        child: correctIncorrectBars([
-          for (final d in p.series)
-            (
-              label: _dayLabel(d.day),
-              correct: d.correct,
-              // The server sends the day's total and how many were right; a
-              // reply that ever disagrees must not draw a negative bar.
-              incorrect: d.answers - d.correct < 0 ? 0 : d.answers - d.correct,
+    ];
+    final correct = days.fold<int>(0, (a, d) => a + d.correct);
+    final incorrect = days.fold<int>(0, (a, d) => a + d.incorrect);
+    final silent = correct + incorrect == 0;
+    return ChartCard(
+      eyebrow: L('Last 30 days', 'Últimos 30 días'),
+      height: silent ? null : 220,
+      legend: silent
+          ? const []
+          : [
+              (AdminTokens.seriesPositive, L('Correct', 'Correctas')),
+              (AdminTokens.seriesNegative, L('Incorrect', 'Incorrectas')),
+            ],
+      // The bars are a comparison; the totals are the reading, so they exist
+      // as text rather than only inside a hover tooltip.
+      footnote: silent
+          ? L('The last 30 days, whatever period the rest of the console is on.',
+              'Los últimos 30 días, sea cual sea el periodo del resto de la consola.')
+          : L(
+              '$correct correct · $incorrect incorrect in 30 days, whatever '
+                  'period the rest of the console is on.',
+              '$correct correctas · $incorrect incorrectas en 30 días, sea cual '
+                  'sea el periodo del resto de la consola.',
             ),
-        ]),
-      );
+      child: silent
+          ? Text(L('Nothing answered yet.', 'Todavía sin respuestas.'),
+              style: AdminTokens.muted)
+          : correctIncorrectBars(days),
+    );
+  }
 
   // ------------------------------------------------------------ usage line
 
@@ -294,8 +309,8 @@ class _AdminPersonState extends State<AdminPerson>
         ],
         const SizedBox(height: 6),
         // Same reply as the chart above, so the same 30 days.
-        Text(L('Both lines cover the last 30 days.',
-            'Ambas líneas cubren los últimos 30 días.'),
+        Text(L('These lines cover the last 30 days.',
+            'Estas líneas cubren los últimos 30 días.'),
             style: AdminTokens.footnote),
       ],
     );
@@ -308,12 +323,12 @@ class _AdminPersonState extends State<AdminPerson>
     if (p.irisQuestions == 0) return null;
     final sections = [
       for (final s in p.irisSections.take(3))
-        if (s.name.isNotEmpty) _sectionName(s.name),
+        if (s.name.isNotEmpty) sectionName(s.name),
     ];
     final helpful = p.irisHelpfulShare;
     return [
-      L('${p.irisQuestions} questions to $_persona',
-          '${p.irisQuestions} preguntas a $_persona'),
+      L('${p.irisQuestions} questions to $_tutor',
+          '${p.irisQuestions} preguntas a $_tutor'),
       if (sections.isNotEmpty)
         L('about ${sections.join(', ')}', 'sobre ${sections.join(', ')}'),
       if (helpful != null)
@@ -344,8 +359,8 @@ class _AdminPersonState extends State<AdminPerson>
             ),
             AdminColumn(
               L('Subtopic', 'Subtema'),
-              (r) => Text(_sectionName(r.section), overflow: TextOverflow.ellipsis),
-              sortKey: (r) => _sectionName(r.section),
+              (r) => Text(sectionName(r.section), overflow: TextOverflow.ellipsis),
+              sortKey: (r) => sectionName(r.section),
               flex: 3,
             ),
             AdminColumn(
@@ -374,8 +389,7 @@ class _AdminPersonState extends State<AdminPerson>
             ),
             AdminColumn(
               L('Last activity', 'Última actividad'),
-              (r) => Text(r.lastActivity == null ? '—' : _date(r.lastActivity!),
-                  style: AdminTokens.mono(11.5)),
+              (r) => Text(date(r.lastActivity), style: AdminTokens.mono(11.5)),
               sortKey: (r) =>
                   r.lastActivity?.millisecondsSinceEpoch ?? 0,
               width: 120,
@@ -416,7 +430,7 @@ class _TopicRow extends StatelessWidget {
             child: Text(
               weak == null || weak.isEmpty
                   ? detail
-                  : '$detail · ${L('review', 'revisar')} ${_sectionName(weak)}',
+                  : '$detail · ${L('review', 'revisar')} ${sectionName(weak)}',
               style: AdminTokens.muted,
               overflow: TextOverflow.ellipsis,
             ),
@@ -437,43 +451,29 @@ class _TopicRow extends StatelessWidget {
 /// session, the PDF viewer and the chat socket, none of which belong in a
 /// web console bundle.
 ({String label, String status, Color color, Color border}) mastery(
-        int mastered, int answered) =>
-    switch (levelOf(mastered, answered)) {
-      'beginner' => (
-          label: L('Beginner', 'Principiante'),
-          status: L('Needs practice', 'Necesita práctica'),
-          color: const Color(0xFFD08B8B),
-          border: const Color(0xFF6E3535),
-        ),
-      'competent' => (
-          label: L('Competent', 'Competente'),
-          status: L('Review soon', 'Repasar pronto'),
-          color: const Color(0xFFCDB96A),
-          border: const Color(0xFF8A7A3A),
-        ),
-      'expert' => (
-          label: L('Expert', 'Experto'),
-          status: L('Stable', 'Estable'),
-          color: const Color(0xFF7DBB9C),
-          border: const Color(0xFF2F6A4C),
-        ),
-      _ => (
-          label: L('Not started', 'Sin empezar'),
-          status: '',
-          color: const Color(0xFF8B8F98),
-          border: const Color(0xFF2C2C33),
-        ),
-    };
-
-/// Section titles arrive numbered ("2. Debida diligencia"); the ordinal is
-/// noise everywhere the console reads one back.
-String _sectionName(String raw) => raw.replaceFirst(RegExp(r'^\d+\.\s*'), '');
-
-String _date(DateTime d) {
-  final l = d.toLocal();
-  return '${l.year}-${l.month.toString().padLeft(2, '0')}-'
-      '${l.day.toString().padLeft(2, '0')}';
+    int mastered, int answered) {
+  const t = TestuTokens.instance;
+  final level = levelOf(mastered, answered);
+  final (label, status, color) = switch (level) {
+    'beginner' => (
+        L('Beginner', 'Principiante'),
+        L('Needs practice', 'Necesita práctica'),
+        // The fill red misses 4.5:1 at 10.5 px; the app's text red is what
+        // the pill has always used.
+        AdminTokens.redText,
+      ),
+    'competent' => (
+        L('Competent', 'Competente'),
+        L('Review soon', 'Repasar pronto'),
+        t.gold,
+      ),
+    'expert' => (L('Expert', 'Experto'), L('Stable', 'Estable'), t.greenText),
+    _ => (L('Not started', 'Sin empezar'), '', t.mut),
+  };
+  return (
+    label: label,
+    status: status,
+    color: color,
+    border: AdminTokens.levelEdge(level),
+  );
 }
-
-String _dayLabel(DateTime d) =>
-    '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}';

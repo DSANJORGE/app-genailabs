@@ -351,12 +351,6 @@ class _Nav extends StatelessWidget {
   final ConsoleNav nav;
   final VoidCallback onSignOut;
 
-  String get _role => switch (me.role) {
-        'admin' => L('Admin', 'Admin'),
-        'manager' => L('Manager', 'Responsable'),
-        _ => L('Member', 'Miembro'),
-      };
-
   @override
   Widget build(BuildContext context) {
     final t = TestuTokens.of(context);
@@ -401,7 +395,7 @@ class _Nav extends StatelessWidget {
             const SizedBox(height: 14),
             Text(me.name, style: AdminTokens.muted),
             const SizedBox(height: 8),
-            TestuPill(_role, color: t.mut, borderColor: t.line2),
+            TestuPill(roleLabel(me.role), color: t.mut, borderColor: t.line2),
             const SizedBox(height: 10),
             TextButton(
               onPressed: onSignOut,
@@ -1619,7 +1613,10 @@ class ConsolePanelError extends StatelessWidget {
   });
 
   final String text;
-  final VoidCallback onRetry;
+
+  /// Null when retrying cannot help — a scope rule is not a hiccup, and a
+  /// button that always fails is worse than no button.
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -1637,11 +1634,13 @@ class ConsolePanelError extends StatelessWidget {
             ),
             const SizedBox(height: 9),
             Text(text, style: AdminTokens.body.copyWith(color: t.mut)),
-            const SizedBox(height: 14),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TestuAct(L('Retry', 'Reintentar'), onTap: onRetry),
-            ),
+            if (onRetry != null) ...[
+              const SizedBox(height: 14),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TestuAct(L('Retry', 'Reintentar'), onTap: onRetry!),
+              ),
+            ],
           ],
         ),
       ),

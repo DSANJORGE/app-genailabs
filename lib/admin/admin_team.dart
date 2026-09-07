@@ -113,10 +113,7 @@ class _AdminTeamPageState extends State<AdminTeamPage>
   @override
   Widget build(BuildContext context) => fetched(_page);
 
-  String get _persona {
-    final name = widget.me.persona?.name ?? '';
-    return name.isEmpty ? 'Iris' : name;
-  }
+  String get _tutor => personaName(widget.me);
 
   /// The team's own row in `overview.teams[]`. A scoped overview sends one
   /// team; a server that ever sends the whole list still resolves here, and
@@ -141,7 +138,7 @@ class _AdminTeamPageState extends State<AdminTeamPage>
         _header(d, team, stat),
         const SizedBox(height: 20),
         Reading(
-          personaName: _persona,
+          personaName: _tutor,
           avatarUrl: widget.me.persona?.avatar,
           sentences: teamReading(stat, d.org),
         ),
@@ -215,14 +212,6 @@ class _AdminTeamPageState extends State<AdminTeamPage>
 
   Widget _stats(_TeamData d, TeamStat stat) {
     final series = d.team.series;
-    int sum(int Function(DayPoint) of) => series.fold(0, (a, b) => a + of(b));
-    List<num> spark(int Function(DayPoint) of) => [
-          for (final p in series.length > 7
-              ? series.sublist(series.length - 7)
-              : series)
-            of(p),
-        ];
-
     final median = d.org.median?.activeShare;
     return StatRow([
       StatBlock(
@@ -236,22 +225,22 @@ class _AdminTeamPageState extends State<AdminTeamPage>
             ? null
             : L('organisation median ${pct(median)}',
                 'mediana de la organización ${pct(median)}'),
-        spark: spark((p) => p.people),
+        spark: spark(series, (p) => p.people),
       ),
       StatBlock(
         label: L('Answers', 'Respuestas'),
-        value: grouped(sum((p) => p.answers)),
-        spark: spark((p) => p.answers),
+        value: grouped(seriesSum(series, (p) => p.answers)),
+        spark: spark(series, (p) => p.answers),
       ),
       StatBlock(
         label: L('Minutes', 'Minutos'),
-        value: grouped(sum((p) => p.minutes)),
-        spark: spark((p) => p.minutes),
+        value: grouped(seriesSum(series, (p) => p.minutes)),
+        spark: spark(series, (p) => p.minutes),
       ),
       StatBlock(
-        label: L('Questions to $_persona', 'Preguntas a $_persona'),
+        label: L('Questions to $_tutor', 'Preguntas a $_tutor'),
         value: grouped(d.team.iris.questions),
-        spark: spark((p) => p.questions),
+        spark: spark(series, (p) => p.questions),
       ),
     ]);
   }
@@ -291,7 +280,8 @@ class _AdminTeamPageState extends State<AdminTeamPage>
                 style: AdminTokens.muted)
           else
             for (final s in sections)
-              BarRow(label: s.name, value: s.questions, max: top),
+              BarRow(
+                  label: sectionName(s.name), value: s.questions, max: top),
         ],
       ),
     );
@@ -361,7 +351,6 @@ class _AdminTeamPageState extends State<AdminTeamPage>
     final now = DateTime.now();
     bool active(_Member m) =>
         m.lastActivity != null && now.difference(m.lastActivity!).inDays < 7;
-    final t = TestuTokens.of(context);
     Widget yesNo(bool value) => Text(
           value ? L('Yes', 'Sí') : L('No', 'No'),
           style: value ? AdminTokens.table : AdminTokens.muted,
@@ -419,10 +408,7 @@ class _AdminTeamPageState extends State<AdminTeamPage>
               AdminColumn(
                 L('Weakest topic', 'Tema más débil'),
                 (m) => Text(m.weakest ?? '—',
-                    style: m.weakest == null
-                        ? AdminTokens.muted
-                        : TextStyle(
-                            fontFamily: 'Geist', fontSize: 12.5, color: t.ink),
+                    style: m.weakest == null ? AdminTokens.muted : null,
                     overflow: TextOverflow.ellipsis),
                 sortKey: (m) => m.weakest ?? '',
                 flex: 2,
@@ -430,7 +416,7 @@ class _AdminTeamPageState extends State<AdminTeamPage>
               AdminColumn(
                 L('Last activity', 'Última actividad'),
                 (m) => Text(
-                  m.lastActivity == null ? '—' : _date(m.lastActivity!),
+                  date(m.lastActivity),
                   style: AdminTokens.mono(11.5),
                 ),
                 sortKey: (m) => m.lastActivity?.millisecondsSinceEpoch ?? 0,
@@ -443,10 +429,4 @@ class _AdminTeamPageState extends State<AdminTeamPage>
       ),
     );
   }
-}
-
-String _date(DateTime d) {
-  final l = d.toLocal();
-  return '${l.year}-${l.month.toString().padLeft(2, '0')}-'
-      '${l.day.toString().padLeft(2, '0')}';
 }

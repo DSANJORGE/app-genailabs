@@ -17,6 +17,36 @@ import 'admin_models.dart';
 /// `calibration` and `median` are CUMULATIVE, so no sentence built from them
 /// may say "in the period".
 
+/// `2026-09-05`, or an em dash. Every console table writes a date this way.
+String date(DateTime? d) {
+  if (d == null) return '—';
+  final l = d.toLocal();
+  return '${l.year}-${l.month.toString().padLeft(2, '0')}-'
+      '${l.day.toString().padLeft(2, '0')}';
+}
+
+/// Section titles arrive numbered ("2. Debida diligencia"); the ordinal is
+/// noise everywhere the console reads one back.
+String sectionName(String raw) => raw.replaceFirst(RegExp(r'^\d+\.\s*'), '');
+
+/// The tutor's name, or the product's default. Every analytics screen signs
+/// its reading with it and names it in its Iris copy.
+String personaName(AdminMe me) {
+  final name = me.persona?.name ?? '';
+  return name.isEmpty ? 'Iris' : name;
+}
+
+/// The two reductions a [StatBlock] needs off a daily series: the period
+/// total, and the last seven points for the sparkline.
+int seriesSum(List<DayPoint> series, int Function(DayPoint) of) =>
+    series.fold(0, (a, d) => a + of(d));
+
+List<num> spark(List<DayPoint> series, int Function(DayPoint) of) => [
+      for (final d
+          in series.length > 7 ? series.sublist(series.length - 7) : series)
+        of(d),
+    ];
+
 String _people(int n) => n == 1 ? L('person', 'persona') : L('people', 'personas');
 
 /// Percent in the console's own spacing: Spanish separates the sign, English
@@ -340,4 +370,4 @@ List<String> personReading(PersonReport p) {
 
 /// Section titles arrive numbered ("2. Debida diligencia"); prose reads them
 /// bare — the same strip the app's tutor greeting does.
-String _section(MasteryRow r) => r.section.replaceFirst(RegExp(r'^\d+\.\s*'), '');
+String _section(MasteryRow r) => sectionName(r.section);

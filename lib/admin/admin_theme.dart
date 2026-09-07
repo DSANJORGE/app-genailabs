@@ -39,6 +39,15 @@ class AdminTokens {
         _ => levelNone,
       };
 
+  /// The app's pill border per level (testu_topics.dart:`masteryOf`): a
+  /// darker edge of the same hue as the label it wraps.
+  static Color levelEdge(String? level) => switch (level) {
+        'expert' => const Color(0xFF2F6A4C),
+        'competent' => const Color(0xFF8A7A3A),
+        'beginner' => const Color(0xFF6E3535),
+        _ => _t.line2,
+      };
+
   /// Fill for a heatmap or table cell carrying a level. 22 % so the text on
   /// top keeps its contrast; the full colour stays for the 1 px inset.
   static Color levelTint(String? level) => level == null

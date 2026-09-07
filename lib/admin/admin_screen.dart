@@ -54,6 +54,10 @@ mixin FilteredFetch<T, W extends StatefulWidget> on State<W> {
   /// their own override it; the rest get [loadError].
   String errorText(Object e) => loadError(e);
 
+  /// Whether the panel offers a Retry. False for a failure that will fail
+  /// the same way every time — a permission, not a hiccup.
+  bool canRetry(Object e) => true;
+
   @override
   void initState() {
     super.initState();
@@ -119,7 +123,8 @@ mixin FilteredFetch<T, W extends StatefulWidget> on State<W> {
   Widget _state(Widget Function(BuildContext, T, String?) page) {
     final e = error;
     if (e != null) {
-      return ConsolePanelError(text: errorText(e), onRetry: load);
+      return ConsolePanelError(
+          text: errorText(e), onRetry: canRetry(e) ? load : null);
     }
     final d = data;
     if (loading || d == null) return const Skeleton(lines: 6, height: 22);

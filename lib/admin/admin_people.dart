@@ -6,22 +6,10 @@ import '../testu/testu_widgets.dart';
 import 'admin_api.dart';
 import 'admin_csv.dart';
 import 'admin_models.dart';
+import 'admin_reading.dart';
 
 const _roles = ['users', 'manager', 'training', 'orgadmin'];
 
-String _roleLabel(String role) => switch (role) {
-      'users' => L('Learner', 'Colaborador'),
-      'manager' => 'Manager',
-      'training' => 'Training / L&D',
-      'orgadmin' => L('Org admin', 'Admin de organización'),
-      _ => role,
-    };
-
-String _fmtDate(DateTime? d) {
-  if (d == null) return '—';
-  final l = d.toLocal();
-  return '${l.year}-${l.month.toString().padLeft(2, '0')}-${l.day.toString().padLeft(2, '0')}';
-}
 
 /// Colaboradores: list + filter, add, team/role changes, disable, CSV import.
 class AdminPeople extends StatefulWidget {
@@ -185,11 +173,11 @@ class _AdminPeopleState extends State<AdminPeople> {
       DataCell(_canManage
           ? DropdownButton<String>(
               value: u.role,
-              items: [for (final r in _roles) DropdownMenuItem(value: r, child: Text(_roleLabel(r)))],
+              items: [for (final r in _roles) DropdownMenuItem(value: r, child: Text(roleLabel(r)))],
               onChanged: (v) => v == null ? null : _mutate(() => widget.api.setRole(u.id, v)),
             )
-          : Text(_roleLabel(u.role), style: TextStyle(color: t.mut))),
-      DataCell(Text(_fmtDate(u.lastActivity), style: TextStyle(color: t.mut))),
+          : Text(roleLabel(u.role), style: TextStyle(color: t.mut))),
+      DataCell(Text(date(u.lastActivity), style: TextStyle(color: t.mut))),
       DataCell(Text(
         u.enabled ? L('Active', 'Activo') : L('Inactive', 'Inactivo'),
         style: TextStyle(color: u.enabled ? t.green : t.faint),
@@ -254,7 +242,7 @@ class _AdminPeopleState extends State<AdminPeople> {
                   DropdownButton<String>(
                     isExpanded: true,
                     value: role,
-                    items: [for (final r in roles) DropdownMenuItem(value: r, child: Text(_roleLabel(r)))],
+                    items: [for (final r in roles) DropdownMenuItem(value: r, child: Text(roleLabel(r)))],
                     onChanged: (v) => setD(() => role = v ?? role),
                   ),
                   const SizedBox(height: 16),

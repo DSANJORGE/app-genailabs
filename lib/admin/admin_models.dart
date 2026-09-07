@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import '../testu/testu_i18n.dart';
+
 /// Typed replies for the plugin's services/testu/* endpoints. Every
 /// fromJson is defensive: numerics via `(j['x'] as num?)?.toInt()`, ids and
 /// names coerced with `'${j['x']}'` so a server returning a bare number or
@@ -74,6 +76,17 @@ class AdminMe {
     );
   }
 }
+
+/// eMe's four `settingsgroup` values, worded once. Colaboradores, the nav
+/// footer and Persona all read a role out of the same place, so a training
+/// lead is never a "member" on one screen and a "Training / L&D" on another.
+String roleLabel(String role) => switch (role) {
+      'users' => L('Learner', 'Colaborador'),
+      'manager' => 'Manager',
+      'training' => 'Training / L&D',
+      'orgadmin' => L('Org admin', 'Admin de organización'),
+      _ => role,
+    };
 
 class AdminUser {
   AdminUser({

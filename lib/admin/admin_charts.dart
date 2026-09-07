@@ -38,7 +38,8 @@ Widget _axisText(String text) => Padding(
       child: Text(text, style: _axisStyle),
     );
 
-String _dm(DateTime d) => '${d.day}/${d.month}';
+/// `5/9` — the day label every chart axis and tooltip uses.
+String dm(DateTime d) => '${d.day}/${d.month}';
 
 /// The 300 ms first draw, then instant redraws.
 ///
@@ -234,7 +235,7 @@ Widget activityChart({
               getTitlesWidget: (v, _) {
                 final i = v.round();
                 if (i < 0 || i >= series.length) return const SizedBox.shrink();
-                return _axisText(_dm(series[i].day));
+                return _axisText(dm(series[i].day));
               },
             ),
           ),
@@ -256,7 +257,7 @@ Widget activityChart({
                   )
                 else
                   LineTooltipItem(
-                    '${_dm(series[s.x.round()].day)}  '
+                    '${dm(series[s.x.round()].day)}  '
                     '${series[s.x.round()].people} $peopleLabel  ·  '
                     '${series[s.x.round()].answers} $answersLabel',
                     _tipStyle,
@@ -349,7 +350,7 @@ Widget dailyBars(
                   if (i < 0 || i >= series.length) {
                     return const SizedBox.shrink();
                   }
-                  return _axisText(_dm(series[i].day));
+                  return _axisText(dm(series[i].day));
                 },
               ),
             ),
@@ -359,7 +360,7 @@ Widget dailyBars(
               getTooltipColor: (_) => _t.card2,
               tooltipBorder: BorderSide(color: _t.line),
               getTooltipItem: (group, _, _, _) => BarTooltipItem(
-                '${_dm(series[group.x].day)}  '
+                '${dm(series[group.x].day)}  '
                 '${value(series[group.x])}',
                 _tipStyle,
               ),

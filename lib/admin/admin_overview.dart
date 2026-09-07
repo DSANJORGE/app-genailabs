@@ -94,27 +94,15 @@ class _AdminOverviewState extends State<AdminOverview>
     );
   }
 
-  String get _persona {
-    final name = widget.me.persona?.name ?? '';
-    return name.isEmpty ? 'Iris' : name;
-  }
+  String get _persona => personaName(widget.me);
 
   // ----------------------------------------------------------------- stats
 
   Widget _stats(Overview o) {
     final series = o.series;
-    int sum(int Function(DayPoint) of) =>
-        series.fold(0, (a, d) => a + of(d));
-    List<num> spark(int Function(DayPoint) of) => [
-          for (final d in series.length > 7
-              ? series.sublist(series.length - 7)
-              : series)
-            of(d),
-        ];
-
-    final answers = sum((d) => d.answers);
-    final minutes = sum((d) => d.minutes);
-    final wrong = sum((d) => d.certainwrong);
+    final answers = seriesSum(series, (d) => d.answers);
+    final minutes = seriesSum(series, (d) => d.minutes);
+    final wrong = seriesSum(series, (d) => d.certainwrong);
     final active = o.cohort.active7d;
     final started = o.cohort.activated;
     final previous = o.previous;
@@ -125,14 +113,14 @@ class _AdminOverviewState extends State<AdminOverview>
         value: grouped(active),
         delta: _delta(active, previous['active7d'], week: true),
         deltaPositive: _better(active, previous['active7d']),
-        spark: spark((d) => d.people),
+        spark: spark(series, (d) => d.people),
       ),
       StatBlock(
         label: L('Answers', 'Respuestas'),
         value: grouped(answers),
         delta: _delta(answers, previous['answers']),
         deltaPositive: _better(answers, previous['answers']),
-        spark: spark((d) => d.answers),
+        spark: spark(series, (d) => d.answers),
       ),
       StatBlock(
         label: L('Minutes in the app', 'Minutos en la app'),
@@ -145,7 +133,7 @@ class _AdminOverviewState extends State<AdminOverview>
           '≈ ${started == 0 ? 0 : (minutes / started).round()} min per person',
           '≈ ${started == 0 ? 0 : (minutes / started).round()} min por persona',
         ),
-        spark: spark((d) => d.minutes),
+        spark: spark(series, (d) => d.minutes),
       ),
       StatBlock(
         label: L('Misconceptions', 'Conceptos erróneos'),
@@ -154,14 +142,14 @@ class _AdminOverviewState extends State<AdminOverview>
         // The one stat where up is bad: the colour follows the meaning, not
         // the sign.
         deltaPositive: _better(wrong, previous['certainwrong'], moreIsBetter: false),
-        spark: spark((d) => d.certainwrong),
+        spark: spark(series, (d) => d.certainwrong),
       ),
       StatBlock(
         label: L('Questions to Iris', 'Preguntas a Iris'),
         value: grouped(o.iris.questions),
         delta: _delta(o.iris.questions, previous['questions']),
         deltaPositive: _better(o.iris.questions, previous['questions']),
-        spark: spark((d) => d.questions),
+        spark: spark(series, (d) => d.questions),
       ),
     ]);
   }

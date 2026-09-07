@@ -35,17 +35,6 @@ String _levelLabel(String? level) => switch (level) {
       _ => L('Not started', 'Sin empezar'),
     };
 
-/// Section titles arrive numbered ("2. Debida diligencia"); a column header
-/// has no room for the ordinal and the topic header already gives the order.
-String _sectionName(String raw) => raw.replaceFirst(RegExp(r'^\d+\.\s*'), '');
-
-String _date(DateTime? d) {
-  if (d == null) return '—';
-  final l = d.toLocal();
-  return '${l.year}-${l.month.toString().padLeft(2, '0')}-'
-      '${l.day.toString().padLeft(2, '0')}';
-}
-
 /// Today's report as a CSV — the columns the console has always exported,
 /// plus the four calibration counters report.json started sending with them.
 /// Pure, so the export is testable without a browser.
@@ -298,10 +287,7 @@ class _AdminMasteryState extends State<AdminMastery> {
   void _exportCsv() =>
       downloadCsv('dominio.csv', masteryCsv(_report?.rows ?? const []));
 
-  String get _persona {
-    final name = widget.me.persona?.name ?? '';
-    return name.isEmpty ? 'Iris' : name;
-  }
+  String get _persona => personaName(widget.me);
 
   String _teamLabel(String? id) => (id == null || id.isEmpty)
       ? L('No team', 'Sin equipo')
@@ -452,7 +438,7 @@ class _Grid {
     for (final r in data) {
       final key = r.sectionKey;
       colTopic[key] = topicNames[r.topicId] ?? r.topic;
-      colName[key] = _sectionName(r.section);
+      colName[key] = sectionName(r.section);
       colOrder[key] = '${colTopic[key]} ${r.section}';
     }
     final colKeys = colOrder.keys.toList()
@@ -518,9 +504,9 @@ class _Grid {
                   questions: t.questions,
                   detail: L(
                     '${t.mastered} of ${t.answered} questions mastered · '
-                        '${t.attempts} attempts · last activity ${_date(t.last)}',
+                        '${t.attempts} attempts · last activity ${date(t.last)}',
                     '${t.mastered} de ${t.answered} preguntas dominadas · '
-                        '${t.attempts} intentos · última actividad ${_date(t.last)}',
+                        '${t.attempts} intentos · última actividad ${date(t.last)}',
                   ),
                 )
               else
