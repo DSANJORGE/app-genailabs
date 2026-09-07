@@ -3,6 +3,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
+
 import 'testu_icons.dart';
 import 'testu_theme.dart';
 
@@ -17,6 +19,19 @@ ImageProvider testuImage(String src) =>
 /// or breaking a word in half.
 bool testuBigText(BuildContext context) =>
     MediaQuery.textScalerOf(context).scale(100) > 120;
+
+/// Window width from which the browser build wears the desktop frame
+/// (left rail, centred column, sheets as dialogs — spec: testu-learn-web).
+/// Below it every surface is the phone app unchanged.
+const double kTestuWide = 700;
+
+/// The frame is a browser thing: an iPhone on its side is 874pt wide and
+/// must stay the phone app. Tests flip this to exercise the frame on the VM.
+@visibleForTesting
+bool testuDesktop = kIsWeb;
+
+bool testuWide(BuildContext context) =>
+    testuDesktop && MediaQuery.sizeOf(context).width >= kTestuWide;
 
 /// Press feedback per spec: opacity .75 + scale .985 + selectionClick haptic.
 class TestuPressable extends StatefulWidget {
@@ -34,25 +49,31 @@ class _TestuPressableState extends State<TestuPressable> {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown: (_) => setState(() => _down = true),
-      onTapCancel: () => setState(() => _down = false),
-      onTapUp: (_) => setState(() => _down = false),
-      onTap: widget.onTap == null
-          ? null
-          : () {
-              HapticFeedback.selectionClick();
-              widget.onTap!();
-            },
-      child: AnimatedScale(
-        scale: _down ? 0.985 : 1,
-        duration: const Duration(milliseconds: 90),
-        curve: TestuTokens.curve,
-        child: AnimatedOpacity(
-          opacity: _down ? 0.75 : 1,
+    // Desktop: a hand cursor says "this presses"; haptics are silent there.
+    return MouseRegion(
+      cursor: widget.onTap == null
+          ? MouseCursor.defer
+          : SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (_) => setState(() => _down = true),
+        onTapCancel: () => setState(() => _down = false),
+        onTapUp: (_) => setState(() => _down = false),
+        onTap: widget.onTap == null
+            ? null
+            : () {
+                HapticFeedback.selectionClick();
+                widget.onTap!();
+              },
+        child: AnimatedScale(
+          scale: _down ? 0.985 : 1,
           duration: const Duration(milliseconds: 90),
-          child: widget.child,
+          curve: TestuTokens.curve,
+          child: AnimatedOpacity(
+            opacity: _down ? 0.75 : 1,
+            duration: const Duration(milliseconds: 90),
+            child: widget.child,
+          ),
         ),
       ),
     );
@@ -751,6 +772,8 @@ class TestuGrabber extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // A dialog has nothing to drag; keep only the sheet's top breathing room.
+    if (testuWide(context)) return const SizedBox(height: 16);
     final t = TestuTokens.of(context);
     return Center(
       child: Container(
@@ -769,7 +792,10 @@ class TestuGrabber extends StatelessWidget {
 /// THE bottom-sheet chrome (spec: 22px top radius, card fill, hairline
 /// edge, 66% backdrop, 88% height cap, Material's 640px landscape cap,
 /// backdrop-tap closes unless [dismissible] is false). Bodies start with a
-/// [TestuGrabber] and own their scrolling.
+/// [TestuGrabber] and own their scrolling. On a desktop window
+/// (spec: testu-learn-web) the same body opens as a centred dialog — a
+/// 640px strip glued to the bottom of a 1920px window is a sheet in name
+/// only.
 Future<T?> showTestuSheet<T>(
   BuildContext context, {
   required WidgetBuilder builder,
@@ -777,6 +803,29 @@ Future<T?> showTestuSheet<T>(
   bool dismissible = true,
 }) {
   final t = TestuTokens.of(context);
+  if (testuWide(context)) {
+    return showDialog<T>(
+      context: context,
+      barrierDismissible: dismissible,
+      barrierColor: t.barrier,
+      builder: (ctx) => Dialog(
+        backgroundColor: t.card,
+        insetPadding: const EdgeInsets.all(24),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(22),
+          side: BorderSide(color: t.line2),
+        ),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minWidth: 640,
+            maxWidth: 640,
+            maxHeight: MediaQuery.sizeOf(ctx).height * maxHeight,
+          ),
+          child: builder(ctx),
+        ),
+      ),
+    );
+  }
   return showModalBottomSheet<T>(
     context: context,
     isScrollControlled: true,
