@@ -145,6 +145,11 @@ class _TestuAppState extends State<TestuApp> with WidgetsBindingObserver {
       _welcomeBack = true;
       _reveal = restored;
     });
+    // First frame on a phone-sized browser: point at the app, once.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final c = _nav.currentContext;
+      if (c != null) maybeShowTestuWebNudge(c);
+    });
   }
 
   void _onSignedIn() {

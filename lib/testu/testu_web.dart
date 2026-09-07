@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'testu_client.dart';
 import 'testu_i18n.dart';
@@ -121,4 +123,48 @@ class TestuRail extends StatelessWidget {
       ),
     );
   }
+}
+
+const _kNudged = 'testu_web_nudged';
+
+/// Phone-sized browser, once per browser: the web build is for desks, the
+/// app is for phones (Diego, 2026-09-07). Checked at first frame only, so
+/// resizing a desktop window never triggers it. [web] is the test seam.
+/// ponytail: no store buttons until the App Store / Play listings exist.
+Future<void> maybeShowTestuWebNudge(BuildContext context,
+    {bool web = kIsWeb}) async {
+  if (!web || MediaQuery.sizeOf(context).width >= 600) return;
+  final prefs = await SharedPreferences.getInstance();
+  if (prefs.getBool(_kNudged) ?? false) return;
+  await prefs.setBool(_kNudged, true);
+  if (!context.mounted) return;
+  final t = TestuTokens.of(context);
+  await showTestuDialog<void>(
+    context,
+    dismissible: false,
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TestuEyebrow(L('MADE FOR DESKTOP', 'PENSADO PARA ESCRITORIO')),
+        const SizedBox(height: 10),
+        Text(
+          L('TestU Learn on the web is designed for a desktop screen. On your phone, the TestU Learn app is the way to learn.',
+              'TestU Learn en la web está pensado para pantallas de escritorio. En tu teléfono, la app de TestU Learn es la forma de aprender.'),
+          style: TextStyle(
+            fontFamily: 'Geist',
+            fontSize: 13.5,
+            height: 1.5,
+            color: t.mut,
+          ),
+        ),
+        const SizedBox(height: 16),
+        TestuButton(
+          L('CONTINUE ON THE WEB', 'SEGUIR EN LA WEB'),
+          variant: TestuButtonVariant.primary,
+          onTap: () => Navigator.of(context).pop(),
+        ),
+      ],
+    ),
+  );
 }

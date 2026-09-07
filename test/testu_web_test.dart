@@ -7,6 +7,7 @@ import 'package:genai_labs/testu/testu_shell.dart';
 import 'package:genai_labs/testu/testu_theme.dart';
 import 'package:genai_labs/testu/testu_web.dart';
 import 'package:genai_labs/testu/testu_widgets.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player_platform_interface/video_player_platform_interface.dart';
 
 /// The browser build's desktop frame (spec: testu-learn-web). A desktop
@@ -138,6 +139,54 @@ void main() {
       TestuShell.tabRequest.value = 3;
       await tester.pump();
       expect(TestuShell.currentTab.value, 3);
+    });
+  });
+
+  group('phone-browser nudge', () {
+    Future<void> pumpNudge(WidgetTester tester, Size size) async {
+      window(tester, size);
+      await tester.pumpWidget(MaterialApp(
+        theme: testuTheme(),
+        home: Builder(builder: (context) {
+          WidgetsBinding.instance.addPostFrameCallback(
+              (_) => maybeShowTestuWebNudge(context, web: true));
+          return const Scaffold();
+        }),
+      ));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('a phone-sized browser is told once', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await pumpNudge(tester, phone);
+      expect(find.text('CONTINUE ON THE WEB'), findsOneWidget);
+      await tester.tap(find.text('CONTINUE ON THE WEB'));
+      await tester.pumpAndSettle();
+      expect(find.text('CONTINUE ON THE WEB'), findsNothing);
+      await pumpNudge(tester, phone);
+      expect(find.text('CONTINUE ON THE WEB'), findsNothing,
+          reason: 'dismissal is remembered per browser');
+    });
+
+    testWidgets('a desktop window never sees it', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await pumpNudge(tester, desktop);
+      expect(find.text('CONTINUE ON THE WEB'), findsNothing);
+    });
+
+    testWidgets('the app build never sees it', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      window(tester, phone);
+      await tester.pumpWidget(MaterialApp(
+        theme: testuTheme(),
+        home: Builder(builder: (context) {
+          WidgetsBinding.instance.addPostFrameCallback(
+              (_) => maybeShowTestuWebNudge(context, web: false));
+          return const Scaffold();
+        }),
+      ));
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('CONTINUE ON THE WEB'), findsNothing);
     });
   });
 }
