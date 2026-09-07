@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genai_labs/admin/admin_signin.dart';
 import 'package:genai_labs/admin/admin_theme.dart';
+import 'package:genai_labs/testu/testu_widgets.dart';
 import 'package:genai_labs/testu/testu_theme.dart';
 
 /// The one screen every console user meets before the console exists: two
@@ -85,12 +86,31 @@ void main() {
     expect(find.text('6-digit code'), findsNothing);
   });
 
+  // eMe sends a real email per request. The first code was sent one second
+  // ago; the second one waits, and the label says how long.
+  testWidgets('resending waits out a 30 s cooldown', (tester) async {
+    final auth = _Auth();
+    await _pump(tester, auth);
+    await _sendCode(tester, 'diego@minsur.test');
+
+    expect(find.text('Resend code (30 s)'), findsOneWidget);
+    await tester.tap(find.text('Resend code (30 s)'));
+    await tester.pump();
+    expect(auth.sent, ['diego@minsur.test'], reason: 'still on cooldown');
+
+    await tester.pump(const Duration(seconds: 10));
+    expect(find.text('Resend code (20 s)'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 20));
+    expect(find.text('Resend code'), findsOneWidget);
+  });
+
   testWidgets('a code that never arrived can be asked for again',
       (tester) async {
     final auth = _Auth();
     await _pump(tester, auth);
     await _sendCode(tester, 'diego@minsur.test');
     expect(auth.sent, ['diego@minsur.test']);
+    await tester.pump(const Duration(seconds: 30));
 
     await tester.tap(find.text('Resend code'));
     await tester.pumpAndSettle();
@@ -102,6 +122,21 @@ void main() {
     // screen has to say it happened.
     expect(find.text('Code sent again.'), findsOneWidget);
     await tester.pump(const Duration(seconds: 5));
+  });
+
+  // AdminSession.sendCode answers 'error' when the eMe boot itself throws --
+  // first screen, server down. The screen has to say so AND stay usable; it
+  // used to sit with its button disabled until someone reloaded the page.
+  testWidgets('a send that never reaches the server leaves the screen usable',
+      (tester) async {
+    await _pump(tester, _Auth(status: 'error'));
+    await _sendCode(tester, 'diego@minsur.test');
+
+    expect(find.text('Could not send the code.'), findsOneWidget);
+    expect(tester.widget<TestuButton>(find.byType(TestuButton)).onTap, isNotNull,
+        reason: 'the CTA is live again, not stuck busy');
+    expect(find.text('Work email'), findsOneWidget,
+        reason: 'a failed send does not move the reader on');
   });
 
   testWidgets('a wrong code says so and the right one signs in',

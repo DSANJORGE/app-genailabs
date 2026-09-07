@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../testu/testu_i18n.dart';
 import '../testu/testu_theme.dart';
@@ -38,11 +40,31 @@ class _AdminSigninState extends State<AdminSignin> {
   bool _codeStage = false, _busy = false;
   String? _error;
 
+  /// Seconds left before another code may be asked for. eMe sends a real
+  /// email per request, so the second one waits.
+  static const _cooldownSeconds = 30;
+  int _wait = 0;
+  Timer? _tick;
+
   @override
   void dispose() {
+    _tick?.cancel();
     _email.dispose();
     _code.dispose();
     super.dispose();
+  }
+
+  void _startCooldown() {
+    _tick?.cancel();
+    setState(() => _wait = _cooldownSeconds);
+    _tick = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      setState(() => _wait--);
+      if (_wait <= 0) timer.cancel();
+    });
   }
 
   Future<void> _send() async {
@@ -66,10 +88,12 @@ class _AdminSigninState extends State<AdminSignin> {
                   'No hay cuenta con ese correo. Habla con tu administrador.')
               : L('Could not send the code.', 'No se pudo enviar el código.');
     });
+    if (s != 'ok') return;
+    _startCooldown();
     // Nothing on screen changes when a second code is sent, so the screen
     // says it out loud -- a toast, not a SnackBar, which docks to the bottom
     // of the window and covers the form on a laptop.
-    if (s == 'ok' && resend && mounted) {
+    if (resend && mounted) {
       showToast(context, L('Code sent again.', 'Código reenviado.'));
     }
   }
@@ -130,7 +154,9 @@ class _AdminSigninState extends State<AdminSignin> {
                     controller: _email,
                     keyboardType: TextInputType.emailAddress,
                     autofocus: true,
-                    onSubmitted: (_) => _send(),
+                    onSubmitted: (_) {
+                      if (!_busy) _send();
+                    },
                     decoration: InputDecoration(
                         hintText: L('Work email', 'Correo de trabajo')),
                   )
@@ -139,7 +165,9 @@ class _AdminSigninState extends State<AdminSignin> {
                     controller: _code,
                     keyboardType: TextInputType.number,
                     autofocus: true,
-                    onSubmitted: (_) => _verify(),
+                    onSubmitted: (_) {
+                      if (!_busy) _verify();
+                    },
                     decoration: InputDecoration(
                         hintText: L('6-digit code', 'Código de 6 dígitos')),
                   ),
@@ -158,13 +186,23 @@ class _AdminSigninState extends State<AdminSignin> {
                 ),
                 if (_codeStage) ...[
                   const SizedBox(height: 6),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  // Wrap, not Row: the countdown makes the second label
+                  // longer than the first, and Spanish is longer again --
+                  // when the pair stops fitting on one line it stacks
+                  // instead of painting overflow stripes.
+                  Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    spacing: 8,
                     children: [
                       _quiet(L('Change email', 'Cambiar correo'),
                           _busy ? null : _backToEmail),
-                      _quiet(L('Resend code', 'Reenviar código'),
-                          _busy ? null : _send),
+                      _quiet(
+                        _wait > 0
+                            ? L('Resend code ($_wait s)',
+                                'Reenviar código ($_wait s)')
+                            : L('Resend code', 'Reenviar código'),
+                        _busy || _wait > 0 ? null : _send,
+                      ),
                     ],
                   ),
                 ],
@@ -187,7 +225,7 @@ class _AdminSigninState extends State<AdminSignin> {
         minimumSize: const Size(0, 36),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         foregroundColor: t.mut,
-        disabledForegroundColor: t.faint,
+        disabledForegroundColor: t.mut.withValues(alpha: 0.6),
         textStyle: const TextStyle(
             fontFamily: 'Geist', fontSize: 12, height: 1.2),
       ),

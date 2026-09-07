@@ -339,10 +339,12 @@ void main() {
     handle.dispose();
   });
 
-  // ...and merging a row must not swallow a control that lives inside it:
-  // Colaboradores puts a Select in two of its cells, and those stay their
-  // own, separately pressable nodes.
-  testWidgets('a control inside a row is still its own node', (tester) async {
+  // ...and a control that lives inside a row stays its own, separately
+  // pressable node -- Colaboradores puts a Select in two of its cells -- and
+  // it announces what it DOES. The hint is a placeholder ("Ninguno"), which
+  // is what a row with no team would otherwise have been called.
+  testWidgets('a control inside a row is its own node, named by its job',
+      (tester) async {
     final handle = tester.ensureSemantics();
     await tester.pumpWidget(_app(AdminTable<String>(
       columns: [
@@ -350,9 +352,11 @@ void main() {
         AdminColumn(
           'Team',
           (r) => Select<String>(
+            // A value IS set: the name must still be the control's job, not
+            // the placeholder and not the value.
             value: 'norte',
-            // Not the column's own word: the header cell would answer to it.
-            hint: 'Change team',
+            hint: 'None',
+            semanticLabel: 'Change team',
             items: const [('norte', 'Norte')],
             onChanged: (_) {},
           ),
@@ -363,11 +367,13 @@ void main() {
     )));
     await tester.pump();
 
-    // The node's name is the hint plus the value it is showing, so match on
-    // the hint rather than on the whole label.
+    // The node's name is the label plus the value it is showing, so match on
+    // the label rather than on the whole string.
     final select =
         tester.getSemantics(find.bySemanticsLabel(RegExp('Change team')));
     expect(select.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+    expect(select.label, contains('Change team'));
+    expect(select.label, isNot(contains('None')));
     handle.dispose();
   });
 }

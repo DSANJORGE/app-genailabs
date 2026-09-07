@@ -63,9 +63,14 @@ class AdminSession {
     return AuthService.isLoggedIn;
   }
 
+  /// `init()` is inside the try, not before it: a boot that throws (server
+  /// unreachable on the very first call) used to escape both of these, and
+  /// [AdminSignin] has nothing to catch it with -- the button stayed disabled
+  /// with no message until someone reloaded the page. A failed boot is just
+  /// another failed send.
   static Future<String> sendCode(String email) async {
-    await init();
     try {
+      await init();
       return (await AuthService.sendUserCode(email: email))['status']
               ?.toString() ??
           'error';
@@ -75,8 +80,8 @@ class AdminSession {
   }
 
   static Future<bool> login(String email, String code) async {
-    await init();
     try {
+      await init();
       return await AuthService.loginWithOtp(email, code);
     } catch (_) {
       return false;

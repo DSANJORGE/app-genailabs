@@ -203,12 +203,10 @@ class _AdminPeopleState extends State<AdminPeople> {
             width: 130,
           ),
           AdminColumn(
-            // 100 px, not 80: a full `2026-09-02` in mono 11.5 is 79 px wide
-            // and left the date touching the status beside it.
             L('Last activity', 'Última actividad'),
             (u) => Text(date(u.lastActivity), style: AdminTokens.mono(11.5)),
             sortKey: (u) => u.lastActivity?.millisecondsSinceEpoch ?? 0,
-            width: 100,
+            width: 80,
             numeric: true,
           ),
           AdminColumn(
@@ -237,6 +235,7 @@ class _AdminPeopleState extends State<AdminPeople> {
     return Select<String>(
       value: teams.any((x) => x.id == u.team) ? u.team : null,
       hint: L('None', 'Ninguno'),
+      semanticLabel: L('Change team', 'Cambiar equipo'),
       items: [
         (null, L('None', 'Ninguno')),
         for (final team in teams) (team.id, team.name),
@@ -251,6 +250,7 @@ class _AdminPeopleState extends State<AdminPeople> {
     }
     return Select<String>(
       value: u.role,
+      semanticLabel: L('Change role', 'Cambiar rol'),
       items: [for (final r in _roles) (r, roleLabel(r))],
       onChanged: (v) => v == null ? null : _mutate(() => widget.api.setRole(u.id, v)),
     );

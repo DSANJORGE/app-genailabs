@@ -179,6 +179,10 @@ void main() {
 
       expect(find.byType(Skeleton), findsWidgets);
       expect(find.byType(ConsolePanelError), findsNothing);
+      // A reply that has not landed is not an empty organisation: showing
+      // "nobody has answered yet" while the answer is still in flight is the
+      // one wrong thing a loading state can say.
+      expect(find.byType(EmptyState), findsNothing);
       expect(tester.takeException(), isNull);
     });
 

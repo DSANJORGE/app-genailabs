@@ -1311,14 +1311,30 @@ class _AdminTableState<T> extends State<AdminTable<T>> {
     return _asc ? out : out.reversed.toList();
   }
 
+  /// Every cell keeps a 12 px right gutter, header and body alike. Without
+  /// it a fixed-width column butts straight into the next one, and a numeric
+  /// (right-aligned) cell reads as one word with the left-aligned cell after
+  /// it: `2026-09-02Activo`.
+  ///
+  /// The gutter is added OUTSIDE [AdminColumn.width], not taken out of it:
+  /// a fixed width is measured against the content that has to fit there
+  /// (`2026-09-02` in mono is 79 px of the 80 px column), so charging it for
+  /// the gutter would wrap every date onto two lines.
+  static const _gutterW = 12.0;
+
   Widget _cells(List<Widget> children) => Row(
         children: [
           for (var i = 0; i < widget.columns.length; i++)
-            widget.columns[i].width != null
-                ? SizedBox(width: widget.columns[i].width, child: children[i])
-                : Expanded(flex: widget.columns[i].flex, child: children[i]),
+            if (widget.columns[i].width case final w?)
+              SizedBox(width: w + _gutterW, child: _gutter(children[i]))
+            else
+              Expanded(
+                  flex: widget.columns[i].flex, child: _gutter(children[i])),
         ],
       );
+
+  Widget _gutter(Widget child) => Padding(
+      padding: const EdgeInsets.only(right: _gutterW), child: child);
 
   Widget _align(int i, Widget child) => Align(
         alignment: widget.columns[i].numeric
@@ -1446,6 +1462,7 @@ class Select<T> extends StatelessWidget {
     required this.items,
     required this.onChanged,
     this.hint,
+    this.semanticLabel,
     this.enabled = true,
   });
 
@@ -1454,7 +1471,16 @@ class Select<T> extends StatelessWidget {
   /// `(value, label)`; a null value is the "all" row.
   final List<(T?, String)> items;
   final ValueChanged<T?> onChanged;
+
+  /// What the control shows when nothing is picked -- a placeholder, not a
+  /// name. In a table cell it says "Ninguno", which is no use to a screen
+  /// reader, hence [semanticLabel].
   final String? hint;
+
+  /// What this control IS ("Change team"), for assistive technology. Falls
+  /// back to [hint] where the placeholder does name the control, which is
+  /// what the context bar's "All topics" / "All teams" selects do.
+  final String? semanticLabel;
   final bool enabled;
 
   @override
@@ -1499,7 +1525,7 @@ class Select<T> extends StatelessWidget {
         onTap: enabled
             ? () => controller.isOpen ? controller.close() : controller.open()
             : null,
-        semanticLabel: hint,
+        semanticLabel: semanticLabel ?? hint,
         builder: (context, hovered) => LayoutBuilder(
           builder: (context, box) {
             final text = Text(
