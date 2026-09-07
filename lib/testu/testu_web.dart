@@ -37,7 +37,10 @@ class TestuFrame extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!testuWide(context)) return child;
     final t = TestuTokens.of(context);
-    return ColoredBox(
+    // Material, not ColoredBox: the rail sits outside the Navigator's
+    // Scaffolds, and without a Material ancestor its Text inherits the
+    // "missing Material" error style (yellow double underline on web).
+    return Material(
       color: t.bg,
       child: ValueListenableBuilder<bool>(
         valueListenable: modal,
@@ -143,13 +146,16 @@ class TestuRail extends StatelessWidget {
                   TestuPressable(
                     onTap: () => onTab(i),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      // 12px on a 1x desktop pixel (the phone bar's 9.5 is
+                      // sized for 3x); mut, not faint, so the inactive
+                      // labels clear 4.5:1 on bg. 12+12 padding = 40px rows.
+                      padding: const EdgeInsets.symmetric(vertical: 12),
                       child: Row(children: [
                         AnimatedContainer(
                           duration: const Duration(milliseconds: 200),
                           curve: TestuTokens.curve,
                           width: 2,
-                          height: 12,
+                          height: 14,
                           color: i == current ? t.orange : Colors.transparent,
                         ),
                         const SizedBox(width: 12),
@@ -158,9 +164,9 @@ class TestuRail extends StatelessWidget {
                           style: TextStyle(
                             fontFamily: 'GeistMono',
                             fontWeight: FontWeight.w500,
-                            fontSize: 10,
-                            letterSpacing: 1.2,
-                            color: i == current ? t.ink : t.faint,
+                            fontSize: 12,
+                            letterSpacing: 1.0,
+                            color: i == current ? t.ink : t.mut,
                           ),
                         ),
                       ]),
