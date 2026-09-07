@@ -2,13 +2,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:genai_labs/admin/admin_nav.dart';
 
 void main() {
-  test('d7 spans seven inclusive days', () {
+  test('the console opens on the last 30 days', () {
     final f = AnalyticsFilters();
-    expect(f.period, Period.d7);
-    expect(f.days, 7);
-    expect(f.query['period'], 'd7');
+    expect(f.period, Period.d30);
+    expect(f.days, 30);
+    expect(f.query['period'], 'd30');
     expect(f.query['from'], matches(r'^\d{4}-\d{2}-\d{2}$'));
     expect(f.query['to'], matches(r'^\d{4}-\d{2}-\d{2}$'));
+  });
+
+  test('d7 spans seven inclusive days', () {
+    final f = AnalyticsFilters()..set(period: Period.d7);
+    expect(f.days, 7);
+    expect(f.query['period'], 'd7');
   });
 
   test('d30 and d90 span their whole window; pilot starts at kPilotStart', () {

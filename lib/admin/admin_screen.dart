@@ -34,6 +34,13 @@ String loadError(Object e) {
 /// citations in a row usually share a key, and a [Pulse] that only watched
 /// `active` would ring once and then sit still.
 ///
+/// The honesty line every `tutordaily`-derived chart needs while a topic
+/// filter is on. `tutordaily` has no topic dimension, so its bars stay
+/// org-wide even when the pill above them says otherwise; the reader is told
+/// rather than left to assume the chart followed the filter.
+String get allTopicsNote => L('Daily activity includes every topic.',
+    'La actividad diaria incluye todos los temas.');
+
 /// A top-level function rather than a mixin method: Dominio runs its own
 /// fetch machine and needs the same wiring.
 Widget pulse(ConsoleRoute route, Set<String> keys, {required Widget child}) =>

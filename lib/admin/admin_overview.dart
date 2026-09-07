@@ -145,14 +145,25 @@ class _AdminOverviewState extends State<AdminOverview>
         spark: spark(series, (d) => d.certainwrong),
       ),
       StatBlock(
-        label: L('Questions to Iris', 'Preguntas a Iris'),
+        label: L('Questions to $_persona', 'Preguntas a $_persona'),
         value: grouped(o.iris.questions),
-        delta: _delta(o.iris.questions, previous['questions']),
-        deltaPositive: _better(o.iris.questions, previous['questions']),
-        spark: spark(series, (d) => d.questions),
+        // The value is topic-filtered -- the server filters `tutorquestion`
+        // by `entitytopic` -- but the comparison and the sparkline come from
+        // `tutordaily`, which has no topic dimension. Under a topic filter
+        // they would answer a different question from the number above them,
+        // so the block carries the number alone.
+        delta: _topicFiltered
+            ? null
+            : _delta(o.iris.questions, previous['questions']),
+        deltaPositive: _topicFiltered
+            ? null
+            : _better(o.iris.questions, previous['questions']),
+        spark: _topicFiltered ? null : spark(series, (d) => d.questions),
       ),
     ]);
   }
+
+  bool get _topicFiltered => widget.filters.topic != null;
 
   /// No `previous` key means the server computed no comparison — say nothing
   /// rather than compare against an assumed zero.
@@ -179,15 +190,19 @@ class _AdminOverviewState extends State<AdminOverview>
         if (ghost != null)
           (AdminTokens.compare, L('Previous period', 'Periodo anterior')),
       ],
-      footnote: ghost == null
-          ? L('Active people = at least one answer that day.',
-              'Personas activas = al menos una respuesta ese día.')
-          : L(
-              'Active people = at least one answer that day. The previous '
-                  'period is the same span immediately before this one.',
-              'Personas activas = al menos una respuesta ese día. El periodo '
-                  'anterior es la misma duración antes del inicio.',
-            ),
+      // Answers/Minutos/Conceptos erróneos and this chart all come from
+      // `tutordaily`, which carries no topic -- say so while the pill claims
+      // otherwise, rather than let the bars read as the topic's own.
+      footnote: (ghost == null
+              ? L('Active people = at least one answer that day.',
+                  'Personas activas = al menos una respuesta ese día.')
+              : L(
+                  'Active people = at least one answer that day. The previous '
+                      'period is the same span immediately before this one.',
+                  'Personas activas = al menos una respuesta ese día. El periodo '
+                      'anterior es la misma duración antes del inicio.',
+                )) +
+          (_topicFiltered ? ' $allTopicsNote' : ''),
       child: activityChart(
         series: o.series,
         previous: ghost,
@@ -297,7 +312,7 @@ class _AdminOverviewState extends State<AdminOverview>
             ),
             AdminColumn(
               L('What the numbers say', 'Lo que dicen los números'),
-              (g) => Text(_gapLine(g),
+              (g) => Text(_gapLine(g, _persona),
                   style: AdminTokens.muted, overflow: TextOverflow.ellipsis),
               flex: 4,
             ),
@@ -440,13 +455,13 @@ Map<String, int> _bars(Levels l) => {
 
 /// A gap read out loud: the three counters that make it a gap, in the order
 /// a training lead acts on them.
-String _gapLine(Gap g) => L(
+String _gapLine(Gap g, String persona) => L(
       '${g.beginners} at Beginner, ${g.questions} '
-          '${g.questions == 1 ? 'question' : 'questions'} to Iris, '
+          '${g.questions == 1 ? 'question' : 'questions'} to $persona, '
           '${g.misconceptions} '
           '${g.misconceptions == 1 ? 'misconception' : 'misconceptions'}',
       '${g.beginners} en Principiante, ${g.questions} '
-          '${g.questions == 1 ? 'pregunta' : 'preguntas'} a Iris, '
+          '${g.questions == 1 ? 'pregunta' : 'preguntas'} a $persona, '
           '${g.misconceptions} '
           '${g.misconceptions == 1 ? 'concepto erróneo' : 'conceptos erróneos'}',
     );

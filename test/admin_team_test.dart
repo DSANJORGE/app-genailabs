@@ -239,7 +239,7 @@ void main() {
     expect(find.text('organisation median 48%'), findsOneWidget);
     // The stats follow a period this page has no control over, so it says
     // which one out loud.
-    expect(find.textContaining('Period 7 d'), findsOneWidget);
+    expect(find.textContaining('Period 30 d'), findsOneWidget);
   });
 
   testWidgets('an organisation under five people gets no median line',

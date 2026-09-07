@@ -63,6 +63,8 @@ class _AdminActivityState extends State<AdminActivity>
 
   String get _persona => personaName(widget.me);
 
+  bool get _topicFiltered => widget.filters.topic != null;
+
   Widget _page(BuildContext context, Activity a, ConsoleRoute route) {
     // `funnel` is the screen's own cohort: activityReading reads the same
     // five numbers, so both come from one place.
@@ -97,7 +99,7 @@ class _AdminActivityState extends State<AdminActivity>
             ),
           )
         else ...[
-          _DailyCard(a.series),
+          _DailyCard(a.series, topicFiltered: _topicFiltered),
           const SizedBox(height: 16),
           _hours(a),
           const SizedBox(height: 16),
@@ -179,13 +181,18 @@ class _AdminActivityState extends State<AdminActivity>
 
   Widget _irisUsage(Activity a) {
     final cited = a.iris.citedShare;
+    // The stats below are topic-filtered (they come from `tutorquestion`);
+    // the bars above them are `tutordaily` and are not.
+    final notes = [
+      if (cited != null)
+        L('${pct(cited)} of replies pointed at the source they came from.',
+            '${pct(cited)} de las respuestas señalaron la fuente de la que salen.'),
+      if (_topicFiltered) allTopicsNote,
+    ];
     return ChartCard(
       eyebrow: L('$_persona usage', 'Uso de $_persona'),
       height: null,
-      footnote: cited == null
-          ? null
-          : L('${pct(cited)} of replies pointed at the source they came from.',
-              '${pct(cited)} de las respuestas señalaron la fuente de la que salen.'),
+      footnote: notes.isEmpty ? null : notes.join(' '),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -469,9 +476,13 @@ class _AdminActivityState extends State<AdminActivity>
 /// The choice survives a filter change, which is what a reader comparing two
 /// periods on the same counter expects.
 class _DailyCard extends StatefulWidget {
-  const _DailyCard(this.series);
+  const _DailyCard(this.series, {required this.topicFiltered});
 
   final List<DayPoint> series;
+
+  /// `tutordaily` has no topic dimension, so a topic filter leaves these bars
+  /// org-wide. The footnote says so rather than let the pill imply otherwise.
+  final bool topicFiltered;
 
   @override
   State<_DailyCard> createState() => _DailyCardState();
@@ -505,21 +516,23 @@ class _DailyCardState extends State<_DailyCard> {
         ],
         onChanged: (v) => setState(() => _toggle = v),
       ),
-      footnote: silent
-          ? L('Available from app version 1.1.1.',
-              'Disponible desde la versión 1.1.1 de la app.')
-          : switch (_toggle) {
-              _Series.people => L(
-                  'Active people = at least one answer that day.',
-                  'Personas activas = al menos una respuesta ese día.'),
-              _Series.answers => L('One bar per day of the selected period.',
-                  'Una barra por día del periodo seleccionado.'),
-              _Series.minutes => L('Time with the app open, measured on the device.',
-                  'Tiempo con la app abierta, medido en el dispositivo.'),
-              _Series.sessions => L(
-                  'A session ends after 30 minutes without activity.',
-                  'Una sesión termina tras 30 minutos sin actividad.'),
-            },
+      footnote: (silent
+              ? L('Available from app version 1.1.1.',
+                  'Disponible desde la versión 1.1.1 de la app.')
+              : switch (_toggle) {
+                  _Series.people => L(
+                      'Active people = at least one answer that day.',
+                      'Personas activas = al menos una respuesta ese día.'),
+                  _Series.answers => L('One bar per day of the selected period.',
+                      'Una barra por día del periodo seleccionado.'),
+                  _Series.minutes => L(
+                      'Time with the app open, measured on the device.',
+                      'Tiempo con la app abierta, medido en el dispositivo.'),
+                  _Series.sessions => L(
+                      'A session ends after 30 minutes without activity.',
+                      'Una sesión termina tras 30 minutos sin actividad.'),
+                }) +
+          (widget.topicFiltered ? ' $allTopicsNote' : ''),
       child: dailyBars(widget.series, value: _value),
     );
   }

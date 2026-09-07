@@ -36,7 +36,10 @@ String ymd(DateTime d) => '${d.year.toString().padLeft(4, '0')}-'
 /// point, so one user gesture is one notification even when it changes two
 /// filters at once.
 class AnalyticsFilters extends ChangeNotifier {
-  Period _period = Period.d7;
+  // Spec analytics-v1 §4 and the §6.1 wireframe: the console opens on 30
+  // days. A week is too short a window for a cohort that answers a handful of
+  // questions a day to read as anything but noise.
+  Period _period = Period.d30;
   String? _topic;
   String? _team;
 

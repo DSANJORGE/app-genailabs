@@ -112,6 +112,7 @@ Future<(FakeEmeHttp, AnalyticsFilters, ConsoleNav)> _pump(
   WidgetTester tester, {
   Map<String, dynamic>? canned,
   String? highlight,
+  String? topic,
   double width = 1440,
 }) async {
   tester.view.physicalSize = Size(width, 2400);
@@ -121,6 +122,7 @@ Future<(FakeEmeHttp, AnalyticsFilters, ConsoleNav)> _pump(
   final http = FakeEmeHttp();
   if (canned != null) http.canned[_path] = canned;
   final filters = AnalyticsFilters();
+  if (topic != null) filters.set(topic: topic);
   final nav = ConsoleNav(ConsoleRoute('overview', highlight: highlight));
   addTearDown(filters.dispose);
   addTearDown(nav.dispose);
@@ -385,5 +387,37 @@ void main() {
     );
   });
 
-}
+  // ------------------------------------------------- topic filter honesty
 
+  // The Iris stat's value is topic-filtered; its delta and sparkline come
+  // from `tutordaily`, which has no topic. Under a filter they would answer a
+  // different question from the number above them.
+  testWidgets('a topic filter strips the Iris delta, sparkline and warns on the chart',
+      (tester) async {
+    await _pump(tester, canned: _canned(), topic: 'topic-ddhh');
+
+    final iris = tester.widget<StatBlock>(
+        find.widgetWithText(StatBlock, 'QUESTIONS TO IRIS'));
+    expect(iris.value, '42');
+    expect(iris.delta, isNull);
+    expect(iris.spark, isNull);
+
+    final daily = tester.widget<ChartCard>(
+        find.widgetWithText(ChartCard, 'DAILY ACTIVITY'));
+    expect(daily.footnote, contains('Daily activity includes every topic.'));
+  });
+
+  testWidgets('without a topic filter the delta, sparkline and no footnote',
+      (tester) async {
+    await _pump(tester, canned: _canned());
+
+    final iris = tester.widget<StatBlock>(
+        find.widgetWithText(StatBlock, 'QUESTIONS TO IRIS'));
+    expect(iris.delta, isNotNull);
+    expect(iris.spark, isNotNull);
+
+    final daily = tester.widget<ChartCard>(
+        find.widgetWithText(ChartCard, 'DAILY ACTIVITY'));
+    expect(daily.footnote, isNot(contains('every topic')));
+  });
+}
