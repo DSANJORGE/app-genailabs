@@ -263,7 +263,7 @@ class TeamStat {
   final int members, activated, active7d;
   final Levels levels;
 
-  /// Unlike [TopicStat.weakest] this is just the weakest section's NAME
+  /// Unlike [TopicStat.weakest] this is just the weakest topic's NAME
   /// (or null), not a [Weakest] record.
   final String? weakest;
 
@@ -504,11 +504,8 @@ class Activity {
         },
         hours: [
           for (final h in (j['hours'] as List? ?? []))
-            (
-              ((h as List)[0] as num).toInt(),
-              (h[1] as num).toInt(),
-              (h[2] as num).toInt(),
-            ),
+            if (h is List && h.length >= 3 && h[0] is num && h[1] is num && h[2] is num)
+              ((h[0] as num).toInt(), (h[1] as num).toInt(), (h[2] as num).toInt()),
         ],
         inactive: [
           for (final p in (j['inactive'] as List? ?? []))
@@ -604,7 +601,7 @@ class Citation {
     final v = j['value'];
     final value = switch (v) {
       null => '',
-      num n => '$n',
+      num n => n is double && n == n.roundToDouble() ? n.toInt().toString() : '$n',
       String s => s,
       _ => jsonEncode(v),
     };

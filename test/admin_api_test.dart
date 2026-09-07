@@ -208,6 +208,33 @@ void main() {
     expect(act.inactive[1].lastActivity, isNull);
   });
 
+  test('activity tolerates a ragged hours row and a null element', () async {
+    http.canned['services/testu/analytics/activity.json'] = {
+      'series': [],
+      'funnel': {},
+      'hours': [
+        [3],
+        [1, null, 4],
+        [0, 9, 3],
+      ],
+      'inactive': [],
+      'iris': {
+        'questions': 0,
+        'people': 0,
+        'citedShare': null,
+        'ratedShare': null,
+        'helpfulShare': null,
+        'themes': [],
+        'sections': [],
+        'labels': [],
+      },
+    };
+
+    final act = await api.activity({});
+
+    expect(act.hours, [(0, 9, 3)]);
+  });
+
   test('person parses raw lastlogin, extended mastery counters, usage and iris', () async {
     http.canned['services/testu/analytics/person.json'] = {
       'user': {
@@ -280,6 +307,7 @@ void main() {
       'citations': [
         {'id': 'c1', 'label': 'Reporte', 'value': 42, 'view': 'report', 'filters': {'from': '2026-09-01'}},
         {'id': 'c2', 'label': 'Detalle', 'value': {'a': 1, 'b': 2}, 'view': 'gap', 'filters': {}},
+        {'id': 'c3', 'label': 'Promedio', 'value': 5.0, 'view': 'report', 'filters': {}},
       ],
       'followups': ['¿Y el equipo Norte?'],
       'model': 'gpt',
@@ -290,6 +318,7 @@ void main() {
     expect(reply.answer, 'La respuesta es...');
     expect(reply.citations[0].value, '42');
     expect(reply.citations[1].value, '{"a":1,"b":2}');
+    expect(reply.citations[2].value, '5');
     expect(reply.followups.single, '¿Y el equipo Norte?');
     expect(http.posted.single.fields['question'], '¿Cuántos activos?');
     expect(http.posted.single.fields['history'], '[]');
