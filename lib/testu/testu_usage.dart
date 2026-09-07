@@ -12,7 +12,9 @@ const kTestuAppVersion = '1.1.1+6';
 /// The app's single usage recorder. Lazily built (top-level finals are), so
 /// it costs nothing until the first event and never runs before Dio is up.
 final testuUsage = TestuUsage(
-  platform: defaultTargetPlatform.name,
+  // A browser reports the emulated platform (iOS under Safari); the console
+  // wants to tell web sessions apart.
+  platform: kIsWeb ? 'web' : defaultTargetPlatform.name,
   appVersion: kTestuAppVersion,
 );
 

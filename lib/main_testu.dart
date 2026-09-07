@@ -1,6 +1,7 @@
 import 'package:eme_app_package/utils/error_handler.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 
 import 'firebase_options.dart';
@@ -24,8 +25,12 @@ bool _firebaseReady = false;
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
-    await AppErrorHandler.initialize(DefaultFirebaseOptions.currentPlatform);
-    _firebaseReady = true;
+    // Web: no Firebase project for the browser yet. initialize(null) still
+    // installs the Flutter and platform error hooks; Crashlytics and
+    // Analytics stay off (spec: testu-learn-web).
+    await AppErrorHandler.initialize(
+        kIsWeb ? null : DefaultFirebaseOptions.currentPlatform);
+    _firebaseReady = !kIsWeb;
   } catch (e) {
     debugPrint('Firebase off: $e');
   }
@@ -94,7 +99,11 @@ class _TestuAppState extends State<TestuApp> with WidgetsBindingObserver {
   /// app `inactive`, and re-locking behind those would be a trap.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused) {
+    // A browser tab never reports `paused`: `hidden` is what it sends when
+    // the tab is hidden or closing, so that is the flush point on web.
+    // Mobile keeps `paused` only (see the note above about `inactive`).
+    if (state == AppLifecycleState.paused ||
+        (kIsWeb && state == AppLifecycleState.hidden)) {
       testuUsage.pause();
       _leftAt = DateTime.now();
     } else if (state == AppLifecycleState.resumed) {
