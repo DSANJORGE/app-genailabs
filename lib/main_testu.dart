@@ -1,6 +1,9 @@
+import 'package:eme_app_package/utils/error_handler.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'firebase_options.dart';
 import 'testu/testu_auth.dart';
 import 'testu/testu_lock.dart';
 import 'testu/testu_profile.dart';
@@ -12,8 +15,19 @@ import 'testu/testu_widgets.dart';
 
 /// TestU Learn entrypoint — run with `flutter run -t lib/main_testu.dart`.
 /// Keeps the TestU surface separate from the catalog app in main.dart.
-void main() {
+/// True once Firebase (project `testu-learn`) is up; Crashlytics hooks are
+/// installed by [AppErrorHandler] and Analytics collects its automatic events.
+/// The app never depends on it: a bad config or no network just leaves it off.
+bool _firebaseReady = false;
+
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await AppErrorHandler.initialize(DefaultFirebaseOptions.currentPlatform);
+    _firebaseReady = true;
+  } catch (e) {
+    debugPrint('Firebase off: $e');
+  }
   restoreTestuAvatar();
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
@@ -148,6 +162,12 @@ class _TestuAppState extends State<TestuApp> with WidgetsBindingObserver {
     }
     return MaterialApp(
       navigatorKey: _nav,
+      // Screen views for named routes; the automatic events (first_open,
+      // session_start, app_update) need nothing from here.
+      navigatorObservers: [
+        if (_firebaseReady)
+          FirebaseAnalyticsObserver(analytics: FirebaseAnalytics.instance),
+      ],
       title: 'TestU Learn',
       debugShowCheckedModeBanner: false,
       theme: testuTheme(),
