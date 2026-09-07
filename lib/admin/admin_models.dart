@@ -113,9 +113,8 @@ class AdminUser {
   final String? lastlogin;
 
   /// eMe's raw account-creation string, kept verbatim for the same reason as
-  /// [lastlogin].
-  // ponytail: person.groovy does not send this yet -- the Persona header
-  // prints the line the day it does, and stays silent until then.
+  /// [lastlogin]; only `person.json` populates it, and it is null for
+  /// accounts eMe never stamped (the Persona header then omits the line).
   final String? creationdate;
 
   String get name => '$firstName $lastName'.trim().isEmpty

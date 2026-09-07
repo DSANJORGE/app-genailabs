@@ -131,7 +131,7 @@ class _AdminPersonState extends State<AdminPerson>
       if ((u.team ?? '').isNotEmpty) _teamName(d, u.team!),
       if (_lastSeen(p) != null)
         L('Last activity ${_lastSeen(p)}', 'Última actividad ${_lastSeen(p)}'),
-      if (u.creationdate != null)
+      if ((u.creationdate ?? '').isNotEmpty)
         L('In the app since ${u.creationdate}',
             'En la app desde ${u.creationdate}'),
     ];
