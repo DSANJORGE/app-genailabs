@@ -1,11 +1,7 @@
-import 'dart:io';
-
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:path_provider/path_provider.dart';
-
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'testu_auth.dart';
@@ -15,6 +11,8 @@ import 'testu_lock.dart';
 import 'testu_theme.dart';
 import 'testu_widgets.dart';
 import 'testu_client.dart';
+import 'testu_avatar_io.dart'
+    if (dart.library.js_interop) 'testu_avatar_web.dart';
 
 /// Ana's chosen avatar — the Today header listens so the photo swap
 /// propagates, like the prototype's setAvatar() updating every .ana-ava.
@@ -34,32 +32,12 @@ final _presetAvatars = [
 
 const _kAvatarPref = 'testu_avatar';
 
-Future<Directory> _avatarDir() async {
-  final d =
-      Directory('${(await getApplicationDocumentsDirectory()).path}/avatars');
-  if (!d.existsSync()) d.createSync(recursive: true);
-  return d;
-}
-
 /// Restores the library and the selection; call once at startup.
 Future<void> restoreTestuAvatar() async {
-  final dir = await _avatarDir();
-  // Carried over from the single-photo cut, which saved one fixed avatar.jpg.
-  final legacy = File('${dir.parent.path}/avatar.jpg');
-  if (legacy.existsSync()) {
-    legacy.renameSync(
-        '${dir.path}/${DateTime.now().millisecondsSinceEpoch}.jpg');
-  }
-  testuAvatarLibrary.value = dir
-      .listSync()
-      .whereType<File>()
-      .map((f) => f.path)
-      .toList()
-    ..sort();
+  testuAvatarLibrary.value = await avatarRestoreLibrary();
   final prefs = await SharedPreferences.getInstance();
   final saved = prefs.getString(_kAvatarPref);
-  if (saved != null &&
-      (saved.startsWith('assets/') || File(saved).existsSync())) {
+  if (saved != null && (saved.startsWith('assets/') || avatarExists(saved))) {
     testuAvatar.value = saved;
   }
 }
@@ -70,34 +48,29 @@ Future<void> _selectAvatar(String src) async {
   await prefs.setString(_kAvatarPref, src);
 }
 
-/// Copies the pick into the library under a unique name — FileImage caches by
-/// path, so reusing one filename would keep serving the previous photo.
 Future<void> _addAvatar() async {
   final picked = await ImagePicker()
       .pickImage(source: ImageSource.gallery, maxWidth: 512);
   if (picked == null) return;
-  final dir = await _avatarDir();
-  final dest = '${dir.path}/${DateTime.now().millisecondsSinceEpoch}.jpg';
-  await File(picked.path).copy(dest);
-  testuAvatarLibrary.value = [...testuAvatarLibrary.value, dest];
-  await _selectAvatar(dest);
+  final src = await avatarAdd(picked);
+  testuAvatarLibrary.value = [...testuAvatarLibrary.value, src];
+  await _selectAvatar(src);
 }
 
 /// Removes a photo from TestU (not from the phone's own library). If it was
 /// the one in use, the profile falls back to the first preset rather than
 /// leaving the header with a missing file.
-Future<void> _removeAvatar(String path) async {
-  final f = File(path);
-  if (f.existsSync()) f.deleteSync();
-  await FileImage(f).evict();
+Future<void> _removeAvatar(String src) async {
+  await avatarRemove(src);
   testuAvatarLibrary.value =
-      testuAvatarLibrary.value.where((p) => p != path).toList();
-  if (testuAvatar.value == path) await _selectAvatar(_presetAvatars.first);
+      testuAvatarLibrary.value.where((p) => p != src).toList();
+  if (testuAvatar.value == src) await _selectAvatar(_presetAvatars.first);
 }
 
-/// [testuAvatar] holds either a bundled asset key or a picked file path.
+/// [testuAvatar] holds a bundled asset key or a store key (a file path on
+/// device, a data URL in the browser).
 ImageProvider testuAvatarImage(String src) =>
-    src.startsWith('assets/') ? AssetImage(src) : FileImage(File(src));
+    src.startsWith('assets/') ? AssetImage(src) : avatarImage(src);
 
 void showTestuProfile(BuildContext context) {
   Navigator.of(context).push(
