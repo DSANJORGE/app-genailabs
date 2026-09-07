@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// URL in prefs, resolve to an image, and leave cleanly when removed.
 /// (The file has no web-only imports, so the VM can test it directly.)
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   test('a picked photo round-trips through prefs as a data URL', () async {

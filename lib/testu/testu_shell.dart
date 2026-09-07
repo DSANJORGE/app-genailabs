@@ -47,6 +47,12 @@ class _TestuShellState extends State<TestuShell> {
   @override
   void initState() {
     super.initState();
+    // Deferred: setting this synchronously here would notify the rail's
+    // ValueListenableBuilder (a sibling under TestuFrame, not an ancestor)
+    // mid-build and crash with "setState called during build".
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) TestuShell.currentTab.value = _tab;
+    });
     TestuShell.tabRequest.addListener(_onTabRequest);
     testuLang.addListener(_onLang);
   }

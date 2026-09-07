@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -18,6 +18,7 @@ class TestuFrame extends StatelessWidget {
     super.key,
     required this.rail,
     required this.onTab,
+    required this.modal,
     required this.child,
   });
 
@@ -25,6 +26,11 @@ class TestuFrame extends StatelessWidget {
   /// the launch intro are client-neutral full-window surfaces.
   final bool rail;
   final ValueChanged<int> onTab;
+
+  /// True while a dialog/sheet route is up — dims the rail and the gutters,
+  /// which live outside the Navigator's overlay and would otherwise stay
+  /// bright and clickable under a modal.
+  final ValueListenable<bool> modal;
   final Widget child;
 
   @override
@@ -33,18 +39,61 @@ class TestuFrame extends StatelessWidget {
     final t = TestuTokens.of(context);
     return ColoredBox(
       color: t.bg,
-      child: Row(children: [
-        if (rail) TestuRail(onTab: onTab),
-        Expanded(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 720),
-              child: child,
-            ),
+      child: ValueListenableBuilder<bool>(
+        valueListenable: modal,
+        builder: (_, dim, _) => Row(children: [
+          if (rail)
+            Stack(children: [
+              TestuRail(onTab: onTab),
+              // Same barrier as the dialog's, over the rail while one is up.
+              if (dim) Positioned.fill(child: ColoredBox(color: t.barrier)),
+            ]),
+          Expanded(
+            child: Stack(children: [
+              // Under the column: the column paints its own barrier, the
+              // gutters get this one.
+              if (dim) Positioned.fill(child: ColoredBox(color: t.barrier)),
+              Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 720),
+                  child: child,
+                ),
+              ),
+            ]),
           ),
-        ),
-      ]),
+        ]),
+      ),
     );
+  }
+}
+
+/// Tells the frame when a modal route (dialog, sheet) is up so the rail and
+/// the gutters, which live outside the Navigator's overlay, dim and stop
+/// taking taps like the column does. Counts PopupRoutes only: pushed
+/// screens (lightbox, video fullscreen) are not modals.
+class TestuModalWatch extends NavigatorObserver {
+  final modal = ValueNotifier<bool>(false);
+  int _depth = 0;
+
+  void _bump(Route<dynamic>? route, int by) {
+    if (route is! PopupRoute) return;
+    _depth = (_depth + by).clamp(0, 1 << 20);
+    modal.value = _depth > 0;
+  }
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) =>
+      _bump(route, 1);
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) =>
+      _bump(route, -1);
+  @override
+  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) =>
+      _bump(route, -1);
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
+    _bump(oldRoute, -1);
+    _bump(newRoute, 1);
   }
 }
 
@@ -76,7 +125,8 @@ class TestuRail extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (client.logo != null)
-                  Image.asset(client.logo!, height: 22)
+                  Image.asset(client.logo!,
+                      width: 140, filterQuality: FilterQuality.high)
                 else
                   Text(
                     client.wordmark.toUpperCase(),
@@ -136,7 +186,6 @@ Future<void> maybeShowTestuWebNudge(BuildContext context,
   if (!web || MediaQuery.sizeOf(context).width >= 600) return;
   final prefs = await SharedPreferences.getInstance();
   if (prefs.getBool(_kNudged) ?? false) return;
-  await prefs.setBool(_kNudged, true);
   if (!context.mounted) return;
   final t = TestuTokens.of(context);
   await showTestuDialog<void>(
@@ -167,4 +216,5 @@ Future<void> maybeShowTestuWebNudge(BuildContext context,
       ],
     ),
   );
+  await prefs.setBool(_kNudged, true);
 }

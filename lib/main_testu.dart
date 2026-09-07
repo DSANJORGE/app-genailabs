@@ -69,6 +69,7 @@ class _TestuAppState extends State<TestuApp> with WidgetsBindingObserver {
   /// When the app was last put away. Null while it's in the foreground.
   DateTime? _leftAt;
   final _nav = GlobalKey<NavigatorState>();
+  final _modals = TestuModalWatch();
 
   /// Long enough that answering a message or picking a photo doesn't make you
   /// re-authenticate; short enough that the phone left on a crew-room table
@@ -101,8 +102,11 @@ class _TestuAppState extends State<TestuApp> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // A browser tab never reports `paused`: `hidden` is what it sends when
-    // the tab is hidden or closing, so that is the flush point on web.
-    // Mobile keeps `paused` only (see the note above about `inactive`).
+    // the tab is hidden or closing, so that is where web pauses; if the POST
+    // is cut off by unload the event is still queued and ships on the next
+    // open(). Mobile keeps `paused` only (see the note above about
+    // `inactive`). Resume is asymmetric on web: a visible but unfocused tab
+    // sits in `inactive`, so the clock restarts on focus.
     if (state == AppLifecycleState.paused ||
         (kIsWeb && state == AppLifecycleState.hidden)) {
       testuUsage.pause();
@@ -198,6 +202,7 @@ class _TestuAppState extends State<TestuApp> with WidgetsBindingObserver {
           _nav.currentState?.popUntil((r) => r.isFirst);
           TestuShell.tabRequest.value = i;
         },
+        modal: _modals.modal,
         child: child!,
       ),
       // Screen views for named routes; the automatic events (first_open,
@@ -205,6 +210,7 @@ class _TestuAppState extends State<TestuApp> with WidgetsBindingObserver {
       navigatorObservers: [
         if (_firebaseReady)
           FirebaseAnalyticsObserver(analytics: FirebaseAnalytics.instance),
+        _modals,
       ],
       title: 'TestU Learn',
       debugShowCheckedModeBanner: false,

@@ -29,7 +29,7 @@ Future<void> avatarRemove(String src) async {
   final p = await SharedPreferences.getInstance();
   await p.setStringList(
       _kLib, (await avatarRestoreLibrary()).where((s) => s != src).toList());
-  _images.remove(src);
+  await _images.remove(src)?.evict();
 }
 
 // One provider per key, so Flutter's image cache hits instead of decoding

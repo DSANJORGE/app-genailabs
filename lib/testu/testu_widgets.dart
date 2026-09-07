@@ -1,9 +1,8 @@
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-
-import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 
 import 'testu_icons.dart';
 import 'testu_theme.dart';

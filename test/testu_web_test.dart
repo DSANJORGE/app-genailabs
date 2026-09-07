@@ -105,10 +105,15 @@ void main() {
     Future<void> pumpShell(WidgetTester tester, Size size,
         {ValueChanged<int>? onTab}) async {
       window(tester, size);
+      final modalWatch = TestuModalWatch();
       await tester.pumpWidget(MaterialApp(
         theme: testuTheme(),
-        builder: (context, child) =>
-            TestuFrame(rail: true, onTab: onTab ?? (_) {}, child: child!),
+        navigatorObservers: [modalWatch],
+        builder: (context, child) => TestuFrame(
+            rail: true,
+            onTab: onTab ?? (_) {},
+            modal: modalWatch.modal,
+            child: child!),
         home: const TestuShell(),
       ));
       await tester.pump(const Duration(seconds: 1));
@@ -139,6 +144,30 @@ void main() {
       TestuShell.tabRequest.value = 3;
       await tester.pump();
       expect(TestuShell.currentTab.value, 3);
+    });
+
+    testWidgets('a dialog dims the rail and blocks its taps', (tester) async {
+      int? tapped;
+      await pumpShell(tester, desktop, onTab: (i) => tapped = i);
+      final ctx = tester.element(find.byType(TestuShell));
+      showTestuSheet<void>(ctx, builder: (_) => const Text('modal'));
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('modal'), findsOneWidget);
+      await tester.tap(find.text('TOPICS'), warnIfMissed: false);
+      await tester.pump();
+      expect(tapped, isNull, reason: 'the rail is behind the barrier');
+      Navigator.of(ctx).pop();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.tap(find.text('TOPICS'));
+      expect(tapped, 1, reason: 'the rail is live again');
+    });
+
+    testWidgets('TestuShell.currentTab resets to 0 for a fresh shell',
+        (tester) async {
+      addTearDown(() => TestuShell.currentTab.value = 0);
+      TestuShell.currentTab.value = 3;
+      await pumpShell(tester, desktop);
+      expect(TestuShell.currentTab.value, 0);
     });
   });
 
