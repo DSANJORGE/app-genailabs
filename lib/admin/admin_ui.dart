@@ -1500,30 +1500,42 @@ class Select<T> extends StatelessWidget {
             ? () => controller.isOpen ? controller.close() : controller.open()
             : null,
         semanticLabel: hint,
-        builder: (context, hovered) => Container(
-          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
-          decoration: BoxDecoration(
-            color: hovered ? t.card2 : null,
-            border: Border.all(color: t.line2),
-            borderRadius: BorderRadius.circular(7),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  fontFamily: 'Geist',
-                  fontSize: 11.5,
-                  // A locked team is still the manager's own team name:
-                  // readable, not decorative.
-                  color: enabled ? t.ink : t.mut,
-                ),
+        builder: (context, hovered) => LayoutBuilder(
+          builder: (context, box) {
+            final text = Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontFamily: 'Geist',
+                fontSize: 11.5,
+                // A locked team is still the manager's own team name:
+                // readable, not decorative.
+                color: enabled ? t.ink : t.mut,
               ),
-              const SizedBox(width: 10),
-              Text('▾', style: AdminTokens.mono(8, color: t.mut)),
-            ],
-          ),
+            );
+            return Container(
+              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+              decoration: BoxDecoration(
+                color: hovered ? t.card2 : null,
+                border: Border.all(color: t.line2),
+                borderRadius: BorderRadius.circular(7),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // In a table cell the width is fixed and a Spanish team
+                  // name is longer than it: the label gives way rather than
+                  // painting overflow stripes over the row. In the context
+                  // bar the select sits in a Wrap with no width to give way
+                  // to, and a flexible child there is a layout error.
+                  box.maxWidth.isFinite ? Flexible(child: text) : text,
+                  const SizedBox(width: 10),
+                  Text('▾', style: AdminTokens.mono(8, color: t.mut)),
+                ],
+              ),
+            );
+          },
         ),
       ),
     );

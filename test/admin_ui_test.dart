@@ -294,6 +294,17 @@ void main() {
         '1 · Sin actividad: Jorge',
       ),
       (ConsoleChip('Compare the teams', onTap: () {}), 'Compare the teams'),
+      // A control that carries no semanticLabel of its own: its visible text
+      // IS its name, and it has to end up on the node that answers the tap
+      // rather than on a sibling underneath it.
+      (
+        Segmented<String>(
+          value: 'a',
+          items: const [('a', 'Piloto')],
+          onChanged: (_) {},
+        ),
+        'Piloto',
+      ),
     ]) {
       await tester.pumpWidget(_app(Center(child: widget)));
       await tester.pump();
@@ -305,4 +316,58 @@ void main() {
     handle.dispose();
   });
 
+  // A row is one control made of several cells: the node that answers the
+  // tap has to carry the row's own words, or a screen reader announces a
+  // nameless button and the name arrives as a separate, unpressable thing.
+  testWidgets('a control with no semanticLabel is named by its own text',
+      (tester) async {
+    final handle = tester.ensureSemantics();
+    await tester.pumpWidget(_app(AdminTable<(String, String)>(
+      columns: [
+        AdminColumn('Name', (r) => Text(r.$1)),
+        AdminColumn('Team', (r) => Text(r.$2)),
+      ],
+      rows: const [('Ana Quispe', 'Norte')],
+      onTap: (_) {},
+    )));
+    await tester.pump();
+
+    final node = tester.getSemantics(find.text('Ana Quispe'));
+    expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isTrue,
+        reason: 'the named node is the one that opens the row');
+    expect(node.label, contains('Ana Quispe'));
+    handle.dispose();
+  });
+
+  // ...and merging a row must not swallow a control that lives inside it:
+  // Colaboradores puts a Select in two of its cells, and those stay their
+  // own, separately pressable nodes.
+  testWidgets('a control inside a row is still its own node', (tester) async {
+    final handle = tester.ensureSemantics();
+    await tester.pumpWidget(_app(AdminTable<String>(
+      columns: [
+        AdminColumn('Name', (r) => Text(r)),
+        AdminColumn(
+          'Team',
+          (r) => Select<String>(
+            value: 'norte',
+            // Not the column's own word: the header cell would answer to it.
+            hint: 'Change team',
+            items: const [('norte', 'Norte')],
+            onChanged: (_) {},
+          ),
+        ),
+      ],
+      rows: const ['Ana Quispe'],
+      onTap: (_) {},
+    )));
+    await tester.pump();
+
+    // The node's name is the hint plus the value it is showing, so match on
+    // the hint rather than on the whole label.
+    final select =
+        tester.getSemantics(find.bySemanticsLabel(RegExp('Change team')));
+    expect(select.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+    handle.dispose();
+  });
 }

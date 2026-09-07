@@ -35,17 +35,20 @@ class AdminApi {
   Future<AdminMe> me() async =>
       AdminMe.fromJson(await _http.getJson('services/testu/personas/me.json'));
 
+  /// The list key is read the way every model reads one (plan ruling R6): an
+  /// endpoint with nothing to report answers `{ok:true}` and no list at all,
+  /// and that is an empty roster, not a failed read.
   Future<List<AdminUser>> users() async => [
-        for (final u
-            in (await _http.getJson('services/testu/personas/users.json'))['users']
-                as List)
+        for (final u in (await _http.getJson(
+                'services/testu/personas/users.json'))['users'] as List? ??
+            const [])
           AdminUser.fromJson(u),
       ];
 
   Future<List<AdminTeam>> teams() async => [
-        for (final t
-            in (await _http.getJson('services/testu/personas/teams.json'))['teams']
-                as List)
+        for (final t in (await _http.getJson(
+                'services/testu/personas/teams.json'))['teams'] as List? ??
+            const [])
           AdminTeam.fromJson(t),
       ];
 
@@ -58,7 +61,7 @@ class AdminApi {
       },
     );
     return AdminReport(
-      [for (final r in j['rows'] as List) MasteryRow(r)],
+      [for (final r in j['rows'] as List? ?? const []) MasteryRow(r)],
       ReportSummary.fromJson(j['summary'] as Map? ?? {}),
       {for (final t in (j['topics'] as List? ?? [])) '${t['id']}': '${t['name']}'},
     );

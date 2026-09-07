@@ -36,20 +36,22 @@ class _AdminTeamsState extends State<AdminTeams> {
     _load();
   }
 
+  /// Both reads in flight at once, joined by `Future.wait`, and EVERY failure
+  /// lands in the panel -- same rule as Colaboradores. Rethrowing the
+  /// EmeHttpException left a 500 or a dead connection with nothing to catch
+  /// it and the screen stuck on its skeleton; the 401/403 case has already
+  /// fired AdminSession.onSignedOut at the HTTP layer, so the panel under it
+  /// costs nothing.
   Future<void> _load() async {
-    final teams = widget.api.teams();
-    final users = widget.api.users();
     try {
-      final t = await teams;
-      final u = await users;
+      final r = await Future.wait<Object>(
+          [widget.api.teams(), widget.api.users()]);
       if (!mounted) return;
       setState(() {
-        _teams = t;
-        _users = u;
+        _teams = r[0] as List<AdminTeam>;
+        _users = r[1] as List<AdminUser>;
         _error = null;
       });
-    } on EmeHttpException {
-      rethrow;
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = e);

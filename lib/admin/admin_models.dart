@@ -135,7 +135,9 @@ class AdminUser {
       last = cut < 0 ? '' : flat.substring(cut + 1);
     }
     return AdminUser(
-      id: '${j['id']}',
+      // Never '${j['id']}': a reply without an id would print the word
+      // "null" at a reader as somebody's name.
+      id: '${j['id'] ?? ''}',
       email: '${j['email'] ?? ''}',
       firstName: first,
       lastName: last,

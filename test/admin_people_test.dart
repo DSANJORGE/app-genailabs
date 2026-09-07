@@ -167,11 +167,11 @@ void main() {
             'firstName': 'Ana',
             'lastName': 'Quispe Contreras',
             'team': 'norte',
-            // 'orgadmin' carries the longest Spanish role label
-            // ("Admin de organización"); the Select that renders it is a
-            // known width risk, so this row deliberately avoids it and uses
-            // a role that ships on real rosters instead.
-            'role': 'manager',
+            // 'orgadmin' carries the longest Spanish role label ("Admin de
+            // organización") and the Select that renders it is fixed to the
+            // column's width: the label has to give way, not paint overflow
+            // stripes over the row.
+            'role': 'orgadmin',
             'enabled': true,
           },
         ],

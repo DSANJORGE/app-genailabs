@@ -479,11 +479,17 @@ class _InteractiveState extends State<_Interactive> {
         cursor: SystemMouseCursors.click,
         onEnter: (_) => setState(() => _on = true),
         onExit: (_) => setState(() => _on = false),
+        // The Semantics carries the tap as well as the button flag, and the
+        // GestureDetector is excluded -- same wiring as admin_ui's own
+        // _Interactive, so the name (the row label underneath) and the action
+        // are on one node rather than on two that happen to merge.
         child: Semantics(
           button: true,
+          onTap: widget.onTap,
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: widget.onTap,
+            excludeFromSemantics: true,
             child: DecoratedBox(
               decoration: BoxDecoration(
                 color: _on ? AdminTokens.hover : null,

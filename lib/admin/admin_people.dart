@@ -47,16 +47,18 @@ class _AdminPeopleState extends State<AdminPeople> {
     super.dispose();
   }
 
+  /// Both reads in flight at once, joined by `Future.wait` -- awaiting them
+  /// one after the other leaves the second future's failure unhandled when
+  /// the first one throws, which is an error nobody catches and a screen
+  /// stuck on its skeleton.
   Future<void> _load() async {
-    final users = widget.api.users();
-    final teams = widget.api.teams();
     try {
-      final u = await users;
-      final t = await teams;
+      final r = await Future.wait<Object>(
+          [widget.api.users(), widget.api.teams()]);
       if (!mounted) return;
       setState(() {
-        _users = u;
-        _teams = t;
+        _users = r[0] as List<AdminUser>;
+        _teams = r[1] as List<AdminTeam>;
         _error = null;
       });
     } catch (e) {
@@ -201,10 +203,12 @@ class _AdminPeopleState extends State<AdminPeople> {
             width: 130,
           ),
           AdminColumn(
+            // 100 px, not 80: a full `2026-09-02` in mono 11.5 is 79 px wide
+            // and left the date touching the status beside it.
             L('Last activity', 'Última actividad'),
             (u) => Text(date(u.lastActivity), style: AdminTokens.mono(11.5)),
             sortKey: (u) => u.lastActivity?.millisecondsSinceEpoch ?? 0,
-            width: 80,
+            width: 100,
             numeric: true,
           ),
           AdminColumn(
