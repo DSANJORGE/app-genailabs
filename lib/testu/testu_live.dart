@@ -96,6 +96,7 @@ Future<void> liveSignOut() async {
   // this user's tutor channel.
   ChatSocketService().disconnect();
   _tutorChannel = null;
+  _tutorChannelId = null;
   _liveTutorialId = null;
   _liveTutorialTitle = null;
   _liveSections = const [];
@@ -161,8 +162,9 @@ class EmeQuestionSource extends TestuQuestionSource {
   }
 
   /// Writes the attempt back as `chat_tutor_answer` so the server keeps a
-  /// `tutoranswer` history the tutor can reason from. Diego's own account
-  /// only (approved 2026-09-03); the shared test user stays unpolluted.
+  /// `tutoranswer` history the tutor can reason from. Every signed-in
+  /// learner's attempts are recorded; the server aggregates them for the
+  /// console.
   @override
   void reportAttempt({
     required int qi,
@@ -171,7 +173,7 @@ class EmeQuestionSource extends TestuQuestionSource {
     required int confidence,
     required bool correct,
   }) {
-    if (AuthService.userId != 'diego' || questionId == null) return;
+    if (questionId == null) return;
     final q = _liveQs[qi];
     if (q.sectionId == null || q.componentId == null) return;
     _tutorChannelFor(_liveTutorialId!).then((chan) async {
@@ -457,8 +459,15 @@ Future<TutorChannel?> _tutorChannelFor(String tutorialId) =>
     _tutorChannel ??= () async {
       final c = await findTutorChannel(tutorialId);
       if (c != null) await ChatSocketService().connect(channel: c.id);
+      _tutorChannelId = c?.id;
       return c;
     }();
+
+/// The resolved channel id, kept alongside the future so callers that
+/// cannot await one (a rating is tagged with the channel it was given in)
+/// can read it synchronously. Null while offline or before it resolves.
+String? _tutorChannelId;
+String? get liveTutorChannelId => _tutorChannelId;
 
 // ---- Reference documents (the sources the tutor cites).
 

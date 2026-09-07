@@ -11,6 +11,7 @@ import 'testu/testu_shell.dart';
 import 'testu/testu_signin.dart';
 import 'testu/testu_splash.dart';
 import 'testu/testu_theme.dart';
+import 'testu/testu_usage.dart';
 import 'testu/testu_widgets.dart';
 
 /// TestU Learn entrypoint — run with `flutter run -t lib/main_testu.dart`.
@@ -94,8 +95,10 @@ class _TestuAppState extends State<TestuApp> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
+      testuUsage.pause();
       _leftAt = DateTime.now();
     } else if (state == AppLifecycleState.resumed) {
+      testuUsage.resume();
       final away = _leftAt;
       _leftAt = null;
       if (away != null &&
@@ -121,6 +124,9 @@ class _TestuAppState extends State<TestuApp> with WidgetsBindingObserver {
     // between the shell and the lock screen.
     await TestuLock.restore();
     final restored = await TestuAuth.restoreSession();
+    // Only a signed-in session can post: events recorded while signed out
+    // are rejected and would sit in the queue for nothing.
+    if (restored) testuUsage.open();
     if (!mounted) return;
     setState(() {
       _checked = true;
@@ -131,11 +137,16 @@ class _TestuAppState extends State<TestuApp> with WidgetsBindingObserver {
     });
   }
 
-  void _onSignedIn() => setState(() {
-        _signedIn = true;
-        _welcomeBack = false;
-        _reveal = true;
-      });
+  void _onSignedIn() {
+    // The restore path never ran for a fresh sign-in, so this is where the
+    // session (and its foreground stopwatch) starts for a new learner.
+    testuUsage.open();
+    setState(() {
+      _signedIn = true;
+      _welcomeBack = false;
+      _reveal = true;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

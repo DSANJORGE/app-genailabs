@@ -17,6 +17,7 @@ import 'testu_session_engine.dart';
 import 'testu_shell.dart';
 import 'testu_sully.dart';
 import 'testu_theme.dart';
+import 'testu_usage.dart';
 import 'testu_widgets.dart';
 import 'testu_client.dart';
 
@@ -1389,7 +1390,19 @@ class _VerdictExtrasState extends State<_VerdictExtras> {
             TestuReactions(
               reacts: _qReacts,
               mine: _qMine,
-              onChanged: (r) => setState(() => _qMine = r),
+              onChanged: (r) {
+                // Removing a reaction is not a rating, so only a set one
+                // is reported to the console.
+                if (r != null) {
+                  testuUsage.rate(
+                    channel: liveTutorChannelId ?? '',
+                    sectionId: q.sectionId ?? '',
+                    questionId: q.questionId,
+                    helpful: r == TestuReaction.like,
+                  );
+                }
+                setState(() => _qMine = r);
+              },
             ),
             const SizedBox(width: 18),
             TestuPressable(
