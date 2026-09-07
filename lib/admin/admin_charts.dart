@@ -7,6 +7,7 @@ import '../testu/testu_i18n.dart';
 import '../testu/testu_theme.dart';
 import 'admin_models.dart';
 import 'admin_theme.dart';
+import 'admin_ui.dart';
 
 /// The console's `fl_chart` theme, as factories rather than a wrapper widget:
 /// transparent backgrounds, 1 px `line` horizontal gridlines and nothing
@@ -23,7 +24,129 @@ TextStyle get _axisStyle => AdminTokens
     .mono(9.5, color: AdminTokens.axis)
     .copyWith(letterSpacing: 1.14);
 
-TextStyle get _tipStyle => AdminTokens.mono(11);
+TextStyle get _tipStyle => AdminTokens.tipStyle;
+
+/// The one tooltip box every chart shows: `card2` on a hairline, 6 px radius,
+/// wide enough for "19/8  7 personas activas  ·  118 respuestas" on one line,
+/// and always shifted back inside the plot -- fl_chart's default lets it
+/// paint above the card, where the card clips its first line off.
+const double _tipWidth = 300;
+const EdgeInsets _tipPadding = AdminTokens.tipPadding;
+final BorderRadius _tipRadius = BorderRadius.circular(6);
+
+/// A rod's top corners, rounded to a half circle; the foot stays square on
+/// the axis. Every bar in the console, so a chart never has a different
+/// corner from the horizontal bars beside it.
+BorderRadius _rod(double width) =>
+    BorderRadius.vertical(top: Radius.circular(width / 2));
+
+/// The touched rod, lifted a third of the way to `ink`: the tooltip says the
+/// number, this says which bar it is about.
+Color _lit(Color c) => Color.lerp(c, _t.ink, 0.35)!;
+
+/// Which bar group the pointer is on, for the charts that draw one lit rod.
+/// fl_chart restyles nothing on hover by itself; it only reports.
+class _Hover extends StatefulWidget {
+  const _Hover(this.builder);
+
+  final Widget Function(BuildContext context, int? touched,
+      void Function(FlTouchEvent, BarTouchResponse?) onTouch) builder;
+
+  @override
+  State<_Hover> createState() => _HoverState();
+}
+
+class _HoverState extends State<_Hover> {
+  int? _touched;
+
+  void _onTouch(FlTouchEvent event, BarTouchResponse? response) {
+    final i = event.isInterestedForInteractions
+        ? response?.spot?.touchedBarGroupIndex
+        : null;
+    if (i != _touched) setState(() => _touched = i);
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      widget.builder(context, _touched, _onTouch);
+}
+
+LineTouchTooltipData _lineTip(
+        List<LineTooltipItem?> Function(List<LineBarSpot>) items) =>
+    LineTouchTooltipData(
+      getTooltipColor: (_) => _t.card2,
+      tooltipBorder: BorderSide(color: _t.line),
+      tooltipBorderRadius: _tipRadius,
+      tooltipPadding: _tipPadding,
+      maxContentWidth: _tipWidth,
+      fitInsideHorizontally: true,
+      fitInsideVertically: true,
+      getTooltipItems: items,
+    );
+
+BarTouchTooltipData _barTip(String Function(int index) text) =>
+    BarTouchTooltipData(
+      getTooltipColor: (_) => _t.card2,
+      tooltipBorder: BorderSide(color: _t.line),
+      tooltipBorderRadius: _tipRadius,
+      tooltipPadding: _tipPadding,
+      maxContentWidth: _tipWidth,
+      fitInsideHorizontally: true,
+      fitInsideVertically: true,
+      getTooltipItem: (group, _, _, _) =>
+          BarTooltipItem(text(group.x), _tipStyle),
+    );
+
+/// The hover marker on a line: a dashed `mut` rule down to the axis and a
+/// ring -- `card` inside, the series' colour as a 2 px stroke -- so it shows
+/// against the line it sits on. A filled dot in the line's own colour was
+/// invisible; fl_chart's default 10 px disc is a target, not a reading.
+List<TouchedSpotIndicatorData> _marker(
+        LineChartBarData bar, List<int> indexes) =>
+    [
+      for (final _ in indexes)
+        TouchedSpotIndicatorData(
+          FlLine(color: _t.mut, strokeWidth: 1, dashArray: [3, 3]),
+          FlDotData(
+            getDotPainter: (_, _, _, _) => FlDotCirclePainter(
+              radius: 4,
+              color: _t.card,
+              strokeWidth: 2,
+              strokeColor: bar.color ?? AdminTokens.focus,
+            ),
+          ),
+        ),
+    ];
+
+/// The console's line: gently curved, round-capped, never overshooting a
+/// zero. Both series of the activity chart and the sparkline share it.
+LineChartBarData _line({
+  required List<FlSpot> spots,
+  required Color color,
+  required double width,
+  bool area = false,
+}) =>
+    LineChartBarData(
+      spots: spots,
+      color: color,
+      barWidth: width,
+      isCurved: true,
+      curveSmoothness: 0.2,
+      preventCurveOverShooting: true,
+      isStrokeCapRound: true,
+      isStrokeJoinRound: true,
+      dotData: const FlDotData(show: false),
+      belowBarData: BarAreaData(
+        show: area,
+        color: color.withValues(alpha: 0.12),
+      ),
+    );
+
+/// Which day labels a series of [n] points shows: every [step]th, so a 30 or
+/// 90 day axis carries six or seven dates rather than one per bar. Bar
+/// charts hand every group to `getTitlesWidget` whatever `interval` says, so
+/// the thinning has to happen in the builder.
+int _every(int n) => (n / 6).ceil().clamp(1, 30);
 
 FlGridData _grid() => FlGridData(
       drawVerticalLine: false,
@@ -116,19 +239,7 @@ LineChartData sparklineData(List<num> values) {
     lineTouchData: const LineTouchData(enabled: false),
     minY: 0,
     lineBarsData: [
-      LineChartBarData(
-        spots: spots,
-        color: AdminTokens.focus,
-        barWidth: 1.4,
-        isCurved: true,
-        curveSmoothness: 0.2,
-        preventCurveOverShooting: true,
-        dotData: const FlDotData(show: false),
-        belowBarData: BarAreaData(
-          show: true,
-          color: AdminTokens.focus.withValues(alpha: 0.12),
-        ),
-      ),
+      _line(spots: spots, color: AdminTokens.focus, width: 1.4, area: true),
     ],
   );
 }
@@ -156,7 +267,8 @@ Widget activityChart({
 
   final hasPrevious = previous != null && previous.isNotEmpty;
 
-  return _FirstDraw((context, duration, scale) {
+  return _Hover((context, touched, onTouch) => _FirstDraw((context, duration, scale) {
+    final barFill = _t.mut.withValues(alpha: 0.55);
     final bars = BarChart(
       BarChartData(
         maxY: topY,
@@ -166,14 +278,9 @@ Widget activityChart({
         borderData: FlBorderData(show: false),
         titlesData: const FlTitlesData(show: false),
         barTouchData: BarTouchData(
-          touchTooltipData: BarTouchTooltipData(
-            getTooltipColor: (_) => _t.card2,
-            tooltipBorder: BorderSide(color: _t.line),
-            getTooltipItem: (group, _, _, _) => BarTooltipItem(
-              '${series[group.x].answers} $answersLabel',
-              _tipStyle,
-            ),
-          ),
+          touchCallback: onTouch,
+          touchTooltipData:
+              _barTip((i) => '${series[i].answers} $answersLabel'),
         ),
         barGroups: [
           for (var i = 0; i < series.length; i++)
@@ -182,9 +289,9 @@ Widget activityChart({
               barRods: [
                 BarChartRodData(
                   toY: toPeopleScale(series[i].answers) * scale,
-                  color: _t.mut.withValues(alpha: 0.55),
+                  color: i == touched ? _lit(barFill) : barFill,
                   width: 6,
-                  borderRadius: BorderRadius.circular(1),
+                  borderRadius: _rod(6),
                 ),
               ],
             ),
@@ -239,7 +346,7 @@ Widget activityChart({
             sideTitles: SideTitles(
               showTitles: true,
               reservedSize: 26,
-              interval: (series.length / 6).ceilToDouble().clamp(1, 30),
+              interval: _every(series.length).toDouble(),
               // minX/maxX are half-slot padding, not days.
               minIncluded: false,
               maxIncluded: false,
@@ -252,10 +359,9 @@ Widget activityChart({
           ),
         ),
         lineTouchData: LineTouchData(
-          touchTooltipData: LineTouchTooltipData(
-            getTooltipColor: (_) => _t.card2,
-            tooltipBorder: BorderSide(color: _t.line),
-            getTooltipItems: (spots) => [
+          getTouchedSpotIndicator: _marker,
+          touchTooltipData: _lineTip(
+            (spots) => [
               for (final s in spots)
                 // barIndex 0 is the previous-period ghost whenever there is
                 // one; reading `series` for it would print this period's
@@ -280,27 +386,22 @@ Widget activityChart({
         ),
         lineBarsData: [
           if (hasPrevious)
-            LineChartBarData(
+            _line(
               spots: [
                 for (var i = 0; i < previous.length && i < series.length; i++)
                   FlSpot(i.toDouble(), previous[i].people * scale),
               ],
               color: AdminTokens.compare,
-              barWidth: 1.2,
-              dotData: const FlDotData(show: false),
+              width: 1.2,
             ),
-          LineChartBarData(
+          _line(
             spots: [
               for (var i = 0; i < series.length; i++)
                 FlSpot(i.toDouble(), series[i].people * scale),
             ],
             color: AdminTokens.focus,
-            barWidth: 1.8,
-            dotData: const FlDotData(show: false),
-            belowBarData: BarAreaData(
-              show: true,
-              color: AdminTokens.focus.withValues(alpha: 0.12),
-            ),
+            width: 1.8,
+            area: true,
           ),
         ],
       ),
@@ -319,7 +420,7 @@ Widget activityChart({
         line,
       ],
     );
-  });
+  }));
 }
 
 /// One muted bar per day of any single `DayPoint` counter.
@@ -341,7 +442,8 @@ Widget dailyBars(
       final width = box.maxWidth.isFinite
           ? ((box.maxWidth - 34) / series.length * 0.42).clamp(6.0, 22.0)
           : 8.0;
-      return _FirstDraw((context, duration, scale) => BarChart(
+      return _Hover((context, touched, onTouch) =>
+          _FirstDraw((context, duration, scale) => BarChart(
         BarChartData(
           maxY: top == 0 ? 1 : top * 1.15,
           gridData: _grid(),
@@ -367,10 +469,11 @@ Widget dailyBars(
               sideTitles: SideTitles(
                 showTitles: true,
                 reservedSize: 26,
-                interval: (series.length / 6).ceilToDouble().clamp(1, 30),
                 getTitlesWidget: (v, _) {
                   final i = v.round();
-                  if (i < 0 || i >= series.length) {
+                  if (i < 0 ||
+                      i >= series.length ||
+                      i % _every(series.length) != 0) {
                     return const SizedBox.shrink();
                   }
                   return _axisText(dm(series[i].day));
@@ -379,15 +482,9 @@ Widget dailyBars(
             ),
           ),
           barTouchData: BarTouchData(
-            touchTooltipData: BarTouchTooltipData(
-              getTooltipColor: (_) => _t.card2,
-              tooltipBorder: BorderSide(color: _t.line),
-              getTooltipItem: (group, _, _, _) => BarTooltipItem(
-                '${dm(series[group.x].day)}  '
-                '${value(series[group.x])}',
-                _tipStyle,
-              ),
-            ),
+            touchCallback: onTouch,
+            touchTooltipData: _barTip(
+                (i) => '${dm(series[i].day)}  ${value(series[i])}'),
           ),
           barGroups: [
             for (var i = 0; i < series.length; i++)
@@ -396,9 +493,9 @@ Widget dailyBars(
                 barRods: [
                   BarChartRodData(
                     toY: value(series[i]) * scale,
-                    color: fill,
+                    color: i == touched ? _lit(fill) : fill,
                     width: width,
-                    borderRadius: BorderRadius.circular(1),
+                    borderRadius: _rod(width),
                   ),
                 ],
               ),
@@ -406,7 +503,7 @@ Widget dailyBars(
         ),
         duration: duration,
         curve: TestuTokens.curve,
-      ));
+      )));
     },
   );
 }
@@ -420,7 +517,8 @@ Widget correctIncorrectBars(
       .map((d) => (d.correct + d.incorrect).toDouble())
       .fold<double>(0, (a, b) => a > b ? a : b);
 
-  return _FirstDraw((context, duration, scale) => BarChart(
+  return _Hover((context, touched, onTouch) =>
+      _FirstDraw((context, duration, scale) => BarChart(
         BarChartData(
           maxY: top == 0 ? 1 : top * 1.15,
           gridData: _grid(),
@@ -446,10 +544,11 @@ Widget correctIncorrectBars(
               sideTitles: SideTitles(
                 showTitles: true,
                 reservedSize: 26,
-                interval: (days.length / 7).ceilToDouble().clamp(1, 30),
                 getTitlesWidget: (v, _) {
                   final i = v.round();
-                  if (i < 0 || i >= days.length) {
+                  if (i < 0 ||
+                      i >= days.length ||
+                      i % _every(days.length) != 0) {
                     return const SizedBox.shrink();
                   }
                   return _axisText(days[i].label);
@@ -458,16 +557,10 @@ Widget correctIncorrectBars(
             ),
           ),
           barTouchData: BarTouchData(
-            touchTooltipData: BarTouchTooltipData(
-              getTooltipColor: (_) => _t.card2,
-              tooltipBorder: BorderSide(color: _t.line),
-              getTooltipItem: (group, _, _, _) => BarTooltipItem(
-                '${days[group.x].label}  '
-                '${days[group.x].correct} ${L('correct', 'correctas')}  ·  '
-                '${days[group.x].incorrect} ${L('incorrect', 'incorrectas')}',
-                _tipStyle,
-              ),
-            ),
+            touchCallback: onTouch,
+            touchTooltipData: _barTip((i) => '${days[i].label}  '
+                '${days[i].correct} ${L('correct', 'correctas')}  ·  '
+                '${days[i].incorrect} ${L('incorrect', 'incorrectas')}'),
           ),
           barGroups: [
             for (var i = 0; i < days.length; i++)
@@ -477,18 +570,24 @@ Widget correctIncorrectBars(
                   BarChartRodData(
                     toY: (days[i].correct + days[i].incorrect) * scale,
                     width: 10,
-                    borderRadius: BorderRadius.circular(1),
-                    color: AdminTokens.seriesNegative,
+                    borderRadius: _rod(10),
+                    color: i == touched
+                        ? _lit(AdminTokens.seriesNegative)
+                        : AdminTokens.seriesNegative,
                     rodStackItems: [
                       BarChartRodStackItem(
                         0,
                         days[i].correct * scale,
-                        AdminTokens.seriesPositive,
+                        i == touched
+                            ? _lit(AdminTokens.seriesPositive)
+                            : AdminTokens.seriesPositive,
                       ),
                       BarChartRodStackItem(
                         days[i].correct * scale,
                         (days[i].correct + days[i].incorrect) * scale,
-                        AdminTokens.seriesNegative,
+                        i == touched
+                            ? _lit(AdminTokens.seriesNegative)
+                            : AdminTokens.seriesNegative,
                       ),
                     ],
                   ),
@@ -498,7 +597,7 @@ Widget correctIncorrectBars(
         ),
         duration: duration,
         curve: TestuTokens.curve,
-      ));
+      )));
 }
 
 /// When the organisation studies: 7 rows × 24 columns of 14 px cells, tinted
@@ -613,11 +712,8 @@ class _HeatCell extends StatelessWidget {
     // #121215 card is a lattice nobody can see, and the empty hours ARE the
     // reading here (nights and weekends).
     const empty = Color(0xFF1D1D22);
-    return Tooltip(
+    return ConsoleTip(
       message: '$label · $n',
-      waitDuration: Duration.zero,
-      textStyle: _tipStyle,
-      decoration: AdminTokens.tip,
       child: Container(
         width: width,
         height: height,

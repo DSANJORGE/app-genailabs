@@ -9,6 +9,7 @@ import 'package:genai_labs/admin/admin_models.dart';
 import 'package:genai_labs/admin/admin_nav.dart';
 import 'package:genai_labs/admin/admin_theme.dart';
 import 'package:genai_labs/admin/admin_ui.dart';
+import 'package:genai_labs/testu/testu_icons.dart';
 import 'package:genai_labs/testu/testu_theme.dart';
 
 Widget _app(Widget child) => MaterialApp(
@@ -283,7 +284,8 @@ void main() {
     final handle = tester.ensureSemantics();
     for (final (widget, name) in <(Widget, String)>[
       (
-        ConsoleIconButton(glyph: '✕', label: 'Close', onTap: () {}),
+        ConsoleIconButton(
+            glyph: TestuGlyph.close, label: 'Close', onTap: () {}),
         'Close',
       ),
       (
@@ -503,11 +505,46 @@ void main() {
     expect(find.byType(Scrollbar), findsOneWidget);
     await tester.drag(find.text('Nombre'), const Offset(-80, 0));
     await tester.pumpAndSettle();
+    // The horizontal one: the body has its own vertical scroller under the
+    // pinned header.
     final scroller = tester.widget<SingleChildScrollView>(
-        find.byType(SingleChildScrollView));
+        find.byWidgetPredicate((w) =>
+            w is SingleChildScrollView && w.scrollDirection == Axis.horizontal));
     expect(scroller.controller!.offset, greaterThan(0));
     expect(tester.getTopLeft(find.text('Niveles')).dx, lessThan(200),
         reason: 'the last column comes into view');
+  });
+
+  testWidgets('a column header drags wider, and double-click hands it back',
+      (tester) async {
+    await tester.pumpWidget(_app(SizedBox(
+      width: 600,
+      child: AdminTable<int>(
+        columns: [
+          AdminColumn('Nombre', (r) => Text('a$r')),
+          AdminColumn('Equipo', (r) => Text('b$r')),
+        ],
+        rows: const [1],
+      ),
+    )));
+    final before = tester.getTopLeft(find.text('Equipo')).dx;
+    // The handle lives in the first column's 12 px right gutter.
+    final handle = Offset(before - 6, 16);
+    await tester.dragFrom(handle, const Offset(80, 0));
+    await tester.pumpAndSettle();
+    // 80 minus the gesture's own touch slop.
+    final after = tester.getTopLeft(find.text('Equipo')).dx;
+    expect(after, greaterThan(before + 50));
+    expect(tester.getTopLeft(find.text('b1')).dx, closeTo(after, 1),
+        reason: 'the body follows the header');
+
+    // The handle moved with the column: it sits in the gutter left of the
+    // second header wherever that now is.
+    await tester.tapAt(Offset(after - 6, 16));
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tapAt(Offset(after - 6, 16));
+    await tester.pumpAndSettle();
+    expect(tester.getTopLeft(find.text('Equipo')).dx, closeTo(before, 1));
   });
 
   // The heatmap's own copy of this primitive painted its focus ring on hover
@@ -605,4 +642,61 @@ void main() {
     expect(find.byTooltip(label), findsOneWidget);
   });
 
+
+  // Material's Tooltip hangs off the centre of its child: for a bar row that
+  // is mid-card, 400 px from the label the reader is on. The console's sits
+  // beside the pointer.
+  testWidgets('a console tooltip opens beside the pointer, not under the widget',
+      (tester) async {
+    await tester.pumpWidget(_app(const SizedBox(
+      width: 600,
+      child: BarRow(label: 'Aplicación práctica', value: 5, max: 5),
+    )));
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    addTearDown(mouse.removePointer);
+    await mouse.addPointer(location: Offset.zero);
+    final at = tester.getTopLeft(find.byType(BarRow)) + const Offset(30, 10);
+    await mouse.moveTo(at);
+    await tester.pumpAndSettle();
+
+    final tip = find.text('Aplicación práctica · 5');
+    expect(tip, findsOneWidget, reason: 'the whole label and the count');
+    final box = tester.getTopLeft(
+        find.ancestor(of: tip, matching: find.byType(Container)).first);
+    expect(box.dx, closeTo(at.dx + 14, 1));
+    expect(box.dy, closeTo(at.dy + 18, 1));
+  });
+
+  // The same handle as AdminTable, inside the grid's horizontal scroller --
+  // the drag has to beat the scroll view for the pointer.
+  testWidgets('a heatmap column drags wider, and its cells follow',
+      (tester) async {
+    final handle = tester.ensureSemantics();
+    await tester.pumpWidget(_app(SizedBox(
+      width: 700,
+      child: HeatmapGrid(
+        cols: const [HeatCol('Tema', 'Uno'), HeatCol('Tema', 'Dos')],
+        rowHeader: 'Persona',
+        onRow: (_) {},
+        rows: const [
+          HeatRow(id: 'u:1', label: 'Ana Quispe', cells: [
+            HeatCell(title: 'Ana · Uno', level: 'beginner', mastered: 1, answered: 4),
+            HeatCell(title: 'Ana · Dos', level: 'expert', mastered: 4, answered: 4),
+          ]),
+        ],
+      ),
+    )));
+    final before = tester.getTopLeft(find.text('Dos')).dx;
+    // 4 px gap, then the middle of the 8 px handle at the cell's right edge.
+    final grip = Offset(before - 8, tester.getCenter(find.text('Uno')).dy);
+    await tester.dragFrom(grip, const Offset(80, 0));
+    await tester.pumpAndSettle();
+
+    final after = tester.getTopLeft(find.text('Dos')).dx;
+    expect(after, greaterThan(before + 50));
+    final cell = tester.getSize(find.bySemanticsLabel(RegExp(r'Ana · Uno')));
+    expect(cell.width, closeTo(after - 4 - tester.getTopLeft(find.text('Uno')).dx, 1),
+        reason: 'the body column is the header column');
+    handle.dispose();
+  });
 }

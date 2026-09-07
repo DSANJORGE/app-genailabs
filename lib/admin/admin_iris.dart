@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../testu/testu_i18n.dart';
+import '../testu/testu_icons.dart';
 import '../testu/testu_md.dart';
 import '../testu/testu_theme.dart';
 import '../testu/testu_widgets.dart';
@@ -375,14 +376,13 @@ class _IrisPanelState extends State<IrisPanel> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // The panel's own face: Geist at w500, a step over the
+                  // body and never Sora -- a bold display name over 11.5 px
+                  // running text read as a heading from another screen.
                   Text(
                     _name,
-                    style: TextStyle(
-                      fontFamily: 'Sora',
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                      color: t.ink,
-                    ),
+                    style: _bodyStyle.copyWith(
+                        fontSize: 12.5, fontWeight: FontWeight.w500, height: 1.2),
                   ),
                   const SizedBox(height: 2),
                   // Running copy, so `mut` rather than kNote's `faint`
@@ -394,11 +394,7 @@ class _IrisPanelState extends State<IrisPanel> {
             ),
             const SizedBox(width: 8),
             ConsoleIconButton(
-              // U+00D7, not U+2715: Geist and Sora carry the multiplication
-              // sign, and neither carries the heavy multiplication X -- which
-              // the browser hides behind a system fallback and the goldens
-              // draw as an empty box.
-              glyph: '×',
+              glyph: TestuGlyph.close,
               label: L('Close', 'Cerrar'),
               onTap: widget.onClose,
             ),
@@ -432,7 +428,13 @@ class _IrisPanelState extends State<IrisPanel> {
       );
 
   Widget _turn(int index, IrisTurn turn) {
-    if (turn.reply == null && !turn.failed) return TestuYouMsg(text: turn.text);
+    if (turn.reply == null && !turn.failed) {
+      // Left, in line with the answer under it: the panel is a transcript
+      // beside the data, and a right-hung bubble left a hole the width of
+      // the column above every answer.
+      return TestuYouMsg(
+          text: turn.text, fontSize: _bodyStyle.fontSize!, alignEnd: false);
+    }
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: Column(
@@ -451,7 +453,7 @@ class _IrisPanelState extends State<IrisPanel> {
             const SizedBox(height: 12),
             Align(
               alignment: Alignment.centerLeft,
-              child: TestuAct(L('Retry', 'Reintentar'),
+              child: ConsoleAct(L('Retry', 'Reintentar'),
                   onTap: () => _retry(index)),
             ),
           ] else
@@ -547,10 +549,14 @@ class _IrisPanelState extends State<IrisPanel> {
         ],
       );
 
+  /// The panel's reading size: the console's table size, not the app's chat
+  /// size. At 12.5/1.62 the answer was the largest running text on a screen
+  /// whose tables sit at 12.5 and whose selects at 11.5 -- the panel is a
+  /// 360 px column beside the data, and reads at the data's own size.
   static final _bodyStyle = TextStyle(
     fontFamily: 'Geist',
-    fontSize: 12.5,
-    height: 1.62,
+    fontSize: 11.5,
+    height: 1.55,
     color: TestuTokens.instance.ink,
   );
 }

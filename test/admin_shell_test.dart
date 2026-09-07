@@ -110,7 +110,7 @@ void main() {
       await pump(tester);
       expect(find.byType(IrisPanel), findsNothing);
 
-      await tester.tap(find.widgetWithText(TestuPressable, 'Iris'));
+      await tester.tap(find.widgetWithText(TestuPressable, 'IRIS'));
       await tester.pumpAndSettle();
       expect(find.byType(IrisPanel), findsOneWidget);
 
@@ -123,7 +123,7 @@ void main() {
 
     testWidgets('keeps its thread across a section change', (tester) async {
       await pump(tester);
-      await tester.tap(find.widgetWithText(TestuPressable, 'Iris'));
+      await tester.tap(find.widgetWithText(TestuPressable, 'IRIS'));
       await tester.pumpAndSettle();
 
       await tester.enterText(find.byType(TextField), '¿Cuántas activas?');
@@ -210,7 +210,7 @@ void main() {
       ));
       await tester.pumpAndSettle();
       final before = tester.getSize(find.byType(ContextBar)).width;
-      await tester.tap(find.widgetWithText(TestuPressable, 'Iris'));
+      await tester.tap(find.widgetWithText(TestuPressable, 'IRIS'));
       await tester.pumpAndSettle();
       expect(find.byType(IrisPanel), findsOneWidget);
       expect(tester.takeException(), isNull);

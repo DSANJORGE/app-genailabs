@@ -2,7 +2,6 @@ import 'package:eme_app_package/eme_http.dart' show EmeHttpException;
 import 'package:flutter/material.dart';
 import '../testu/testu_i18n.dart';
 import '../testu/testu_theme.dart';
-import '../testu/testu_widgets.dart';
 import 'admin_api.dart';
 import 'admin_csv.dart';
 import 'admin_models.dart';
@@ -129,40 +128,42 @@ class _AdminPeopleState extends State<AdminPeople> {
     }
     final t = TestuTokens.of(context);
     final teams = _teams!;
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            Expanded(child: _searchField(t)),
-            if (_canOperate) ...[
-              const SizedBox(width: 12),
-              SizedBox(width: 140, child: TestuButton(L('Add', 'Añadir'), onTap: () => _openAdd(teams))),
-              const SizedBox(width: 12),
-              SizedBox(width: 160, child: TestuButton(L('Import CSV', 'Importar CSV'), onTap: () => _openImport(teams))),
-            ],
-          ]),
-          const SizedBox(height: 16),
-          _table(teams, t),
-          if (_canViewProfile) ...[
-            const SizedBox(height: 10),
-            Text(L('Click a row to open the profile.', 'Haz clic en una fila para ver la ficha.'),
-                style: AdminTokens.footnote),
+    // No inset of its own: the scaffold already pads the content column, and
+    // a second 20 px put this table's left edge 20 px right of the title's.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          Expanded(child: _searchField(t)),
+          if (_canOperate) ...[
+            const SizedBox(width: 10),
+            ConsoleAct(L('Add', 'Añadir'), onTap: () => _openAdd(teams)),
+            const SizedBox(width: 8),
+            ConsoleAct(L('Import CSV', 'Importar CSV'),
+                onTap: () => _openImport(teams)),
           ],
+        ]),
+        const SizedBox(height: 16),
+        _table(teams, t),
+        if (_canViewProfile) ...[
+          const SizedBox(height: 10),
+          Text(L('Click a row to open the profile.', 'Haz clic en una fila para ver la ficha.'),
+              style: AdminTokens.footnote),
         ],
-      ),
+      ],
     );
   }
 
+  /// The search pill, on the same 28 px line as the acts beside it: 11.5 px
+  /// like a [Select], 6 px of vertical padding like one.
   Widget _searchField(TestuTokens t) => TextField(
         controller: _search,
-        style: TextStyle(fontFamily: 'Geist', fontSize: 12.5, color: t.ink),
+        style: TextStyle(fontFamily: 'Geist', fontSize: 11.5, color: t.ink),
         decoration: InputDecoration(
           hintText: L('Search by name, email or team', 'Buscar por nombre, correo o equipo'),
-          hintStyle: TextStyle(fontFamily: 'Geist', fontSize: 12.5, color: t.mut),
+          hintStyle: TextStyle(fontFamily: 'Geist', fontSize: 11.5, color: t.mut),
           isDense: true,
-          contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 18),
+          contentPadding: const EdgeInsets.symmetric(vertical: 7, horizontal: 14),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(999), borderSide: BorderSide(color: t.line2)),
           enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(999), borderSide: BorderSide(color: t.line2)),
           focusedBorder: OutlineInputBorder(
@@ -209,7 +210,9 @@ class _AdminPeopleState extends State<AdminPeople> {
             L('Last activity', 'Última actividad'),
             (u) => Text(date(u.lastActivity), style: AdminTokens.mono(11.5)),
             sortKey: (u) => u.lastActivity?.millisecondsSinceEpoch ?? 0,
-            width: 80,
+            // 100, not 80: "Última actividad" at 11 px is 92 px, and at 80
+            // the header read "Última activi…" over every row.
+            width: 100,
             numeric: true,
           ),
           AdminColumn(
@@ -238,6 +241,7 @@ class _AdminPeopleState extends State<AdminPeople> {
     return Select<String>(
       value: teams.any((x) => x.id == u.team) ? u.team : null,
       hint: L('None', 'Ninguno'),
+      fill: true,
       semanticLabel: L('Change team', 'Cambiar equipo'),
       items: [
         (null, L('None', 'Ninguno')),
@@ -253,6 +257,7 @@ class _AdminPeopleState extends State<AdminPeople> {
     }
     return Select<String>(
       value: u.role,
+      fill: true,
       semanticLabel: L('Change role', 'Cambiar rol'),
       items: [for (final r in _roles) (r, roleLabel(r))],
       onChanged: (v) => v == null ? null : _mutate(() => widget.api.setRole(u.id, v)),
@@ -285,76 +290,61 @@ class _AdminPeopleState extends State<AdminPeople> {
     var role = 'users';
     final roles = ['users', 'manager', if (_canManage) ...['training', 'orgadmin']];
     final t = TestuTokens.of(context);
-    await showDialog<void>(
-      context: context,
-      builder: (dctx) => StatefulBuilder(
-        builder: (dctx, setD) => Dialog(
-          backgroundColor: t.card,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 22, vertical: 24),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18), side: BorderSide(color: t.line2)),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 380),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(L('Add collaborator', 'Añadir colaborador'),
-                      style: TextStyle(color: t.ink, fontSize: 16, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: email,
-                    autofocus: true,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: InputDecoration(hintText: L('Email', 'Correo')),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(controller: first, decoration: InputDecoration(hintText: L('First name', 'Nombre'))),
-                  const SizedBox(height: 8),
-                  TextField(controller: last, decoration: InputDecoration(hintText: L('Last name', 'Apellidos'))),
-                  const SizedBox(height: 8),
-                  Select<String>(
-                    value: team,
-                    hint: L('Team', 'Equipo'),
-                    items: [
-                      (null, L('None', 'Ninguno')),
-                      for (final tm in teams) (tm.id, tm.name),
-                    ],
-                    onChanged: (v) => setD(() => team = v),
-                  ),
-                  const SizedBox(height: 8),
-                  Select<String>(
-                    value: role,
-                    items: [for (final r in roles) (r, roleLabel(r))],
-                    onChanged: (v) => setD(() => role = v ?? role),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                    TextButton(onPressed: () => Navigator.pop(dctx), child: Text(L('Cancel', 'Cancelar'))),
-                    const SizedBox(width: 8),
-                    TestuAct(
-                      L('Save', 'Guardar'),
-                      primary: true,
-                      onTap: () {
-                        final e = email.text.trim();
-                        if (e.isEmpty) return;
-                        Navigator.pop(dctx);
-                        _mutate(() => widget.api.createUser(
-                              email: e,
-                              firstName: first.text.trim(),
-                              lastName: last.text.trim(),
-                              team: team,
-                              role: role,
-                            ));
-                      },
-                    ),
-                  ]),
-                ],
-              ),
-            ),
-          ),
+    await showConsoleForm(
+      context,
+      title: L('Add collaborator', 'Añadir colaborador'),
+      fields: (dctx, setD) => [
+        TextField(
+          controller: email,
+          autofocus: true,
+          keyboardType: TextInputType.emailAddress,
+          style: AdminTokens.table,
+          decoration: consoleField(t, hint: L('Email', 'Correo')),
         ),
+        const SizedBox(height: 8),
+        TextField(
+            controller: first,
+            style: AdminTokens.table,
+            decoration: consoleField(t, hint: L('First name', 'Nombre'))),
+        const SizedBox(height: 8),
+        TextField(
+            controller: last,
+            style: AdminTokens.table,
+            decoration: consoleField(t, hint: L('Last name', 'Apellidos'))),
+        const SizedBox(height: 8),
+        Select<String>(
+          value: team,
+          hint: L('Team', 'Equipo'),
+          fill: true,
+          items: [
+            (null, L('None', 'Ninguno')),
+            for (final tm in teams) (tm.id, tm.name),
+          ],
+          onChanged: (v) => setD(() => team = v),
+        ),
+        const SizedBox(height: 8),
+        Select<String>(
+          value: role,
+          fill: true,
+          items: [for (final r in roles) (r, roleLabel(r))],
+          onChanged: (v) => setD(() => role = v ?? role),
+        ),
+      ],
+      primary: (dctx, _) => ConsoleAct(
+        L('Save', 'Guardar'),
+        primary: true,
+        onTap: () {
+          final e = email.text.trim();
+          if (e.isEmpty) return;
+          Navigator.pop(dctx);
+          _mutate(() => widget.api.createUser(
+                email: e,
+                firstName: first.text.trim(),
+                lastName: last.text.trim(),
+                team: team,
+                role: role,
+              ));
+        },
       ),
     );
   }
@@ -365,93 +355,71 @@ class _AdminPeopleState extends State<AdminPeople> {
     final existing = {for (final u in _users!) u.email};
     CsvImport? preview;
     final t = TestuTokens.of(context);
-    await showDialog<void>(
-      context: context,
-      builder: (dctx) => StatefulBuilder(
-        builder: (dctx, setD) => Dialog(
-          backgroundColor: t.card,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 22, vertical: 24),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18), side: BorderSide(color: t.line2)),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: SizedBox(
-              width: 560,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(L('Import CSV', 'Importar CSV'),
-                      style: TextStyle(color: t.ink, fontSize: 16, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 4),
-                  Text(
-                    // ponytail: paste-in text field rather than a file picker; add
-                    // file_picker only if Minsur asks for a real file upload.
-                    L('Paste the CSV text (header: email,firstName,lastName,team).',
-                        'Pega el texto CSV (encabezado: email,firstName,lastName,team).'),
-                    style: TextStyle(color: t.mut, fontSize: 11),
+    await showConsoleForm(
+      context,
+      title: L('Import CSV', 'Importar CSV'),
+      width: 560,
+      fields: (dctx, setD) => [
+        Text(
+          // ponytail: paste-in text field rather than a file picker; add
+          // file_picker only if Minsur asks for a real file upload.
+          L('Paste the CSV text (header: email,firstName,lastName,team).',
+              'Pega el texto CSV (encabezado: email,firstName,lastName,team).'),
+          style: AdminTokens.muted,
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: textCtl,
+          maxLines: 6,
+          style: AdminTokens.mono(12),
+          decoration: consoleField(t),
+          onChanged: (v) => setD(() => preview =
+              v.trim().isEmpty ? null : parseUsersCsv(v, teamIds: teamIds, existingEmails: existing)),
+        ),
+        const SizedBox(height: 12),
+        if (preview != null && preview!.rows.isNotEmpty)
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 220),
+            child: SingleChildScrollView(
+              child: AdminTable<CsvRow>(
+                rows: preview!.rows,
+                columns: [
+                  AdminColumn(L('Email', 'Correo'), (r) => Text(r.email), flex: 3),
+                  AdminColumn(L('Name', 'Nombre'), (r) => Text('${r.firstName} ${r.lastName}'.trim()), flex: 2),
+                  AdminColumn(L('Team', 'Equipo'), (r) => Text(r.team), width: 100),
+                  AdminColumn(
+                    L('Error', 'Error'),
+                    (r) => Text(r.error ?? '',
+                        style: TextStyle(color: r.error == null ? t.green : AdminTokens.redText)),
+                    flex: 2,
                   ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: textCtl,
-                    maxLines: 6,
-                    style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-                    decoration: const InputDecoration(border: OutlineInputBorder()),
-                    onChanged: (v) => setD(() => preview =
-                        v.trim().isEmpty ? null : parseUsersCsv(v, teamIds: teamIds, existingEmails: existing)),
-                  ),
-                  const SizedBox(height: 12),
-                  if (preview != null && preview!.rows.isNotEmpty)
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxHeight: 220),
-                      child: SingleChildScrollView(
-                        child: AdminTable<CsvRow>(
-                          rows: preview!.rows,
-                          columns: [
-                            AdminColumn(L('Email', 'Correo'), (r) => Text(r.email), flex: 3),
-                            AdminColumn(L('Name', 'Nombre'), (r) => Text('${r.firstName} ${r.lastName}'.trim()), flex: 2),
-                            AdminColumn(L('Team', 'Equipo'), (r) => Text(r.team), width: 100),
-                            AdminColumn(
-                              L('Error', 'Error'),
-                              (r) => Text(r.error ?? '', style: TextStyle(color: r.error == null ? t.green : t.red)),
-                              flex: 2,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  // What the paste amounts to, before anything is sent. A
-                  // preview table with an Error column on every row and a
-                  // disabled button was the whole explanation until now.
-                  if (preview != null) ...[
-                    const SizedBox(height: 10),
-                    Text(_csvSummary(preview!), style: AdminTokens.footnote),
-                  ],
-                  const SizedBox(height: 16),
-                  Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                    TextButton(onPressed: () => Navigator.pop(dctx), child: Text(L('Cancel', 'Cancelar'))),
-                    const SizedBox(width: 8),
-                    TestuAct(
-                      L('Import ${preview?.valid.length ?? 0} rows', 'Importar ${preview?.valid.length ?? 0} filas'),
-                      primary: true,
-                      onTap: (preview?.valid.isNotEmpty ?? false)
-                          ? () {
-                              final bytes = preview!.toCsvBytes();
-                              Navigator.pop(dctx);
-                              _mutate(() async {
-                                final n = await widget.api.importUsers(bytes);
-                                if (mounted) {
-                                  showToast(context, L('Imported $n', 'Importadas $n'));
-                                }
-                              });
-                            }
-                          : null,
-                    ),
-                  ]),
                 ],
               ),
             ),
           ),
-        ),
+        // What the paste amounts to, before anything is sent. A
+        // preview table with an Error column on every row and a
+        // disabled button was the whole explanation until now.
+        if (preview != null) ...[
+          const SizedBox(height: 10),
+          Text(_csvSummary(preview!), style: AdminTokens.footnote),
+        ],
+      ],
+      primary: (dctx, _) => ConsoleAct(
+        L('Import ${preview?.valid.length ?? 0} rows', 'Importar ${preview?.valid.length ?? 0} filas'),
+        primary: true,
+        onTap: (preview?.valid.isNotEmpty ?? false)
+            ? () {
+                final bytes = preview!.toCsvBytes();
+                Navigator.pop(dctx);
+                _mutate(() async {
+                  final n = await widget.api.importUsers(bytes);
+                  if (mounted) {
+                    showToast(context, L('Imported $n', 'Importadas $n'));
+                  }
+                });
+              }
+            : null,
       ),
     );
   }

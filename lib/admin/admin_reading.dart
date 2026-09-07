@@ -51,7 +51,12 @@ String personaName(AdminMe me) => personaNameOf(me.persona);
 /// Iris panel), so the console never invents a second default name.
 String personaNameOf(AdminPersona? persona) {
   final name = persona?.name ?? '';
-  return name.isEmpty ? 'Iris' : name;
+  // IRIS is an acronym (Integrity, Respect, Innovation, Sustainability --
+  // testu_client.dart), and the app prints it as one. The persona record was
+  // typed as a name; the console spells it the app's way whatever case the
+  // record carries.
+  if (name.isEmpty || name.toLowerCase() == 'iris') return 'IRIS';
+  return name;
 }
 
 /// The two reductions a [StatBlock] needs off a daily series: the period

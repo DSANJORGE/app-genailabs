@@ -338,7 +338,7 @@ void main() {
 
     expect(find.byType(StackedBar), findsNothing);
     expect(find.text('NO QUESTIONS YET'), findsOneWidget);
-    expect(find.textContaining('Nobody has asked Iris anything'),
+    expect(find.textContaining('Nobody has asked IRIS anything'),
         findsOneWidget);
     // The promise the app makes every learner holds in the empty state too.
     expect(find.text('Aggregated: no individual question is ever shown.'),

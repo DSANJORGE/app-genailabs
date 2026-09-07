@@ -308,7 +308,7 @@ void main() {
       await tester.tap(find.text('Who needs help this week?'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Iris is not available right now.'), findsOneWidget);
+      expect(find.text('IRIS is not available right now.'), findsOneWidget);
       expect(find.text('Retry'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });

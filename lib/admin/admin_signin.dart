@@ -168,8 +168,9 @@ class _AdminSigninState extends State<AdminSignin> {
                     onSubmitted: (_) {
                       if (!_busy) _send();
                     },
-                    decoration: InputDecoration(
-                        hintText: L('Work email', 'Correo de trabajo')),
+                    style: _fieldStyle,
+                    decoration: testuFieldDecoration(t,
+                        hint: L('Work email', 'Correo de trabajo')),
                   )
                 else
                   TextField(
@@ -179,8 +180,9 @@ class _AdminSigninState extends State<AdminSignin> {
                     onSubmitted: (_) {
                       if (!_busy) _verify();
                     },
-                    decoration: InputDecoration(
-                        hintText: L('6-digit code', 'Código de 6 dígitos')),
+                    style: _fieldStyle,
+                    decoration: testuFieldDecoration(t,
+                        hint: L('6-digit code', 'Código de 6 dígitos')),
                   ),
                 const SizedBox(height: 12),
                 if (_error != null)
@@ -224,6 +226,9 @@ class _AdminSigninState extends State<AdminSignin> {
       ),
     );
   }
+
+  static final _fieldStyle = TextStyle(
+      fontFamily: 'Geist', fontSize: 15, color: TestuTokens.instance.ink);
 
   /// The two ways out of the code stage: quiet text, never a second CTA --
   /// the white button above is the only action this screen advertises.

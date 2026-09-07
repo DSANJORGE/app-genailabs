@@ -4,6 +4,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
 import '../testu/testu_i18n.dart';
+import '../testu/testu_icons.dart';
 import '../testu/testu_theme.dart';
 import '../testu/testu_widgets.dart';
 import 'admin_charts.dart';
@@ -107,16 +108,25 @@ class ConsoleInteractiveState extends State<ConsoleInteractive> {
 /// when its columns outrun the card and by the heatmap grid, which has always
 /// scrolled -- silently, which is how a reader misses a column.
 class HScroll extends StatefulWidget {
-  const HScroll({super.key, required this.child});
+  const HScroll({super.key, required this.child, this.controller, this.thumb = true});
 
   final Widget child;
+
+  /// Shared with another [HScroll] that has to move with this one -- the
+  /// heatmap's pinned header over its scrolling body.
+  final ScrollController? controller;
+
+  /// Whether this one carries the thumb. A body that scrolls under a pinned
+  /// header hands its thumb to the header, where it stays in view.
+  final bool thumb;
 
   @override
   State<HScroll> createState() => _HScrollState();
 }
 
 class _HScrollState extends State<HScroll> {
-  final _controller = ScrollController();
+  final _own = ScrollController();
+  ScrollController get _controller => widget.controller ?? _own;
 
   /// Whether there is anything to scroll. The gutter the thumb sits in is
   /// reserved only then -- the heatmap grid usually fits its card, and 10 px
@@ -125,7 +135,7 @@ class _HScrollState extends State<HScroll> {
 
   @override
   void dispose() {
-    _controller.dispose();
+    _own.dispose();
     super.dispose();
   }
 
@@ -143,6 +153,13 @@ class _HScrollState extends State<HScroll> {
   @override
   Widget build(BuildContext context) {
     final t = TestuTokens.of(context);
+    if (!widget.thumb) {
+      return SingleChildScrollView(
+        controller: _controller,
+        scrollDirection: Axis.horizontal,
+        child: widget.child,
+      );
+    }
     // Material's default thumb is a bright bar across a dark console; this is
     // the same hairline vocabulary as everything else here.
     return ScrollbarTheme(
@@ -781,7 +798,7 @@ class Reading extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(
           child: ConstrainedBox(
-            // ~70ch of Sora 15 — reading copy, not a data row.
+            // ~75ch of Sora 14 — reading copy, not a data row.
             constraints: const BoxConstraints(maxWidth: 760),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1017,6 +1034,67 @@ class _LegendDot extends StatelessWidget {
       );
 }
 
+/// The console's one hover tooltip: `AdminTokens.tip` on `tipStyle`, and it
+/// sits beside the POINTER. Material's `Tooltip` hangs off the centre of its
+/// child, which for a bar row is 400 px from the bar the reader is on and
+/// for a heatmap cell is the row beneath it. [rich] replaces the text body
+/// (the heatmap's title-pill-sentence card); [message] is always what
+/// assistive technology and `find.byTooltip` get.
+class ConsoleTip extends StatefulWidget {
+  const ConsoleTip({
+    super.key,
+    required this.message,
+    required this.child,
+    this.rich,
+  });
+
+  final String message;
+  final Widget? rich;
+  final Widget child;
+
+  @override
+  State<ConsoleTip> createState() => _ConsoleTipState();
+}
+
+class _ConsoleTipState extends State<ConsoleTip> {
+  Offset _pointer = Offset.zero;
+
+  /// 14 px right and 18 down of the pointer, kept inside the overlay. Below
+  /// and right, so the pointer never sits on the box and the box never
+  /// covers what it is describing.
+  Offset _place(TooltipPositionContext c) => Offset(
+        (_pointer.dx + 14)
+            .clamp(0.0, (c.overlaySize.width - c.tooltipSize.width).clamp(0.0, double.infinity)),
+        (_pointer.dy + 18)
+            .clamp(0.0, (c.overlaySize.height - c.tooltipSize.height).clamp(0.0, double.infinity)),
+      );
+
+  @override
+  Widget build(BuildContext context) => MouseRegion(
+        opaque: false,
+        onEnter: (e) => _pointer = e.position,
+        // A rebuild per move re-lays the overlay child out at the new point;
+        // the box is one DecoratedBox, so that is cheap.
+        onHover: (e) => setState(() => _pointer = e.position),
+        child: RawTooltip(
+          semanticsTooltip: widget.message,
+          positionDelegate: _place,
+          tooltipBuilder: (context, animation) => FadeTransition(
+            opacity: animation,
+            child: Container(
+              padding: widget.rich == null
+                  ? AdminTokens.tipPadding
+                  : const EdgeInsets.fromLTRB(10, 8, 10, 9),
+              decoration: AdminTokens.tip,
+              child: widget.rich ??
+                  Text(widget.message, style: AdminTokens.tipStyle),
+            ),
+          ),
+          child: widget.child,
+        ),
+      );
+}
+
 /// Inline stacked mastery bar for a table row or a topic line. The counts are
 /// also exposed to the semantics tree, so the bar is never colour-only.
 class LevelBar extends StatelessWidget {
@@ -1039,19 +1117,16 @@ class LevelBar extends StatelessWidget {
         : [for (final k in present) '${_levelLabel(k)} ${levels[k]}'].join(', ');
     return Semantics(
       label: reading,
-      child: Tooltip(
+      child: ConsoleTip(
         // The same sentence the screen reader gets: four colours in a 6 px bar
         // are not a reading for anybody, sighted or not.
         message: reading,
-        waitDuration: Duration.zero,
-        textStyle: AdminTokens.mono(11),
-        decoration: AdminTokens.tip,
         child: ClipRRect(
           borderRadius: BorderRadius.circular(height / 2),
           child: SizedBox(
             height: height,
             child: present.isEmpty
-                ? const ColoredBox(color: AdminTokens.levelNone)
+                ? ColoredBox(color: AdminTokens.levelNone)
                 : Row(
                     // stretch, not the default centre: a ColoredBox with no
                     // child takes the SMALLEST size its constraints allow, so
@@ -1136,7 +1211,7 @@ class StackedBar extends StatelessWidget {
         child: SizedBox(
           height: height,
           child: present.isEmpty
-              ? const ColoredBox(color: AdminTokens.levelNone)
+              ? ColoredBox(color: AdminTokens.levelNone)
               : Row(
                   // See [LevelBar]: a centred cross axis paints every segment
                   // 0 px high.
@@ -1154,8 +1229,8 @@ class StackedBar extends StatelessWidget {
 
 /// One horizontal bar: a label, a `focus` bar proportional to [max], and the
 /// count in mono at the end. The length is a comparison, never the reading --
-/// the number is always there as text, and [tooltip] carries what does not
-/// fit on the row.
+/// the number is always there as text, and the tooltip carries the whole
+/// label (a subtopic title rarely fits the row) plus whatever [tooltip] adds.
 class BarRow extends StatelessWidget {
   const BarRow({
     super.key,
@@ -1163,7 +1238,7 @@ class BarRow extends StatelessWidget {
     required this.value,
     required this.max,
     this.tooltip,
-    this.labelWidth = 150,
+    this.labelWidth,
   });
 
   final String label;
@@ -1172,57 +1247,56 @@ class BarRow extends StatelessWidget {
   /// The widest bar on the card -- every row is drawn against the same one.
   final int max;
   final String? tooltip;
-  final double labelWidth;
+
+  /// Null shares the row: 38 % to the words, the rest to the bar (flex, not
+  /// a LayoutBuilder -- the Iris cards measure these rows intrinsically). A
+  /// fixed 150 px cut every Spanish subtopic to "Aplicación práctica: cas…"
+  /// while the bar ran 700 px.
+  final double? labelWidth;
 
   @override
   Widget build(BuildContext context) {
-    final row = Padding(
-      padding: const EdgeInsets.symmetric(vertical: 7),
-      child: Row(
-        children: [
-          SizedBox(
-            width: labelWidth,
-            child: Text(label,
-                style: AdminTokens.table,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: SizedBox(
-              height: 8,
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: FractionallySizedBox(
-                  widthFactor: max <= 0 ? 0 : (value / max).clamp(0.0, 1.0),
-                  heightFactor: 1,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: AdminTokens.focus,
-                      borderRadius: BorderRadius.circular(2),
+    final words = Text(label,
+        style: AdminTokens.table, maxLines: 1, overflow: TextOverflow.ellipsis);
+    return ConsoleTip(
+      message: tooltip ?? '$label · $value',
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 7),
+        child: Row(
+          children: [
+            if (labelWidth case final w?)
+              SizedBox(width: w, child: words)
+            else
+              Expanded(flex: 38, child: words),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: labelWidth == null ? 62 : 1,
+              child: SizedBox(
+                height: 8,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: FractionallySizedBox(
+                    widthFactor: max <= 0 ? 0 : (value / max).clamp(0.0, 1.0),
+                    heightFactor: 1,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: AdminTokens.focus,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(width: 12),
-          SizedBox(
-            width: 48,
-            child: Text('$value',
-                style: AdminTokens.mono(11), textAlign: TextAlign.right),
-          ),
-        ],
+            const SizedBox(width: 12),
+            SizedBox(
+              width: 48,
+              child: Text('$value',
+                  style: AdminTokens.mono(11), textAlign: TextAlign.right),
+            ),
+          ],
+        ),
       ),
-    );
-    final message = tooltip;
-    if (message == null) return row;
-    return Tooltip(
-      message: message,
-      waitDuration: Duration.zero,
-      textStyle: AdminTokens.mono(11),
-      decoration: AdminTokens.tip,
-      child: row,
     );
   }
 }
@@ -1309,7 +1383,7 @@ class _QuadCell extends StatelessWidget {
       decoration: BoxDecoration(
         // The app's own misconception border, ported verbatim with the rest
         // of the quadrant.
-        border: Border.all(color: hot ? const Color(0xFF6E3535) : t.line),
+        border: Border.all(color: hot ? t.redBorder : t.line),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
@@ -1376,7 +1450,7 @@ class Funnel extends StatelessWidget {
                         child: DecoratedBox(
                           decoration: BoxDecoration(
                             color: AdminTokens.focus,
-                            borderRadius: BorderRadius.circular(2),
+                            borderRadius: BorderRadius.circular(5),
                           ),
                         ),
                       ),
@@ -1458,6 +1532,18 @@ class _AdminTableState<T> extends State<AdminTable<T>> {
   int? _sort;
   bool _asc = true;
 
+  /// Column widths the reader has dragged, by index. A dragged column becomes
+  /// fixed at that width; the flexed ones share what is left. Double-click on
+  /// the handle forgets it.
+  final _dragged = <int, double>{};
+
+  /// What each header cell was last laid out at (content width, without the
+  /// gutter): the starting point of a drag on a flexed column, which has no
+  /// width of its own to start from.
+  final _laidOut = <int, double>{};
+
+  double? _fixed(int i) => _dragged[i] ?? widget.columns[i].width;
+
   @override
   void initState() {
     super.initState();
@@ -1505,25 +1591,53 @@ class _AdminTableState<T> extends State<AdminTable<T>> {
 
   double get _minWidth {
     var w = 0.0;
-    for (final c in widget.columns) {
-      w += (c.width ?? _minFlexW) + _gutterW;
+    for (var i = 0; i < widget.columns.length; i++) {
+      w += (_fixed(i) ?? _minFlexW) + _gutterW;
     }
     return w;
   }
 
-  Widget _cells(List<Widget> children) => Row(
+  Widget _cells(List<Widget> children, {bool header = false}) => Row(
         children: [
           for (var i = 0; i < widget.columns.length; i++)
-            if (widget.columns[i].width case final w?)
-              SizedBox(width: w + _gutterW, child: _gutter(children[i]))
+            if (_fixed(i) case final w?)
+              SizedBox(
+                  width: w + _gutterW, child: _gutter(i, children[i], header))
             else
               Expanded(
-                  flex: widget.columns[i].flex, child: _gutter(children[i])),
+                  flex: widget.columns[i].flex,
+                  child: _gutter(i, children[i], header)),
         ],
       );
 
-  Widget _gutter(Widget child) => Padding(
-      padding: const EdgeInsets.only(right: _gutterW), child: child);
+  /// The cell in its 12 px right gutter. A header cell also records its
+  /// width and carries the drag handle, which lives IN the gutter so it never
+  /// takes a pixel from the label.
+  Widget _gutter(int i, Widget child, bool header) {
+    final cell = Padding(
+        padding: const EdgeInsets.only(right: _gutterW), child: child);
+    if (!header) return cell;
+    return Stack(
+      children: [
+        LayoutBuilder(builder: (context, box) {
+          _laidOut[i] = box.maxWidth - _gutterW;
+          return cell;
+        }),
+        Positioned(
+          top: 0,
+          bottom: 0,
+          right: 0,
+          width: _gutterW,
+          child: ColumnResizer(
+            onStart: () => _dragged[i] ??= _laidOut[i] ?? _minFlexW,
+            onDrag: (dx) => setState(() =>
+                _dragged[i] = (_dragged[i]! + dx).clamp(40.0, 900.0)),
+            onReset: () => setState(() => _dragged.remove(i)),
+          ),
+        ),
+      ],
+    );
+  }
 
   Widget _align(int i, Widget child) => Align(
         alignment: widget.columns[i].numeric
@@ -1563,7 +1677,7 @@ class _AdminTableState<T> extends State<AdminTable<T>> {
                     ? null
                     : () => setState(() => _apply(i, toggle: true)),
               ),
-          ]),
+          ], header: true),
         ),
         const _Hairline(),
         if (rows.isEmpty)
@@ -1578,28 +1692,92 @@ class _AdminTableState<T> extends State<AdminTable<T>> {
             ),
           )
         else
-          for (final row in rows)
-            ConsoleInteractive(
-              onTap: widget.onTap == null
-                  ? null
-                  : () => widget.onTap!(row),
-              radius: 0,
-              builder: (context, hovered) => Container(
-                height: 40,
-                decoration: BoxDecoration(
-                  color: hovered ? AdminTokens.hover : null,
-                  border: Border(bottom: BorderSide(color: t.line)),
-                ),
-                child: DefaultTextStyle(
-                  style: AdminTokens.table,
-                  child: _cells([
-                    for (var i = 0; i < widget.columns.length; i++)
-                      _align(i, widget.columns[i].cell(row)),
-                  ]),
-                ),
+          // The body scrolls under the pinned header once it outruns the
+          // viewport; a wheel at its end goes on to the page.
+          ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: AdminTokens.bodyMax(context)),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final row in rows)
+                    ConsoleInteractive(
+                      onTap: widget.onTap == null
+                          ? null
+                          : () => widget.onTap!(row),
+                      radius: 0,
+                      builder: (context, hovered) => Container(
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: hovered ? AdminTokens.hover : null,
+                          border: Border(bottom: BorderSide(color: t.line)),
+                        ),
+                        child: DefaultTextStyle(
+                          style: AdminTokens.table,
+                          child: _cells([
+                            for (var i = 0; i < widget.columns.length; i++)
+                              _align(i, widget.columns[i].cell(row)),
+                          ]),
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
+          ),
       ],
+    );
+  }
+}
+
+/// The column-resize handle: the header cell's gutter, with a column-resize
+/// cursor, a 1 px `line2` rule while hovered or dragged so the reader can see
+/// what they have hold of, and a double-click that hands the column back.
+/// [AdminTable] and the heatmap grid share it, so every table on the console
+/// resizes the same way.
+class ColumnResizer extends StatefulWidget {
+  const ColumnResizer({
+    super.key,
+    required this.onStart,
+    required this.onDrag,
+    required this.onReset,
+  });
+
+  final VoidCallback onStart;
+  final ValueChanged<double> onDrag;
+  final VoidCallback onReset;
+
+  @override
+  State<ColumnResizer> createState() => _ResizerState();
+}
+
+class _ResizerState extends State<ColumnResizer> {
+  bool _hot = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TestuTokens.of(context);
+    return ExcludeSemantics(
+      child: MouseRegion(
+        cursor: SystemMouseCursors.resizeColumn,
+        onEnter: (_) => setState(() => _hot = true),
+        onExit: (_) => setState(() => _hot = false),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onHorizontalDragStart: (_) => widget.onStart(),
+          onHorizontalDragUpdate: (d) => widget.onDrag(d.delta.dx),
+          onDoubleTap: widget.onReset,
+          child: Center(
+            child: Container(
+              width: 1,
+              // Only the vertical middle: a full-height rule between every
+              // header would draw a grid the table does not otherwise have.
+              height: 16,
+              color: _hot ? t.mut : Colors.transparent,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1629,11 +1807,8 @@ class _HeaderCell<T> extends StatelessWidget {
               // A narrow column ellipsises its header ("Última activi…"), and
               // the full words then exist nowhere on the screen: the tooltip
               // is where they live.
-              child: Tooltip(
+              child: ConsoleTip(
                 message: column.label,
-                waitDuration: Duration.zero,
-                textStyle: AdminTokens.mono(11),
-                decoration: AdminTokens.tip,
                 child: Text(
                   column.label,
                   maxLines: 1,
@@ -1647,9 +1822,10 @@ class _HeaderCell<T> extends StatelessWidget {
             ),
             if (sorted) ...[
               const SizedBox(width: 5),
-              Text(
-                ascending ? '▲' : '▼',
-                style: AdminTokens.mono(8, color: AdminTokens.focus),
+              RotatedBox(
+                quarterTurns: ascending ? 2 : 0,
+                child: TestuIcon(TestuGlyph.chevronDown,
+                    size: 9, color: AdminTokens.focus),
               ),
             ],
           ],
@@ -1678,9 +1854,15 @@ class Select<T> extends StatelessWidget {
     this.hint,
     this.semanticLabel,
     this.enabled = true,
+    this.fill = false,
   });
 
   final T? value;
+
+  /// Take the whole width offered rather than the label's: a table column of
+  /// selects, or a form field. Explicit, because a Wrap offers a finite width
+  /// too, and the context bar's selects must stay the size of their words.
+  final bool fill;
 
   /// `(value, label)`; a null value is the "all" row.
   final List<(T?, String)> items;
@@ -1778,29 +1960,26 @@ class Select<T> extends StatelessWidget {
                 borderRadius: BorderRadius.circular(7),
               ),
               child: Row(
-                mainAxisSize: MainAxisSize.min,
+                // [fill]: a column of selects each as wide as its own label
+                // was a ragged edge down the roster.
+                mainAxisSize: fill ? MainAxisSize.max : MainAxisSize.min,
                 children: [
-                  // In a table cell the width is fixed and a Spanish team
-                  // name is longer than it: the label gives way rather than
-                  // painting overflow stripes over the row. In the context
-                  // bar the select sits in a Wrap with no width to give way
-                  // to, and a flexible child there is a layout error.
+                  // In a table cell a Spanish team name is longer than the
+                  // cell: the label gives way rather than painting overflow
+                  // stripes over the row, and the whole name moves to a
+                  // tooltip. A flexible child under unbounded width is a
+                  // layout error, so there the text stands alone.
                   if (!box.maxWidth.isFinite)
                     text
-                  else if (clipped)
-                    Flexible(
-                      child: Tooltip(
-                        message: label,
-                        waitDuration: Duration.zero,
-                        textStyle: AdminTokens.mono(11),
-                        decoration: AdminTokens.tip,
-                        child: text,
-                      ),
-                    )
                   else
-                    Flexible(child: text),
+                    Flexible(
+                      fit: fill ? FlexFit.tight : FlexFit.loose,
+                      child: clipped
+                          ? ConsoleTip(message: label, child: text)
+                          : text,
+                    ),
                   const SizedBox(width: 10),
-                  Text('▼', style: AdminTokens.mono(8, color: t.mut)),
+                  TestuIcon(TestuGlyph.chevronDown, size: 9, color: t.mut),
                 ],
               ),
             );
@@ -1984,7 +2163,7 @@ class ConsolePanelError extends StatelessWidget {
               const SizedBox(height: 14),
               Align(
                 alignment: Alignment.centerLeft,
-                child: TestuAct(L('Retry', 'Reintentar'), onTap: onRetry!),
+                child: ConsoleAct(L('Retry', 'Reintentar'), onTap: onRetry!),
               ),
             ],
           ],
@@ -2092,9 +2271,70 @@ class ConsoleChip extends StatelessWidget {
   }
 }
 
-/// A bare glyph button — the Iris panel's ✕ today. `ConsoleInteractive` gives it the
-/// console's hover, Enter/Space and focus ring; the 40 px box is the tap
-/// target, deliberately much larger than the glyph inside it.
+/// The console's button: [Select]'s exact chrome (11.5 px label, 6/12 px
+/// padding, `line2` hairline, 7 px radius), so a row of a select, a segmented
+/// control and two actions sits on one 28 px line. `primary` is the screen's
+/// one white act. Through [ConsoleInteractive], so it hovers, answers Enter
+/// and shows the focus ring like everything else here -- the app's
+/// `TestuAct` is a thumb target with none of that, and 20 px taller.
+class ConsoleAct extends StatelessWidget {
+  const ConsoleAct(
+    this.label, {
+    super.key,
+    this.onTap,
+    this.primary = false,
+    this.color,
+  });
+
+  final String label;
+  final VoidCallback? onTap;
+  final bool primary;
+
+  /// Off-palette label colour -- the red of a destructive act.
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TestuTokens.of(context);
+    final off = onTap == null;
+    return ConsoleInteractive(
+      onTap: onTap,
+      semanticLabel: label,
+      builder: (context, hovered) => ExcludeSemantics(
+        child: AnimatedContainer(
+          duration: AdminTokens.dur(context, 150),
+          curve: TestuTokens.curve,
+          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+          decoration: BoxDecoration(
+            color: primary
+                ? (off ? t.line2 : t.primaryAction)
+                : (hovered ? t.card2 : null),
+            border: Border.all(
+                color: primary && !off ? t.primaryAction : t.line2),
+            borderRadius: BorderRadius.circular(7),
+          ),
+          child: Text(
+            label,
+            maxLines: 1,
+            style: TextStyle(
+              fontFamily: 'Geist',
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+              color: off
+                  ? t.faint
+                  : color ?? (primary ? t.onPrimaryAction : t.ink),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A bare glyph button — the Iris panel's close today. The app's
+/// [TestuIconButton] grammar (a house glyph, never a text character) with
+/// `ConsoleInteractive`'s hover, Enter/Space and focus ring; the 40 px box is
+/// the tap target, deliberately much larger than the glyph inside it.
 class ConsoleIconButton extends StatelessWidget {
   const ConsoleIconButton({
     super.key,
@@ -2103,7 +2343,7 @@ class ConsoleIconButton extends StatelessWidget {
     required this.onTap,
   });
 
-  final String glyph;
+  final TestuGlyph glyph;
   final String label;
   final VoidCallback onTap;
 
@@ -2117,19 +2357,61 @@ class ConsoleIconButton extends StatelessWidget {
       onTap: onTap,
       radius: 8,
       semanticLabel: label,
-      // The glyph is decoration -- "Close" is the name, "✕" is not.
+      // The glyph is decoration -- "Close" is the name, the icon is not.
       builder: (context, hovered) => ExcludeSemantics(
         child: SizedBox(
           width: 40,
           height: 40,
           child: Center(
-            child: Text(
-              glyph,
-              style: TextStyle(fontSize: 13, color: hovered ? t.ink : t.mut),
-            ),
+            child: TestuIcon(glyph, size: 13, color: hovered ? t.ink : t.mut),
           ),
         ),
       ),
     );
   }
 }
+
+/// The console's text input on a card: the app's field chrome one step
+/// darker, sized for a laptop form rather than a thumb.
+InputDecoration consoleField(TestuTokens t, {String? hint}) =>
+    testuFieldDecoration(t, hint: hint, fill: t.field, fontSize: 12.5)
+        .copyWith(
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(vertical: 11, horizontal: 12),
+    );
+
+/// The console's one form dialog: [showTestuDialog]'s chrome, a sheet title,
+/// the fields, then Cancel and exactly one primary act on the right. Three
+/// hand-rolled copies had already drifted apart by a title size and a stock
+/// Material Cancel.
+Future<void> showConsoleForm(
+  BuildContext context, {
+  required String title,
+  double width = 380,
+  required List<Widget> Function(BuildContext dctx, StateSetter setD) fields,
+  required Widget Function(BuildContext dctx, StateSetter setD) primary,
+}) =>
+    showTestuDialog<void>(
+      context,
+      child: StatefulBuilder(
+        builder: (dctx, setD) => SizedBox(
+          width: width,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(title, style: kSheetTitle),
+              const SizedBox(height: 16),
+              ...fields(dctx, setD),
+              const SizedBox(height: 16),
+              Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                ConsoleAct(L('Cancel', 'Cancelar'),
+                    onTap: () => Navigator.pop(dctx)),
+                const SizedBox(width: 8),
+                primary(dctx, setD),
+              ]),
+            ],
+          ),
+        ),
+      ),
+    );

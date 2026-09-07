@@ -331,15 +331,14 @@ class _AdminActivityState extends State<AdminActivity>
     'other',
   ];
 
-  /// Seven qualitative colours, never the level trio: these are categories,
-  /// not levels, and reusing red/amber/green here would read as bad/ok/good.
+  /// Five steps of the one accent, then `faint` for off-topic and `mut` for
+  /// the rest: categories, so never the level trio (red/amber/green would
+  /// read as bad/ok/good), and never blue, violet or gold -- those are the
+  /// app's link, pill and badge colours, and in a bar beside orange charts
+  /// they read as another product's palette.
   static final List<Color> _themePalette = [
-    TestuTokens.instance.orange,
-    TestuTokens.instance.blue,
-    TestuTokens.instance.green,
-    TestuTokens.instance.amber,
-    TestuTokens.instance.violet,
-    TestuTokens.instance.gold,
+    ...AdminTokens.ramp(5),
+    TestuTokens.instance.faint,
     TestuTokens.instance.mut,
   ];
 
@@ -382,11 +381,8 @@ class _AdminActivityState extends State<AdminActivity>
       runSpacing: 8,
       children: [
         for (final (label, count) in labels)
-          Tooltip(
+          ConsoleTip(
             message: '$label · $count',
-            waitDuration: Duration.zero,
-            textStyle: AdminTokens.mono(11),
-            decoration: AdminTokens.tip,
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 10),
               decoration: BoxDecoration(

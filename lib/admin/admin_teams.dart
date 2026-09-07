@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../testu/testu_i18n.dart';
 import '../testu/testu_theme.dart';
-import '../testu/testu_widgets.dart';
 import 'admin_api.dart';
 import 'admin_models.dart';
 import 'admin_nav.dart';
@@ -108,24 +107,24 @@ class _AdminTeamsState extends State<AdminTeams> {
     }
     final t = TestuTokens.of(context);
     final teams = _teams!;
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    // See Colaboradores: the scaffold pads the column, this screen does not.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_canOperate) ...[
           Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-            if (_canOperate)
-              SizedBox(width: 140, child: TestuButton(L('New team', 'Nuevo equipo'), onTap: () => _openEdit(null))),
+            ConsoleAct(L('New team', 'Nuevo equipo'),
+                onTap: () => _openEdit(null)),
           ]),
           const SizedBox(height: 16),
-          _table(teams, t),
-          if (_canViewTeam) ...[
-            const SizedBox(height: 10),
-            Text(L('Click a row to open the team.', 'Haz clic en una fila para ver el equipo.'),
-                style: AdminTokens.footnote),
-          ],
         ],
-      ),
+        _table(teams, t),
+        if (_canViewTeam) ...[
+          const SizedBox(height: 10),
+          Text(L('Click a row to open the team.', 'Haz clic en una fila para ver el equipo.'),
+              style: AdminTokens.footnote),
+        ],
+      ],
     );
   }
 
@@ -191,7 +190,9 @@ class _AdminTeamsState extends State<AdminTeams> {
         padding: const EdgeInsets.symmetric(horizontal: 8),
         minimumSize: const Size(0, 28),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        textStyle: const TextStyle(fontFamily: 'Geist', fontSize: 12, fontWeight: FontWeight.w700),
+        // w500, the same weight as Colaboradores' "Desactivar": the two row
+        // acts of the roster screens read as one thing.
+        textStyle: const TextStyle(fontFamily: 'Geist', fontSize: 12, fontWeight: FontWeight.w500),
       ),
       child: Text(L('Edit', 'Editar')),
     );
@@ -209,92 +210,76 @@ class _AdminTeamsState extends State<AdminTeams> {
     final teams = _teams!;
     final parentChoices = [for (final tm in teams) if (tm.id != existing?.id) tm];
     final t = TestuTokens.of(context);
-    await showDialog<void>(
-      context: context,
-      builder: (dctx) => StatefulBuilder(
-        builder: (dctx, setD) => Dialog(
-          backgroundColor: t.card,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 22, vertical: 24),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18), side: BorderSide(color: t.line2)),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 380),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    existing == null ? L('New team', 'Nuevo equipo') : L('Edit team', 'Editar equipo'),
-                    style: TextStyle(color: t.ink, fontSize: 16, fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 16),
-                  if (existing == null) ...[
-                    TextField(
-                      controller: id,
-                      autofocus: true,
-                      inputFormatters: [FilteringTextInputFormatter.allow(RegExp('[a-z0-9]'))],
-                      decoration: InputDecoration(hintText: L('Id', 'Id')),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-                  TextField(controller: name, decoration: InputDecoration(hintText: L('Name', 'Nombre'))),
-                  const SizedBox(height: 8),
-                  Select<String>(
-                    value: parentChoices.any((tm) => tm.id == parent) ? parent : null,
-                    hint: L('Parent', 'Padre'),
-                    items: [
-                      (null, L('None', 'Ninguno')),
-                      for (final tm in parentChoices) (tm.id, tm.name),
-                    ],
-                    onChanged: (v) => setD(() => parent = v),
-                  ),
-                  const SizedBox(height: 8),
-                  Select<String>(
-                    value: _managers.any((u) => u.id == manager) ? manager : null,
-                    hint: 'Manager',
-                    items: [
-                      (null, L('None', 'Ninguno')),
-                      for (final u in _managers) (u.id, u.name),
-                    ],
-                    onChanged: (v) => setD(() => manager = v),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(controller: location, decoration: InputDecoration(hintText: L('Location', 'Ubicación'))),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: costcenter,
-                    decoration: InputDecoration(hintText: L('Cost center', 'Centro de costo')),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                    TextButton(onPressed: () => Navigator.pop(dctx), child: Text(L('Cancel', 'Cancelar'))),
-                    const SizedBox(width: 8),
-                    TestuAct(
-                      L('Save', 'Guardar'),
-                      primary: true,
-                      onTap: () {
-                        final teamId = existing?.id ?? id.text.trim();
-                        final teamName = name.text.trim();
-                        if (teamId.isEmpty || teamName.isEmpty) return;
-                        Navigator.pop(dctx);
-                        _mutate(() => widget.api.saveTeam(AdminTeam(
-                              id: teamId,
-                              name: teamName,
-                              parent: parent,
-                              manager: manager,
-                              location: location.text.trim(),
-                              costcenter: costcenter.text.trim(),
-                              members: existing?.members ?? 0,
-                            )));
-                      },
-                    ),
-                  ]),
-                ],
-              ),
-            ),
+    await showConsoleForm(
+      context,
+      title: existing == null ? L('New team', 'Nuevo equipo') : L('Edit team', 'Editar equipo'),
+      fields: (dctx, setD) => [
+        if (existing == null) ...[
+          TextField(
+            controller: id,
+            autofocus: true,
+            inputFormatters: [FilteringTextInputFormatter.allow(RegExp('[a-z0-9]'))],
+            style: AdminTokens.table,
+            decoration: consoleField(t, hint: L('Id', 'Id')),
           ),
+          const SizedBox(height: 8),
+        ],
+        TextField(
+            controller: name,
+            style: AdminTokens.table,
+            decoration: consoleField(t, hint: L('Name', 'Nombre'))),
+        const SizedBox(height: 8),
+        Select<String>(
+          value: parentChoices.any((tm) => tm.id == parent) ? parent : null,
+          hint: L('Parent', 'Padre'),
+          fill: true,
+          items: [
+            (null, L('None', 'Ninguno')),
+            for (final tm in parentChoices) (tm.id, tm.name),
+          ],
+          onChanged: (v) => setD(() => parent = v),
         ),
+        const SizedBox(height: 8),
+        Select<String>(
+          value: _managers.any((u) => u.id == manager) ? manager : null,
+          hint: 'Manager',
+          fill: true,
+          items: [
+            (null, L('None', 'Ninguno')),
+            for (final u in _managers) (u.id, u.name),
+          ],
+          onChanged: (v) => setD(() => manager = v),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+            controller: location,
+            style: AdminTokens.table,
+            decoration: consoleField(t, hint: L('Location', 'Ubicación'))),
+        const SizedBox(height: 8),
+        TextField(
+          controller: costcenter,
+          style: AdminTokens.table,
+          decoration: consoleField(t, hint: L('Cost center', 'Centro de costo')),
+        ),
+      ],
+      primary: (dctx, _) => ConsoleAct(
+        L('Save', 'Guardar'),
+        primary: true,
+        onTap: () {
+          final teamId = existing?.id ?? id.text.trim();
+          final teamName = name.text.trim();
+          if (teamId.isEmpty || teamName.isEmpty) return;
+          Navigator.pop(dctx);
+          _mutate(() => widget.api.saveTeam(AdminTeam(
+                id: teamId,
+                name: teamName,
+                parent: parent,
+                manager: manager,
+                location: location.text.trim(),
+                costcenter: costcenter.text.trim(),
+                members: existing?.members ?? 0,
+              )));
+        },
       ),
     );
   }

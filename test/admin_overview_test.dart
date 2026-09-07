@@ -358,14 +358,14 @@ void main() {
       },
     ];
     await _pump(tester, canned: canned);
-    expect(find.text('6 at Beginner, 1 question to Iris, 1 misconception'),
+    expect(find.text('6 at Beginner, 1 question to IRIS, 1 misconception'),
         findsOneWidget);
 
     testuLang.value = 'es';
     addTearDown(() => testuLang.value = 'en');
     await _pump(tester, canned: canned);
     expect(
-      find.text('6 en Principiante, 1 pregunta a Iris, 1 concepto erróneo'),
+      find.text('6 en Principiante, 1 pregunta a IRIS, 1 concepto erróneo'),
       findsOneWidget,
     );
 
@@ -382,7 +382,7 @@ void main() {
     await _pump(tester, canned: _canned());
 
     expect(
-      find.text('6 en Principiante, 14 preguntas a Iris, 3 conceptos erróneos'),
+      find.text('6 en Principiante, 14 preguntas a IRIS, 3 conceptos erróneos'),
       findsOneWidget,
     );
   });

@@ -17,11 +17,10 @@ class AdminTokens {
   /// Medians and previous-period ghosts: present, never competing.
   static final Color compare = _t.mut.withValues(alpha: 0.45);
 
-  /// The app's text-red (`#D08B8B`, already used for the misconception
-  /// count and the Beginner label). `TestuTokens.red` is a fill and border
-  /// colour — as 11-13 px text on `card`/`card2` it lands at 4.1:1, under the
-  /// 4.5:1 floor, so error copy and negative deltas use this instead.
-  static const Color redText = Color(0xFFD08B8B);
+  /// The app's text-red. `TestuTokens.red` is a fill and border colour — as
+  /// 11-13 px text on `card`/`card2` it lands at 4.1:1, under the 4.5:1
+  /// floor, so error copy and negative deltas use this instead.
+  static final Color redText = _t.redText;
 
   static const Color seriesPositive = Color(0xFF3F7D5F);
   static const Color seriesNegative = Color(0xFF8F4444);
@@ -30,7 +29,8 @@ class AdminTokens {
   static final Color axis = _t.faint;
   static final Color hover = _t.card2;
 
-  static const Color levelNone = Color(0xFF3A3A40);
+  /// The app's "not started" dot.
+  static final Color levelNone = _t.idle;
 
   static Color level(String? level) => switch (level) {
         'expert' => _t.green,
@@ -42,9 +42,9 @@ class AdminTokens {
   /// The app's pill border per level (testu_topics.dart:`masteryOf`): a
   /// darker edge of the same hue as the label it wraps.
   static Color levelEdge(String? level) => switch (level) {
-        'expert' => const Color(0xFF2F6A4C),
-        'competent' => const Color(0xFF8A7A3A),
-        'beginner' => const Color(0xFF6E3535),
+        'expert' => _t.greenBorder,
+        'competent' => _t.goldBorder,
+        'beginner' => _t.redBorder,
         _ => _t.line2,
       };
 
@@ -65,7 +65,7 @@ class AdminTokens {
   static final reading = TextStyle(
       fontFamily: 'Sora',
       fontWeight: FontWeight.w600,
-      fontSize: 15,
+      fontSize: 14,
       height: 1.45,
       color: _t.ink);
 
@@ -108,6 +108,33 @@ class AdminTokens {
     border: Border.all(color: _t.line),
     borderRadius: BorderRadius.circular(6),
   );
+
+  /// What a tooltip says it in: the table's Geist at 11, tabular so a date
+  /// and a count line up, and NOT the mono at w500 the charts used to wear
+  /// -- beside a 9.5 px axis that read as the biggest text on the card.
+  static final TextStyle tipStyle = TextStyle(
+      fontFamily: 'Geist',
+      fontSize: 11,
+      height: 1.35,
+      fontFeatures: const [FontFeature.tabularFigures()],
+      color: _t.ink);
+  static const EdgeInsets tipPadding = EdgeInsets.fromLTRB(9, 5, 9, 6);
+
+  /// A sequential ramp of the one accent for categorical data that has no
+  /// levels (the question themes): [n] steps from `focus` down to a fifth of
+  /// it. Blue, violet and gold are app tokens for links, pills and badges,
+  /// and in a bar beside orange charts they read as another product's
+  /// palette.
+  static List<Color> ramp(int n) => [
+        for (var i = 0; i < n; i++)
+          focus.withValues(alpha: n == 1 ? 1 : 1 - 0.8 * i / (n - 1)),
+      ];
+
+  /// How far a table or grid body may run before it scrolls inside its own
+  /// box with the header pinned: the viewport less the chrome above a card.
+  /// A page-long roster scrolled its header away with the first wheel.
+  static double bodyMax(BuildContext c) =>
+      (MediaQuery.sizeOf(c).height - 260).clamp(280.0, 2000.0);
 
   static TextStyle mono(double size, {Color? color}) => TextStyle(
         fontFamily: 'GeistMono',

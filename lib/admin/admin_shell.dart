@@ -272,7 +272,7 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
                 style: TextStyle(color: t.mut),
               ),
               const SizedBox(height: 12),
-              TextButton(onPressed: widget.onSignOut, child: Text(L('Sign out', 'Cerrar sesión'))),
+              ConsoleAct(L('Sign out', 'Cerrar sesión'), onTap: widget.onSignOut),
             ],
           ),
         ),

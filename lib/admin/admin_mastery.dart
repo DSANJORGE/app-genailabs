@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../testu/testu_i18n.dart';
-import '../testu/testu_widgets.dart';
 import 'admin_api.dart';
 import 'admin_csv.dart';
 import 'admin_download.dart';
@@ -393,10 +392,11 @@ class _AdminMasteryState extends State<AdminMastery> {
     widget.nav.go(id.startsWith('u:') ? 'person' : 'team', entityId: entityId);
   }
 
-  Widget _actions() => Wrap(
-        spacing: 10,
-        runSpacing: 8,
-        crossAxisAlignment: WrapCrossAlignment.center,
+  /// One 28 px line: the sort at the left, and the two page-level acts at the
+  /// right edge where Colaboradores keeps its own. The sort would rather sit
+  /// on the grid's card beside the view toggle, but the card header has no
+  /// room for both at the console's narrowest column.
+  Widget _actions() => Row(
         children: [
           Select<_Sort>(
             value: _sort,
@@ -408,18 +408,23 @@ class _AdminMasteryState extends State<AdminMastery> {
             ],
             onChanged: (v) => setState(() => _sort = v ?? _Sort.team),
           ),
-          TestuAct(
+          const Spacer(),
+          if (_recomputing) ...[
+            Text(L('Recomputing…', 'Recalculando…'),
+                style: AdminTokens.muted),
+            const SizedBox(width: 12),
+          ],
+          ConsoleAct(
             L('Export CSV', 'Exportar CSV'),
             onTap: (_report?.rows.isEmpty ?? true) ? null : _exportCsv,
           ),
-          if (_canOperate)
-            TestuAct(
+          if (_canOperate) ...[
+            const SizedBox(width: 8),
+            ConsoleAct(
               L('Recompute', 'Recalcular'),
               onTap: _recomputing ? null : _recompute,
             ),
-          if (_recomputing)
-            Text(L('Recomputing…', 'Recalculando…'),
-                style: AdminTokens.muted),
+          ],
         ],
       );
 }

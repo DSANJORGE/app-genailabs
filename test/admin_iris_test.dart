@@ -227,7 +227,7 @@ void main() {
     final (http, _, _) = await _pump(tester, canned: _down);
     await _ask(tester, '¿Quién necesita ayuda esta semana?');
 
-    expect(find.text('Iris is not available right now.'), findsOneWidget);
+    expect(find.text('IRIS is not available right now.'), findsOneWidget);
     expect(find.text('Retry'), findsOneWidget);
     // The question is still on screen: the thread survives the failure.
     expect(find.text('¿Quién necesita ayuda esta semana?'), findsOneWidget);
@@ -239,7 +239,7 @@ void main() {
     expect(http.posted.length, 2);
     expect(http.posted.last.fields['question'],
         '¿Quién necesita ayuda esta semana?');
-    expect(find.text('Iris is not available right now.'), findsNothing);
+    expect(find.text('IRIS is not available right now.'), findsNothing);
     expect(find.byType(CitationChip), findsOneWidget);
   });
 

@@ -229,15 +229,15 @@ void main() {
 
     expect(find.text('4 sessions · 37 min · 3 active days'), findsOneWidget);
     expect(
-      find.text('6 questions to Iris · about Debida diligencia · 50% helpful'),
+      find.text('6 questions to IRIS · about Debida diligencia · 50% helpful'),
       findsOneWidget,
     );
   });
 
-  testWidgets('a person who never asked Iris gets no Iris line', (tester) async {
+  testWidgets('a person who never asked IRIS gets no Iris line', (tester) async {
     await _pump(tester, canned: _canned(iris: {'questions': 0}));
 
-    expect(find.textContaining('questions to Iris'), findsNothing);
+    expect(find.textContaining('questions to IRIS'), findsNothing);
   });
 
   testWidgets('the subtopic table lists every row', (tester) async {
