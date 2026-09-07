@@ -16,9 +16,6 @@ import 'testu_tutor.dart';
 import 'testu_widgets.dart';
 import 'testu_client.dart';
 
-/// TestU Learn shell: four-tab surface with the pinned translucent bottom nav
-/// (spec: screens artifact — Today · Topics · Tutor · Dashboard).
-
 /// The four tab labels, in nav order. The tutor tab wears the org tutor's
 /// name (Vueling → Sully): it opens the general tutor that routes questions
 /// to the topic-expert tutors who answer inside topic/question contexts.
@@ -29,6 +26,8 @@ List<String> testuTabLabels() => [
       L('DASHBOARD', 'DASHBOARD'),
     ];
 
+/// TestU Learn shell: four-tab surface with the pinned translucent bottom nav
+/// (spec: screens artifact — Today · Topics · Tutor · Dashboard).
 class TestuShell extends StatefulWidget {
   const TestuShell({super.key});
 

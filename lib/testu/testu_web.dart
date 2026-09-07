@@ -66,9 +66,9 @@ class TestuRail extends StatelessWidget {
       // Language switch re-reads L(); the shell tells us which tab is up.
       child: ValueListenableBuilder<String>(
         valueListenable: testuLang,
-        builder: (_, __, ___) => ValueListenableBuilder<int>(
+        builder: (_, _, _) => ValueListenableBuilder<int>(
           valueListenable: TestuShell.currentTab,
-          builder: (_, current, __) {
+          builder: (_, current, _) {
             final labels = testuTabLabels();
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,

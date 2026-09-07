@@ -130,6 +130,7 @@ void main() {
 
     testWidgets('a rail tap reports the tab; the shell publishes its tab',
         (tester) async {
+      addTearDown(() => TestuShell.currentTab.value = 0);
       int? tapped;
       await pumpShell(tester, desktop, onTab: (i) => tapped = i);
       await tester.tap(find.text('TOPICS'));
