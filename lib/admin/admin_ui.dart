@@ -845,19 +845,152 @@ String _levelLabel(String? level) => switch (level) {
       _ => L('No data', 'Sin datos'),
     };
 
-/// The key for [LevelBar], shown once per table rather than per row.
-class LevelLegend extends StatelessWidget {
-  const LevelLegend({super.key});
+/// The key for a coloured series, shown once per card rather than per row.
+class Legend extends StatelessWidget {
+  const Legend(this.items, {super.key});
+
+  /// `(colour, label)` -- the label carries the count when there is one, so a
+  /// stacked bar is never read by colour alone.
+  final List<(Color, String)> items;
 
   @override
   Widget build(BuildContext context) => Wrap(
         spacing: 14,
         runSpacing: 4,
         children: [
-          for (final k in LevelBar._order)
-            _LegendDot(color: AdminTokens.level(k), label: _levelLabel(k)),
+          for (final (color, label) in items)
+            _LegendDot(color: color, label: label),
         ],
       );
+}
+
+/// The key for [LevelBar], shown once per table rather than per row.
+class LevelLegend extends StatelessWidget {
+  const LevelLegend({super.key});
+
+  @override
+  Widget build(BuildContext context) => Legend([
+        for (final k in LevelBar._order) (AdminTokens.level(k), _levelLabel(k)),
+      ]);
+}
+
+/// [LevelBar] for data that has no levels: one segment per series, flexed by
+/// its count, coloured by the caller. The colours are passed in rather than
+/// looked up precisely so non-level data can never borrow the level trio's
+/// meaning. Pair it with a [Legend] -- the counts live there.
+class StackedBar extends StatelessWidget {
+  const StackedBar(this.segments, {super.key, this.height = 10});
+
+  /// `(colour, label, count)`; zero-count segments are dropped.
+  final List<(Color color, String label, int count)> segments;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final present = [
+      for (final s in segments)
+        if (s.$3 > 0) s,
+    ];
+    return Semantics(
+      label: [
+        for (final (_, label, count) in present) '$label $count',
+      ].join(', '),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(height / 2),
+        child: SizedBox(
+          height: height,
+          child: present.isEmpty
+              ? const ColoredBox(color: AdminTokens.levelNone)
+              : Row(
+                  children: [
+                    for (final (color, _, count) in present)
+                      Expanded(flex: count, child: ColoredBox(color: color)),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One horizontal bar: a label, a `focus` bar proportional to [max], and the
+/// count in mono at the end. The length is a comparison, never the reading --
+/// the number is always there as text, and [tooltip] carries what does not
+/// fit on the row.
+class BarRow extends StatelessWidget {
+  const BarRow({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.max,
+    this.tooltip,
+    this.labelWidth = 150,
+  });
+
+  final String label;
+  final int value;
+
+  /// The widest bar on the card -- every row is drawn against the same one.
+  final int max;
+  final String? tooltip;
+  final double labelWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TestuTokens.of(context);
+    final row = Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(
+        children: [
+          SizedBox(
+            width: labelWidth,
+            child: Text(label,
+                style: AdminTokens.table,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: SizedBox(
+              height: 8,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: FractionallySizedBox(
+                  widthFactor: max <= 0 ? 0 : (value / max).clamp(0.0, 1.0),
+                  heightFactor: 1,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: AdminTokens.focus,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          SizedBox(
+            width: 48,
+            child: Text('$value',
+                style: AdminTokens.mono(11), textAlign: TextAlign.right),
+          ),
+        ],
+      ),
+    );
+    final message = tooltip;
+    if (message == null) return row;
+    return Tooltip(
+      message: message,
+      waitDuration: Duration.zero,
+      textStyle: AdminTokens.mono(11),
+      decoration: BoxDecoration(
+        color: t.card2,
+        border: Border.all(color: t.line),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: row,
+    );
+  }
 }
 
 /// The app's calibration quadrant, ported: right/wrong × certain/unsure,

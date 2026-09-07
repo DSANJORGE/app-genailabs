@@ -4,6 +4,7 @@ import 'package:flutter/services.dart' show SystemNavigator;
 
 import '../testu/testu_i18n.dart';
 import '../testu/testu_theme.dart';
+import 'admin_activity.dart';
 import 'admin_api.dart';
 import 'admin_mastery.dart';
 import 'admin_models.dart';
@@ -199,12 +200,12 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
 
   /// Every route resolves here, and nowhere else.
   Widget _page(ConsoleRoute route) => switch (route.section) {
-    // Tasks 12-14 replace these three with AdminActivity,
-    // AdminPerson(userId: route.entityId!) and AdminTeamPage(teamId: …),
-    // each taking api, me, filters and nav.
+    // Tasks 13-14 replace these two with AdminPerson(userId: route.entityId!)
+    // and AdminTeamPage(teamId: …), each taking api, me, filters and nav.
     'overview' =>
       AdminOverview(api: widget.api, me: widget.me, filters: _filters, nav: _nav),
-    'activity' => _notYet(_label('activity')),
+    'activity' =>
+      AdminActivity(api: widget.api, me: widget.me, filters: _filters, nav: _nav),
     'person' => _notYet(_label('person')),
     'team' => _notYet(_label('team')),
     'mastery' => AdminMastery(api: widget.api, me: widget.me),

@@ -475,6 +475,9 @@ Widget correctIncorrectBars(
 /// When the organisation studies: 7 rows × 24 columns of 14 px cells, tinted
 /// `focus` by share of the busiest hour. The count is in every cell's
 /// tooltip, so the tint is never the only reading.
+///
+/// `cells` is sparse — the server sends only the hours it has, never 168
+/// triples — and its weekday is 0-based with Monday first.
 Widget hoursHeatmap(List<(int wd, int h, int n)> cells) {
   final counts = <int, int>{};
   for (final (wd, h, n) in cells) {
@@ -506,14 +509,17 @@ Widget hoursHeatmap(List<(int wd, int h, int n)> cells) {
         ],
       ),
       const SizedBox(height: 4),
-      for (var wd = 1; wd <= 7; wd++)
+      // `wd` is the server's own weekday: Monday = 0 through Sunday = 6
+      // (`(Calendar.DAY_OF_WEEK + 5) % 7` in activity.groovy). Reading it as
+      // 1-7 loses Monday entirely and labels every other day one row early.
+      for (var wd = 0; wd < 7; wd++)
         Padding(
           padding: const EdgeInsets.only(bottom: 2),
           child: Row(
             children: [
               SizedBox(
                 width: 34,
-                child: Text(dayNames[wd - 1], style: _axisStyle),
+                child: Text(dayNames[wd], style: _axisStyle),
               ),
               for (var h = 0; h < 24; h++)
                 Padding(
@@ -521,7 +527,7 @@ Widget hoursHeatmap(List<(int wd, int h, int n)> cells) {
                   child: _HeatCell(
                     n: counts[wd * 24 + h] ?? 0,
                     max: max,
-                    label: '${dayNames[wd - 1]} ${h.toString().padLeft(2, '0')}:00',
+                    label: '${dayNames[wd]} ${h.toString().padLeft(2, '0')}:00',
                   ),
                 ),
             ],
