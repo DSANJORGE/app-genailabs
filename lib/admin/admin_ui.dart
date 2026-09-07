@@ -506,13 +506,13 @@ class ContextBar extends StatelessWidget {
               Segmented<Period>(
                 value: filters.period,
                 items: [
-                  (Period.d7, L('7 d', '7 d')),
-                  (Period.d30, L('30 d', '30 d')),
-                  (Period.d90, L('90 d', '90 d')),
+                  (Period.d7, Period.d7.label),
+                  (Period.d30, Period.d30.label),
+                  (Period.d90, Period.d90.label),
                   // Before launch day "Piloto" would be a one-day window
                   // pretending to be a period: offer it once it exists.
                   if (!kPilotStart.isAfter(DateTime.now()))
-                    (Period.pilot, L('Pilot', 'Piloto')),
+                    (Period.pilot, Period.pilot.label),
                 ],
                 onChanged: (p) => filters.set(period: p),
               ),

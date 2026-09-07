@@ -14,8 +14,15 @@ const _report = 'services/testu/analytics/report.json';
 const _users = 'services/testu/personas/users.json';
 const _teams = 'services/testu/personas/teams.json';
 
-final _me = AdminMe('m', 'm@x', 'Diego San Jorge', 'training', {'analytics_view'},
-    const [], persona: AdminPersona('Iris', organization: 'Minsur'));
+final _me = AdminMe('m', 'm@x', 'Diego San Jorge', 'training',
+    {'analytics_view', 'personas_view'}, const [],
+    persona: AdminPersona('Iris', organization: 'Minsur'));
+
+/// The roster endpoints need personas_view and answer 403 without it -- and
+/// that 403 ends the session, so they must not be called at all.
+final _analyticsOnly = AdminMe('m', 'm@x', 'Diego San Jorge', 'training',
+    {'analytics_view'}, const [],
+    persona: AdminPersona('Iris', organization: 'Minsur'));
 
 /// Yesterday, so the "active 7 d" column has something true in it whenever
 /// this test runs.
@@ -167,6 +174,7 @@ Future<(FakeEmeHttp, AnalyticsFilters, ConsoleNav)> _pump(
   WidgetTester tester, {
   bool canned = true,
   Map<String, dynamic>? overview,
+  AdminMe? me,
   double width = 1440,
 }) async {
   tester.view.physicalSize = Size(width, 2400);
@@ -191,7 +199,7 @@ Future<(FakeEmeHttp, AnalyticsFilters, ConsoleNav)> _pump(
       body: ListView(children: [
         AdminTeamPage(
           api: AdminApi(http: http),
-          me: _me,
+          me: me ?? _me,
           filters: filters,
           nav: nav,
           teamId: 'team-pisco',
@@ -229,6 +237,9 @@ void main() {
     );
     expect(find.text('ACTIVE 7 D'), findsOneWidget);
     expect(find.text('organisation median 48%'), findsOneWidget);
+    // The stats follow a period this page has no control over, so it says
+    // which one out loud.
+    expect(find.textContaining('Period 7 d'), findsOneWidget);
   });
 
   testWidgets('an organisation under five people gets no median line',
@@ -249,6 +260,16 @@ void main() {
     expect(find.text('Otro Equipo'), findsNothing);
     // u1 answered in two topics and is weakest in Ciberseguridad.
     expect(find.text('Ciberseguridad'), findsWidgets);
+  });
+
+  testWidgets('a viewer without personas_view keeps the analytics half',
+      (tester) async {
+    final (http, _, _) = await _pump(tester, me: _analyticsOnly);
+
+    expect(http.requests.where((r) => r.$1 == _users), isEmpty);
+    expect(http.requests.where((r) => r.$1 == _teams), isEmpty);
+    expect(find.text('ACTIVE 7 D'), findsOneWidget);
+    expect(find.text('Your account cannot list people.'), findsOneWidget);
   });
 
   testWidgets('a member row drills into that person', (tester) async {

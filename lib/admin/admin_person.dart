@@ -22,6 +22,9 @@ import 'admin_ui.dart';
 /// The reply is scoped server-side: person.json answers 403 for someone
 /// outside the viewer's teams, and that is the one error this screen words
 /// itself.
+/// The reply plus the team names it needs to read one id back as a place.
+typedef _PersonData = ({PersonReport person, List<AdminTeam> teams});
+
 class AdminPerson extends StatefulWidget {
   const AdminPerson({
     super.key,
@@ -43,16 +46,40 @@ class AdminPerson extends StatefulWidget {
 }
 
 class _AdminPersonState extends State<AdminPerson>
-    with FilteredFetch<PersonReport, AdminPerson> {
+    with FilteredFetch<_PersonData, AdminPerson> {
   @override
   AnalyticsFilters get filters => widget.filters;
 
   @override
   ConsoleNav get nav => widget.nav;
 
+  /// A fixed 30-day window, not the shared period: the card below says
+  /// "Últimos 30 días" and the usage and Iris lines are summed off the same
+  /// reply, so the page would be lying if the console's period control could
+  /// silently make it 7. `person.json` scopes itself to the learner, so no
+  /// other filter belongs in this query.
+  Map<String, String> get _window {
+    final now = DateTime.now();
+    final to = DateTime(now.year, now.month, now.day);
+    return {
+      'from': ymd(DateTime(to.year, to.month, to.day - 30)),
+      'to': ymd(to),
+      'period': 'd30',
+    };
+  }
+
   @override
-  Future<PersonReport> fetch() =>
-      widget.api.person(widget.userId, widget.filters.query);
+  Future<_PersonData> fetch() async {
+    // `user.team` is an id; only teams.json knows the name. That endpoint
+    // needs personas_view and answers 403 without it -- and THAT 403 does
+    // end the session, so a viewer who lacks the verb must never call it.
+    final teams = widget.me.can('personas_view')
+        ? widget.api.teams().catchError((_) => <AdminTeam>[])
+        : Future.value(<AdminTeam>[]);
+    final r = await Future.wait<Object>(
+        [widget.api.person(widget.userId, _window), teams]);
+    return (person: r[0] as PersonReport, teams: r[1] as List<AdminTeam>);
+  }
 
   /// A manager reading someone outside their teams gets a 403 from
   /// person.groovy. That is not a breakage, it is the scope rule, and it is
@@ -60,7 +87,7 @@ class _AdminPersonState extends State<AdminPerson>
   @override
   String errorText(Object e) => e is EmeHttpException && e.statusCode == 403
       ? L('Outside your scope.', 'Fuera de tu alcance.')
-      : errText(e);
+      : loadError(e);
 
   @override
   Widget build(BuildContext context) => fetched(_page);
@@ -70,10 +97,12 @@ class _AdminPersonState extends State<AdminPerson>
     return name.isEmpty ? 'Iris' : name;
   }
 
-  Widget _page(BuildContext context, PersonReport p, String? highlight) => Column(
+  Widget _page(BuildContext context, _PersonData d, String? highlight) {
+    final p = d.person;
+    return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _header(p),
+          _header(d),
           const SizedBox(height: 20),
           Reading(
             personaName: _persona,
@@ -90,14 +119,16 @@ class _AdminPersonState extends State<AdminPerson>
           Pulse(active: points(highlight, 'subtopic'), child: _table(p)),
         ],
       );
+  }
 
   // ---------------------------------------------------------------- header
 
-  Widget _header(PersonReport p) {
+  Widget _header(_PersonData d) {
+    final p = d.person;
     final u = p.user;
     final t = TestuTokens.of(context);
     final meta = [
-      if ((u.team ?? '').isNotEmpty) u.team!,
+      if ((u.team ?? '').isNotEmpty) _teamName(d, u.team!),
       if (_lastSeen(p) != null)
         L('Last activity ${_lastSeen(p)}', 'Última actividad ${_lastSeen(p)}'),
       if (u.creationdate != null)
@@ -123,6 +154,15 @@ class _AdminPersonState extends State<AdminPerson>
         ],
       ],
     );
+  }
+
+  /// The id is the honest fallback: a team the roster does not carry (or a
+  /// viewer who may not read the roster) still names something real.
+  String _teamName(_PersonData d, String id) {
+    for (final t in d.teams) {
+      if (t.id == id) return t.name;
+    }
+    return id;
   }
 
   static String _role(String role) => switch (role) {
@@ -220,8 +260,10 @@ class _AdminPersonState extends State<AdminPerson>
           (AdminTokens.seriesPositive, L('Correct', 'Correctas')),
           (AdminTokens.seriesNegative, L('Incorrect', 'Incorrectas')),
         ],
-        footnote: L('One column per day of the selected period.',
-            'Una columna por día del periodo seleccionado.'),
+        footnote: L(
+          'The last 30 days, whatever period the rest of the console is on.',
+          'Los últimos 30 días, sea cual sea el periodo del resto de la consola.',
+        ),
         child: correctIncorrectBars([
           for (final d in p.series)
             (
@@ -250,6 +292,11 @@ class _AdminPersonState extends State<AdminPerson>
           const SizedBox(height: 6),
           Text(iris, style: AdminTokens.body),
         ],
+        const SizedBox(height: 6),
+        // Same reply as the chart above, so the same 30 days.
+        Text(L('Both lines cover the last 30 days.',
+            'Ambas líneas cubren los últimos 30 días.'),
+            style: AdminTokens.footnote),
       ],
     );
   }

@@ -1,9 +1,24 @@
 import 'dart:async';
 
+import 'package:eme_app_package/eme_http.dart' show EmeHttpException;
 import 'package:flutter/material.dart';
 
+import '../testu/testu_i18n.dart';
+import 'admin_api.dart';
 import 'admin_nav.dart';
 import 'admin_ui.dart';
+
+/// A failed read, in words. The console never shows a reader a thrown
+/// object: a transport failure is a connection, a status is a status, and
+/// only [AdminApi]'s own `Exception('msg')` mutations carry a sentence worth
+/// printing as-is.
+String loadError(Object e) {
+  if (e is! EmeHttpException) return errText(e);
+  final code = e.statusCode;
+  return code == null
+      ? L('No connection.', 'Sin conexión.')
+      : L('Could not load ($code).', 'No se pudo cargar ($code).');
+}
 
 /// The fetch half of an analytics screen (spec analytics-v1 §6), shared by
 /// Resumen, Actividad, Persona and Equipo.
@@ -35,8 +50,9 @@ mixin FilteredFetch<T, W extends StatefulWidget> on State<W> {
   /// One fetch of everything the screen draws.
   Future<T> fetch();
 
-  /// What the panel says when [fetch] throws.
-  String errorText(Object e);
+  /// What the panel says when [fetch] throws. Screens with a sentence of
+  /// their own override it; the rest get [loadError].
+  String errorText(Object e) => loadError(e);
 
   @override
   void initState() {

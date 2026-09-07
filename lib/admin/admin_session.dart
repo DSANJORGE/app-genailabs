@@ -40,13 +40,23 @@ class AdminSession {
     // Mirrors testu_live.dart:59-61: eMe keeps one token per user, so a
     // login elsewhere 403s every call here from then on -- drop to sign-in
     // instead of leaving the screen stuck showing stale data.
-    EmeHttp.onUnauthorized = (_) {
-      if (AuthService.isLoggedIn) {
+    EmeHttp.onUnauthorized = (e) {
+      if (signsOut(e) && AuthService.isLoggedIn) {
         AuthService.logout();
         onSignedOut?.call();
       }
     };
   }
+
+  /// Whether a 401/403 means the session is gone.
+  ///
+  /// One endpoint answers 403 for a reason that has nothing to do with the
+  /// token: analytics/person.json refuses a learner outside the viewer's
+  /// teams (person.groovy). Signing the console out there would drop a
+  /// manager to the login screen for clicking a name in their own team list,
+  /// so Persona words that reply itself and the session survives it.
+  static bool signsOut(EmeHttpException e) => !(e.statusCode == 403 &&
+      e.uri.path.endsWith('analytics/person.json'));
 
   static Future<bool> restore() async {
     await init();

@@ -11,9 +11,27 @@ import 'package:genai_labs/testu/testu_i18n.dart';
 import 'package:genai_labs/testu/testu_theme.dart';
 
 const _path = 'services/testu/analytics/person.json';
+const _teamsPath = 'services/testu/personas/teams.json';
 
-final _me = AdminMe('m', 'm@x', 'Diego San Jorge', 'training', {'analytics_view'},
-    const [], persona: AdminPersona('Iris', organization: 'Minsur'));
+/// `user.team` is an id; only teams.json knows what it is called.
+Map<String, dynamic> _teamsJson() => {
+      'teams': [
+        {'id': 'team-pisco', 'name': 'Operaciones Pisco', 'members': 9},
+      ],
+    };
+
+String _ymdOf(DateTime d) => '${d.year.toString().padLeft(4, '0')}-'
+    '${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+final _me = AdminMe('m', 'm@x', 'Diego San Jorge', 'training',
+    {'analytics_view', 'personas_view'}, const [],
+    persona: AdminPersona('Iris', organization: 'Minsur'));
+
+/// The same console user without the personas permission: teams.json would
+/// 403 for them, and a 403 on that endpoint DOES end the session.
+final _analyticsOnly = AdminMe('m', 'm@x', 'Diego San Jorge', 'training',
+    {'analytics_view'}, const [],
+    persona: AdminPersona('Iris', organization: 'Minsur'));
 
 /// A whole person.json, the shape person.groovy sends: `user` carries a flat
 /// `name` and eMe's raw `lastlogin` (NOT ISO-8601), two mastery rows, a dense
@@ -23,7 +41,7 @@ Map<String, dynamic> _canned({Map<String, dynamic>? iris}) => {
       'user': {
         'id': 'u1',
         'name': 'Ana Quispe',
-        'team': 'Operaciones Pisco',
+        'team': 'team-pisco',
         'role': 'manager',
         'enabled': true,
         'lastlogin': '2026-09-05 22:55:49 -0300',
@@ -113,6 +131,7 @@ Future<(FakeEmeHttp, ConsoleNav)> _pump(
   WidgetTester tester, {
   Map<String, dynamic>? canned,
   FakeEmeHttp? http,
+  AdminMe? me,
   double width = 1440,
 }) async {
   tester.view.physicalSize = Size(width, 2400);
@@ -120,7 +139,10 @@ Future<(FakeEmeHttp, ConsoleNav)> _pump(
   addTearDown(tester.view.reset);
 
   final client = http ?? FakeEmeHttp();
-  if (canned != null) client.canned[_path] = canned;
+  if (canned != null) {
+    client.canned[_path] = canned;
+    client.canned[_teamsPath] = _teamsJson();
+  }
   final filters = AnalyticsFilters();
   final nav = ConsoleNav(const ConsoleRoute('person', entityId: 'u1'));
   addTearDown(filters.dispose);
@@ -132,7 +154,7 @@ Future<(FakeEmeHttp, ConsoleNav)> _pump(
       body: ListView(children: [
         AdminPerson(
           api: AdminApi(http: client),
-          me: _me,
+          me: me ?? _me,
           filters: filters,
           nav: nav,
           userId: 'u1',
@@ -145,6 +167,42 @@ Future<(FakeEmeHttp, ConsoleNav)> _pump(
 }
 
 void main() {
+  testWidgets('the 30-day card asks for 30 days, whatever the shared period is',
+      (tester) async {
+    final (http, _) = await _pump(tester, canned: _canned());
+
+    final q = http.requests.firstWhere((r) => r.$1 == _path).$2! as Map;
+    final today = DateTime.now();
+    expect(q['to'], _ymdOf(DateTime(today.year, today.month, today.day)));
+    expect(q['from'],
+        _ymdOf(DateTime(today.year, today.month, today.day - 30)));
+    expect(q['period'], 'd30');
+  });
+
+  testWidgets('the header resolves the team id to its name', (tester) async {
+    await _pump(tester, canned: _canned());
+
+    expect(find.textContaining('Operaciones Pisco'), findsOneWidget);
+    expect(find.textContaining('team-pisco'), findsNothing);
+  });
+
+  testWidgets('a viewer without personas_view never calls teams.json',
+      (tester) async {
+    final (http, _) = await _pump(tester, canned: _canned(), me: _analyticsOnly);
+
+    expect(http.requests.where((r) => r.$1 == _teamsPath), isEmpty,
+        reason: 'that endpoint 403s for them, and its 403 ends the session');
+    // The id is the honest fallback, not a blank.
+    expect(find.textContaining('team-pisco'), findsOneWidget);
+  });
+
+  testWidgets('a load failure is worded, not a thrown exception',
+      (tester) async {
+    await _pump(tester);
+
+    expect(find.text('Could not load (404).'), findsOneWidget);
+  });
+
   testWidgets('the header names the person and the topic rows carry the '
       "app's own pill", (tester) async {
     await _pump(tester, canned: _canned());

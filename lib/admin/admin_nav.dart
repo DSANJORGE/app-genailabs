@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import '../testu/testu_i18n.dart';
+
 /// Console filter and navigation state — the two notifiers every analytics
 /// screen listens to. Kept out of the widget files so a screen can be built
 /// and tested without a shell around it.
@@ -9,6 +11,23 @@ import 'package:flutter/foundation.dart';
 final DateTime kPilotStart = DateTime(2026, 9, 14);
 
 enum Period { d7, d30, d90, pilot }
+
+extension PeriodLabel on Period {
+  /// What the context bar calls this window — and what any screen without a
+  /// context bar has to print, so a period-scoped number is never silent
+  /// about which period it is.
+  String get label => switch (this) {
+        Period.d7 => L('7 d', '7 d'),
+        Period.d30 => L('30 d', '30 d'),
+        Period.d90 => L('90 d', '90 d'),
+        Period.pilot => L('Pilot', 'Piloto'),
+      };
+}
+
+/// `2026-09-07` — the date format every analytics query speaks.
+String ymd(DateTime d) => '${d.year.toString().padLeft(4, '0')}-'
+    '${d.month.toString().padLeft(2, '0')}-'
+    '${d.day.toString().padLeft(2, '0')}';
 
 /// Period, topic and team, shared by Resumen, Actividad and Dominio so the
 /// three screens never disagree about what window is on screen.
@@ -61,8 +80,8 @@ class AnalyticsFilters extends ChangeNotifier {
   /// Query string for every analytics endpoint. Unset filters are absent —
   /// the server reads a missing key as "all", never as an empty match.
   Map<String, String> get query => {
-        'from': _ymd(from),
-        'to': _ymd(to),
+        'from': ymd(from),
+        'to': ymd(to),
         'period': _period.name,
         'entitytopic': ?_topic,
         'team': ?_team,
@@ -92,10 +111,6 @@ class AnalyticsFilters extends ChangeNotifier {
     _team = nextTeam;
     notifyListeners();
   }
-
-  static String _ymd(DateTime d) => '${d.year.toString().padLeft(4, '0')}-'
-      '${d.month.toString().padLeft(2, '0')}-'
-      '${d.day.toString().padLeft(2, '0')}';
 }
 
 /// Where the content column is pointed: a section id, optionally a drill-down

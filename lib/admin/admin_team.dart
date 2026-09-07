@@ -86,12 +86,16 @@ class _AdminTeamPageState extends State<AdminTeamPage>
     final q = {...widget.filters.query, 'team': widget.teamId};
     // The median is an organisation figure: the same window, no team.
     final org = {...widget.filters.query}..remove('team');
+    // users.json and teams.json need personas_view and answer 403 without
+    // it -- and that 403 ends the session. A viewer who lacks the verb gets
+    // the analytics half of the screen and a table that says why.
+    final roster = widget.me.can('personas_view');
     final r = await Future.wait<Object>([
       widget.api.overview(q),
       widget.api.overview(org),
-      widget.api.users(),
+      roster ? widget.api.users() : Future.value(<AdminUser>[]),
       widget.api.report(team: widget.teamId),
-      widget.api.teams(),
+      roster ? widget.api.teams() : Future.value(<AdminTeam>[]),
     ]);
     return (
       team: r[0] as Overview,
@@ -175,6 +179,10 @@ class _AdminTeamPageState extends State<AdminTeamPage>
         L('Part of ${_teamNameOf(d, parent)}', 'Dentro de ${_teamNameOf(d, parent)}'),
       L('${stat.members} ${stat.members == 1 ? 'person' : 'people'}',
           '${stat.members} ${stat.members == 1 ? 'persona' : 'personas'}'),
+      // This page has no context bar, so the window the stats and the
+      // activity chart follow would otherwise be invisible.
+      L('Period ${widget.filters.period.label}',
+          'Periodo ${widget.filters.period.label}'),
     ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -378,8 +386,11 @@ class _AdminTeamPageState extends State<AdminTeamPage>
           const SizedBox(height: 12),
           AdminTable<_Member>(
             rows: members,
-            emptyText: L('Nobody is in this team yet.',
-                'Todavía no hay nadie en este equipo.'),
+            emptyText: widget.me.can('personas_view')
+                ? L('Nobody is in this team yet.',
+                    'Todavía no hay nadie en este equipo.')
+                : L('Your account cannot list people.',
+                    'Tu cuenta no puede ver el listado de personas.'),
             onTap: (m) => widget.nav.go('person', entityId: m.user.id),
             columns: [
               AdminColumn(
