@@ -308,9 +308,10 @@ class _AdminPersonState extends State<AdminPerson>
           Text(iris, style: AdminTokens.body),
         ],
         const SizedBox(height: 6),
-        // Same reply as the chart above, so the same 30 days.
-        Text(L('These lines cover the last 30 days.',
-            'Estas líneas cubren los últimos 30 días.'),
+        // Same reply as the chart above, so the same 30 days. Worded without
+        // a count: the Iris line above is absent when nobody asked anything.
+        Text(L('Usage over the last 30 days.',
+            'Uso de los últimos 30 días.'),
             style: AdminTokens.footnote),
       ],
     );
