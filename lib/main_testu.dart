@@ -13,6 +13,7 @@ import 'testu/testu_signin.dart';
 import 'testu/testu_splash.dart';
 import 'testu/testu_theme.dart';
 import 'testu/testu_usage.dart';
+import 'testu/testu_web.dart';
 import 'testu/testu_widgets.dart';
 
 /// TestU Learn entrypoint — run with `flutter run -t lib/main_testu.dart`.
@@ -182,6 +183,18 @@ class _TestuAppState extends State<TestuApp> with WidgetsBindingObserver {
     }
     return MaterialApp(
       navigatorKey: _nav,
+      // Desktop frame (spec: testu-learn-web): rail + 720px column around
+      // every route. No rail during sign-in, the lock, or the launch intro.
+      builder: (context, child) => TestuFrame(
+        rail: _signedIn && !_locked && !_reveal,
+        onTab: (i) {
+          // A rail tap from a pushed screen (Topic Home, a session) lands
+          // on the tab, not under it.
+          _nav.currentState?.popUntil((r) => r.isFirst);
+          TestuShell.tabRequest.value = i;
+        },
+        child: child!,
+      ),
       // Screen views for named routes; the automatic events (first_open,
       // session_start, app_update) need nothing from here.
       navigatorObservers: [

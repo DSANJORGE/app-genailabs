@@ -18,11 +18,25 @@ import 'testu_client.dart';
 
 /// TestU Learn shell: four-tab surface with the pinned translucent bottom nav
 /// (spec: screens artifact — Today · Topics · Tutor · Dashboard).
+
+/// The four tab labels, in nav order. The tutor tab wears the org tutor's
+/// name (Vueling → Sully): it opens the general tutor that routes questions
+/// to the topic-expert tutors who answer inside topic/question contexts.
+List<String> testuTabLabels() => [
+      L('TODAY', 'HOY'),
+      L('TOPICS', 'TEMAS'),
+      client.tutor.toUpperCase(),
+      L('DASHBOARD', 'DASHBOARD'),
+    ];
+
 class TestuShell extends StatefulWidget {
   const TestuShell({super.key});
 
   /// Debrief CTAs land on a specific tab after popping back to the shell.
   static final tabRequest = ValueNotifier<int?>(null);
+
+  /// The tab on screen — the desktop rail (testu_web.dart) mirrors it.
+  static final currentTab = ValueNotifier<int>(0);
 
   @override
   State<TestuShell> createState() => _TestuShellState();
@@ -30,16 +44,6 @@ class TestuShell extends StatefulWidget {
 
 class _TestuShellState extends State<TestuShell> {
   int _tab = 0;
-
-  List<String> get _tabs => [
-        L('TODAY', 'HOY'),
-        L('TOPICS', 'TEMAS'),
-        // The tab wears the org tutor's name (Vueling → Sully): it opens
-        // Sully's orchestrator — the general tutor that routes questions to
-        // the topic-expert Sullys who answer inside topic/question contexts.
-        client.tutor.toUpperCase(),
-        L('DASHBOARD', 'DASHBOARD'),
-      ];
 
   @override
   void initState() {
@@ -58,11 +62,16 @@ class _TestuShellState extends State<TestuShell> {
   // Language switch: remount the tabs so every (const) subtree re-reads L().
   void _onLang() => setState(() {});
 
+  void _select(int i) {
+    TestuShell.currentTab.value = i;
+    setState(() => _tab = i);
+  }
+
   void _onTabRequest() {
     final i = TestuShell.tabRequest.value;
     if (i != null) {
       TestuShell.tabRequest.value = null;
-      setState(() => _tab = i);
+      _select(i);
     }
   }
 
@@ -82,7 +91,7 @@ class _TestuShellState extends State<TestuShell> {
                 const TestuTopicsScreen(),
                 TestuTutorScreen(
                   active: _tab == 2,
-                  onCalibration: () => setState(() => _tab = 3),
+                  onCalibration: () => _select(3),
                 ),
                 TestuDashboardScreen(active: _tab == 3),
               ],
@@ -90,14 +99,17 @@ class _TestuShellState extends State<TestuShell> {
           ),
         ],
       ),
-      bottomNavigationBar: TestuNav(
-        items: _tabs,
-        current: _tab,
-        onTap: (i) {
-          HapticFeedback.selectionClick();
-          setState(() => _tab = i);
-        },
-      ),
+      // On a desktop window the rail (testu_web.dart) carries the tabs.
+      bottomNavigationBar: testuWide(context)
+          ? null
+          : TestuNav(
+              items: testuTabLabels(),
+              current: _tab,
+              onTap: (i) {
+                HapticFeedback.selectionClick();
+                _select(i);
+              },
+            ),
     );
   }
 }
@@ -209,9 +221,11 @@ class _TestuTodayScreenState extends State<TestuTodayScreen> {
   Widget build(BuildContext context) {
     final t = TestuTokens.of(context);
     final size = MediaQuery.sizeOf(context);
-    if (size.width > size.height) {
-      // Landscape: pinned, the header would swallow half the height — it
-      // scrolls away with the cards instead (it has its own 18px padding).
+    if (size.height < 500) {
+      // Short viewport (a phone on its side): pinned, the header would
+      // swallow half the height — it scrolls away with the cards instead
+      // (it has its own 18px padding). A desktop window is wide AND tall,
+      // so it keeps the pinned header.
       return SafeArea(
         bottom: false,
         child: ListView(

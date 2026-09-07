@@ -3,7 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:genai_labs/testu/testu_pdf.dart';
 import 'package:genai_labs/testu/testu_resources.dart';
 import 'package:genai_labs/testu/testu_schedule_sheet.dart';
+import 'package:genai_labs/testu/testu_shell.dart';
 import 'package:genai_labs/testu/testu_theme.dart';
+import 'package:genai_labs/testu/testu_web.dart';
 import 'package:genai_labs/testu/testu_widgets.dart';
 import 'package:video_player_platform_interface/video_player_platform_interface.dart';
 
@@ -95,6 +97,46 @@ void main() {
                 (tag: 'PDF', label: 'Manual', trailing: 'p. 12',
                  selected: true, indent: false, onTap: () {}),
               ]));
+    });
+  });
+
+  group('frame', () {
+    Future<void> pumpShell(WidgetTester tester, Size size,
+        {ValueChanged<int>? onTab}) async {
+      window(tester, size);
+      await tester.pumpWidget(MaterialApp(
+        theme: testuTheme(),
+        builder: (context, child) =>
+            TestuFrame(rail: true, onTab: onTab ?? (_) {}, child: child!),
+        home: const TestuShell(),
+      ));
+      await tester.pump(const Duration(seconds: 1));
+    }
+
+    testWidgets('desktop window: rail in, bottom nav out, 720 column',
+        (tester) async {
+      await pumpShell(tester, desktop);
+      expect(find.byType(TestuRail), findsOneWidget);
+      expect(find.byType(TestuNav), findsNothing);
+      expect(tester.getSize(find.byType(TestuShell)).width, 720);
+    });
+
+    testWidgets('phone window: the phone app, untouched', (tester) async {
+      await pumpShell(tester, phone);
+      expect(find.byType(TestuRail), findsNothing);
+      expect(find.byType(TestuNav), findsOneWidget);
+      expect(tester.getSize(find.byType(TestuShell)).width, 390);
+    });
+
+    testWidgets('a rail tap reports the tab; the shell publishes its tab',
+        (tester) async {
+      int? tapped;
+      await pumpShell(tester, desktop, onTab: (i) => tapped = i);
+      await tester.tap(find.text('TOPICS'));
+      expect(tapped, 1);
+      TestuShell.tabRequest.value = 3;
+      await tester.pump();
+      expect(TestuShell.currentTab.value, 3);
     });
   });
 }
