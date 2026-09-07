@@ -26,6 +26,18 @@ String pct(double share) {
   return L('$n%', '$n %');
 }
 
+/// 1284 -> "1 284". Four figures and up read as groups on a dashboard; an
+/// unbroken run of digits does not.
+String grouped(int value) {
+  final digits = value.abs().toString();
+  final out = StringBuffer(value < 0 ? '\u2212' : '');
+  for (var i = 0; i < digits.length; i++) {
+    if (i > 0 && (digits.length - i) % 3 == 0) out.write(' ');
+    out.write(digits[i]);
+  }
+  return out.toString();
+}
+
 /// The comparison line under a [StatBlock] — signed, because the number
 /// above it is the value and this is only its direction. [week] words it
 /// against last week (a 7-day stat); otherwise against the selected period.

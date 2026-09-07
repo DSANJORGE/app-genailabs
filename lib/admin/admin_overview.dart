@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import '../testu/testu_i18n.dart';
@@ -9,6 +7,7 @@ import 'admin_charts.dart';
 import 'admin_models.dart';
 import 'admin_nav.dart';
 import 'admin_reading.dart';
+import 'admin_screen.dart';
 import 'admin_theme.dart';
 import 'admin_ui.dart';
 
@@ -38,90 +37,23 @@ class AdminOverview extends StatefulWidget {
   State<AdminOverview> createState() => _AdminOverviewState();
 }
 
-class _AdminOverviewState extends State<AdminOverview> {
-  Overview? _data;
-  Object? _error;
-  bool _loading = true;
-
-  /// Every filter gesture is debounced, and every reply is stamped: a slow
-  /// answer to an abandoned filter must never overwrite a fast answer to the
-  /// current one.
-  Timer? _debounce;
-  int _request = 0;
+class _AdminOverviewState extends State<AdminOverview>
+    with FilteredFetch<Overview, AdminOverview> {
+  @override
+  AnalyticsFilters get filters => widget.filters;
 
   @override
-  void initState() {
-    super.initState();
-    widget.filters.addListener(_schedule);
-    _fetch();
-  }
+  ConsoleNav get nav => widget.nav;
 
   @override
-  void dispose() {
-    widget.filters.removeListener(_schedule);
-    _debounce?.cancel();
-    super.dispose();
-  }
-
-  void _schedule() {
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 150), _reload);
-  }
-
-  void _reload() {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    _fetch();
-  }
-
-  Future<void> _fetch() async {
-    final mine = ++_request;
-    try {
-      final data = await widget.api.overview(widget.filters.query);
-      if (!mounted || mine != _request) return;
-      setState(() {
-        _data = data;
-        _error = null;
-        _loading = false;
-      });
-    } catch (e) {
-      if (!mounted || mine != _request) return;
-      setState(() {
-        _error = e;
-        _loading = false;
-      });
-    }
-  }
+  Future<Overview> fetch() => widget.api.overview(widget.filters.query);
 
   @override
-  Widget build(BuildContext context) => crossfade(_state(context));
+  String errorText(Object e) =>
+      L('The overview could not be loaded.', 'No se pudo cargar el resumen.');
 
-  Widget _state(BuildContext context) {
-    if (_error != null) {
-      return ConsolePanelError(
-        text: L('The overview could not be loaded.', 'No se pudo cargar el resumen.'),
-        onRetry: _reload,
-      );
-    }
-    final data = _data;
-    if (_loading || data == null) return const Skeleton(lines: 6, height: 22);
-    // The highlight is a per-citation thing (Task 16), so only the page body
-    // rebuilds on it -- not the fetch, not the filters.
-    return ValueListenableBuilder<ConsoleRoute>(
-      valueListenable: widget.nav,
-      builder: (context, route, _) => _page(context, data, route.highlight),
-    );
-  }
-
-  /// True when an Iris citation is pointing at [what]. Citation ids name the
-  /// element they quote ("stats.active7d", "teams.pisco", "gap.phishing"), so
-  /// a substring match is what connects one to a panel.
-  // TODO(task-16): swap the substring match for the citation id vocabulary
-  // the Iris panel actually emits, once Task 16 fixes it.
-  bool _points(String? highlight, String what) =>
-      highlight != null && highlight.toLowerCase().contains(what);
+  @override
+  Widget build(BuildContext context) => fetched(_page);
 
   Widget _page(BuildContext context, Overview o, String? highlight) {
     // Nobody has answered: the reading says when data appears and the stat
@@ -137,7 +69,7 @@ class _AdminOverviewState extends State<AdminOverview> {
           sentences: overviewReading(o),
         ),
         const SizedBox(height: 22),
-        Pulse(active: _points(highlight, 'stat'), child: _stats(o)),
+        Pulse(active: points(highlight, 'stat'), child: _stats(o)),
         const SizedBox(height: 22),
         if (empty)
           EmptyState(
@@ -154,9 +86,9 @@ class _AdminOverviewState extends State<AdminOverview> {
           const SizedBox(height: 16),
           _pair(context, o),
           const SizedBox(height: 16),
-          Pulse(active: _points(highlight, 'gap'), child: _gaps(o)),
+          Pulse(active: points(highlight, 'gap'), child: _gaps(o)),
           const SizedBox(height: 16),
-          Pulse(active: _points(highlight, 'team'), child: _teams(o)),
+          Pulse(active: points(highlight, 'team'), child: _teams(o)),
         ],
       ],
     );
@@ -190,21 +122,21 @@ class _AdminOverviewState extends State<AdminOverview> {
     return StatRow([
       StatBlock(
         label: L('Active 7 d', 'Activos 7 d'),
-        value: _grouped(active),
+        value: grouped(active),
         delta: _delta(active, previous['active7d'], week: true),
         deltaPositive: _better(active, previous['active7d']),
         spark: spark((d) => d.people),
       ),
       StatBlock(
         label: L('Answers', 'Respuestas'),
-        value: _grouped(answers),
+        value: grouped(answers),
         delta: _delta(answers, previous['answers']),
         deltaPositive: _better(answers, previous['answers']),
         spark: spark((d) => d.answers),
       ),
       StatBlock(
         label: L('Minutes in the app', 'Minutos en la app'),
-        value: _grouped(minutes),
+        value: grouped(minutes),
         // Minutes have no good direction -- more is not better -- so this
         // one carries the per-person reading instead of a delta. The
         // denominator is everyone who has ever answered, not the 7-day
@@ -217,7 +149,7 @@ class _AdminOverviewState extends State<AdminOverview> {
       ),
       StatBlock(
         label: L('Misconceptions', 'Conceptos erróneos'),
-        value: _grouped(wrong),
+        value: grouped(wrong),
         delta: _delta(wrong, previous['certainwrong']),
         // The one stat where up is bad: the colour follows the meaning, not
         // the sign.
@@ -226,7 +158,7 @@ class _AdminOverviewState extends State<AdminOverview> {
       ),
       StatBlock(
         label: L('Questions to Iris', 'Preguntas a Iris'),
-        value: _grouped(o.iris.questions),
+        value: grouped(o.iris.questions),
         delta: _delta(o.iris.questions, previous['questions']),
         deltaPositive: _better(o.iris.questions, previous['questions']),
         spark: spark((d) => d.questions),
@@ -526,15 +458,3 @@ String _gapLine(Gap g) => L(
       '${g.beginners} en Principiante, ${g.questions} preguntas a Iris, '
           '${g.misconceptions} conceptos erróneos',
     );
-
-/// 1284 -> "1 284". Four figures and up read as groups on a dashboard; an
-/// unbroken run of digits does not.
-String _grouped(int value) {
-  final digits = value.abs().toString();
-  final out = StringBuffer(value < 0 ? '−' : '');
-  for (var i = 0; i < digits.length; i++) {
-    if (i > 0 && (digits.length - i) % 3 == 0) out.write(' ');
-    out.write(digits[i]);
-  }
-  return out.toString();
-}

@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import '../testu/testu_i18n.dart';
@@ -9,6 +7,7 @@ import 'admin_charts.dart';
 import 'admin_models.dart';
 import 'admin_nav.dart';
 import 'admin_reading.dart';
+import 'admin_screen.dart';
 import 'admin_theme.dart';
 import 'admin_ui.dart';
 
@@ -44,90 +43,23 @@ class AdminActivity extends StatefulWidget {
 /// what the card's footnote says rather than pretending the org was idle.
 enum _Series { people, answers, minutes, sessions }
 
-class _AdminActivityState extends State<AdminActivity> {
-  Activity? _data;
-  Object? _error;
-  bool _loading = true;
-
-  /// Every filter gesture is debounced, and every reply is stamped: a slow
-  /// answer to an abandoned filter must never overwrite a fast answer to the
-  /// current one.
-  Timer? _debounce;
-  int _request = 0;
+class _AdminActivityState extends State<AdminActivity>
+    with FilteredFetch<Activity, AdminActivity> {
+  @override
+  AnalyticsFilters get filters => widget.filters;
 
   @override
-  void initState() {
-    super.initState();
-    widget.filters.addListener(_schedule);
-    _fetch();
-  }
+  ConsoleNav get nav => widget.nav;
 
   @override
-  void dispose() {
-    widget.filters.removeListener(_schedule);
-    _debounce?.cancel();
-    super.dispose();
-  }
-
-  void _schedule() {
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 150), _reload);
-  }
-
-  void _reload() {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    _fetch();
-  }
-
-  Future<void> _fetch() async {
-    final mine = ++_request;
-    try {
-      final data = await widget.api.activity(widget.filters.query);
-      if (!mounted || mine != _request) return;
-      setState(() {
-        _data = data;
-        _error = null;
-        _loading = false;
-      });
-    } catch (e) {
-      if (!mounted || mine != _request) return;
-      setState(() {
-        _error = e;
-        _loading = false;
-      });
-    }
-  }
+  Future<Activity> fetch() => widget.api.activity(widget.filters.query);
 
   @override
-  Widget build(BuildContext context) => crossfade(_state(context));
+  String errorText(Object e) =>
+      L('Activity could not be loaded.', 'No se pudo cargar la actividad.');
 
-  Widget _state(BuildContext context) {
-    if (_error != null) {
-      return ConsolePanelError(
-        text: L('Activity could not be loaded.', 'No se pudo cargar la actividad.'),
-        onRetry: _reload,
-      );
-    }
-    final data = _data;
-    if (_loading || data == null) return const Skeleton(lines: 6, height: 22);
-    // The highlight is a per-citation thing (Task 16), so only the page body
-    // rebuilds on it -- not the fetch, not the filters.
-    return ValueListenableBuilder<ConsoleRoute>(
-      valueListenable: widget.nav,
-      builder: (context, route, _) => _page(context, data, route.highlight),
-    );
-  }
-
-  /// True when an Iris citation is pointing at [what]. Citation ids name the
-  /// element they quote ("funnel.answered", "iris.themes", "inactive.u-luis"),
-  /// so a substring match is what connects one to a panel.
-  // TODO(task-16): swap the substring match for the citation id vocabulary
-  // the Iris panel actually emits, once Task 16 fixes it.
-  bool _points(String? highlight, String what) =>
-      highlight != null && highlight.toLowerCase().contains(what);
+  @override
+  Widget build(BuildContext context) => fetched(_page);
 
   String get _persona {
     final name = widget.me.persona?.name ?? '';
@@ -155,7 +87,7 @@ class _AdminActivityState extends State<AdminActivity> {
         const SizedBox(height: 22),
         // Adoption reads even at zero -- it is the one card that explains an
         // empty screen, so it never hides behind the empty state.
-        Pulse(active: _points(highlight, 'funnel'), child: _adoption(a)),
+        Pulse(active: points(highlight, 'funnel'), child: _adoption(a)),
         const SizedBox(height: 16),
         if (answered == 0)
           EmptyState(
@@ -172,12 +104,12 @@ class _AdminActivityState extends State<AdminActivity> {
           const SizedBox(height: 16),
           _hours(a),
           const SizedBox(height: 16),
-          Pulse(active: _points(highlight, 'iris'), child: _irisPair(context, a)),
+          Pulse(active: points(highlight, 'iris'), child: _irisPair(context, a)),
           const SizedBox(height: 16),
-          Pulse(active: _points(highlight, 'iris'), child: _themes(context, a)),
+          Pulse(active: points(highlight, 'iris'), child: _themes(context, a)),
         ],
         const SizedBox(height: 16),
-        Pulse(active: _points(highlight, 'inactive'), child: _inactive(a)),
+        Pulse(active: points(highlight, 'inactive'), child: _inactive(a)),
       ],
     );
   }

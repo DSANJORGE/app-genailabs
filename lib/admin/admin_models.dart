@@ -86,6 +86,7 @@ class AdminUser {
     required this.enabled,
     this.lastActivity,
     this.lastlogin,
+    this.creationdate,
   });
   final String id, email, firstName, lastName, role;
   final String? team;
@@ -98,21 +99,41 @@ class AdminUser {
   /// doesn't send it.
   final String? lastlogin;
 
+  /// eMe's raw account-creation string, kept verbatim for the same reason as
+  /// [lastlogin].
+  // ponytail: person.groovy does not send this yet -- the Persona header
+  // prints the line the day it does, and stays silent until then.
+  final String? creationdate;
+
   String get name => '$firstName $lastName'.trim().isEmpty
       ? id
       : '$firstName $lastName'.trim();
 
-  factory AdminUser.fromJson(Map j) => AdminUser(
-        id: '${j['id']}',
-        email: '${j['email'] ?? ''}',
-        firstName: '${j['firstName'] ?? ''}',
-        lastName: '${j['lastName'] ?? ''}',
-        team: j['team']?.toString(),
-        role: '${j['role'] ?? 'users'}',
-        enabled: j['enabled'] != false,
-        lastActivity: DateTime.tryParse('${j['lastactivity'] ?? ''}'),
-        lastlogin: j['lastlogin']?.toString(),
-      );
+  factory AdminUser.fromJson(Map j) {
+    var first = '${j['firstName'] ?? ''}';
+    var last = '${j['lastName'] ?? ''}';
+    // person.json sends ONE flat `name` where users.json sends the two
+    // halves. Split on the first space so the reading rules still have a
+    // given name to address the learner by.
+    if (first.isEmpty && last.isEmpty) {
+      final flat = '${j['name'] ?? ''}'.trim();
+      final cut = flat.indexOf(' ');
+      first = cut < 0 ? flat : flat.substring(0, cut);
+      last = cut < 0 ? '' : flat.substring(cut + 1);
+    }
+    return AdminUser(
+      id: '${j['id']}',
+      email: '${j['email'] ?? ''}',
+      firstName: first,
+      lastName: last,
+      team: j['team']?.toString(),
+      role: '${j['role'] ?? 'users'}',
+      enabled: j['enabled'] != false,
+      lastActivity: DateTime.tryParse('${j['lastactivity'] ?? ''}'),
+      lastlogin: j['lastlogin']?.toString(),
+      creationdate: j['creationdate']?.toString(),
+    );
+  }
 }
 
 class AdminTeam {

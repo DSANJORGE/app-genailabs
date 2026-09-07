@@ -11,6 +11,8 @@ import 'admin_models.dart';
 import 'admin_nav.dart';
 import 'admin_overview.dart';
 import 'admin_people.dart';
+import 'admin_person.dart';
+import 'admin_team.dart';
 import 'admin_teams.dart';
 import 'admin_ui.dart';
 
@@ -200,14 +202,29 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
 
   /// Every route resolves here, and nowhere else.
   Widget _page(ConsoleRoute route) => switch (route.section) {
-    // Tasks 13-14 replace these two with AdminPerson(userId: route.entityId!)
-    // and AdminTeamPage(teamId: …), each taking api, me, filters and nav.
     'overview' =>
       AdminOverview(api: widget.api, me: widget.me, filters: _filters, nav: _nav),
     'activity' =>
       AdminActivity(api: widget.api, me: widget.me, filters: _filters, nav: _nav),
-    'person' => _notYet(_label('person')),
-    'team' => _notYet(_label('team')),
+    // Keyed by the entity: person A -> person B reuses this slot, and without
+    // a key the State would keep A's data and never refetch. _canOpen has
+    // already refused an empty id.
+    'person' => AdminPerson(
+        key: ValueKey('person.${route.entityId}'),
+        api: widget.api,
+        me: widget.me,
+        filters: _filters,
+        nav: _nav,
+        userId: route.entityId!,
+      ),
+    'team' => AdminTeamPage(
+        key: ValueKey('team.${route.entityId}'),
+        api: widget.api,
+        me: widget.me,
+        filters: _filters,
+        nav: _nav,
+        teamId: route.entityId!,
+      ),
     'mastery' =>
       AdminMastery(api: widget.api, me: widget.me, filters: _filters, nav: _nav),
     'people' => AdminPeople(api: widget.api, me: widget.me),
