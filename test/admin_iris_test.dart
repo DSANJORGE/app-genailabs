@@ -5,6 +5,7 @@ import 'package:dio/dio.dart' show MultipartFile;
 import 'package:eme_app_package/eme_http.dart';
 import 'package:eme_app_package/testing/fake_eme_http.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart' show SemanticsAction;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genai_labs/admin/admin_api.dart';
 import 'package:genai_labs/admin/admin_iris.dart';
@@ -75,6 +76,7 @@ Future<(FakeEmeHttp, ConsoleNav, AnalyticsFilters)> _pump(
   String? selectedUser,
   EmeHttp? http,
   IrisThread? thread,
+  VoidCallback? onClose,
 }) async {
   tester.view.physicalSize = const Size(1440, 900);
   tester.view.devicePixelRatio = 1;
@@ -101,7 +103,7 @@ Future<(FakeEmeHttp, ConsoleNav, AnalyticsFilters)> _pump(
             screen: screen,
             selectedUser: selectedUser,
             thread: thread ?? IrisThread(),
-            onClose: () {},
+            onClose: onClose ?? () {},
           ),
         ),
       ]),
@@ -325,6 +327,41 @@ void main() {
     expect(find.textContaining('Tres personas destacan.', findRichText: true),
         findsOneWidget);
     expect(find.byType(CitationChip), findsOneWidget);
+  });
+
+  testWidgets('the close button is a button a screen reader can press',
+      (tester) async {
+    var closed = 0;
+    await _pump(tester, canned: _reply(), onClose: () => closed++);
+    final handle = tester.ensureSemantics();
+
+    // The node that carries the label is the one a screen reader presses, so
+    // that is the node the tap action has to be on.
+    final node = tester.getSemantics(find.bySemanticsLabel('Close'));
+    expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isTrue,
+        reason: 'announced as a button, so it has to be pressable as one');
+
+    handle.dispose();
+
+    await tester.tap(find.byType(ConsoleIconButton));
+    await tester.pump();
+    expect(closed, 1);
+  });
+
+  testWidgets('disposing the thread mid-question is not an error',
+      (tester) async {
+    final http = _HeldHttp();
+    final thread = IrisThread();
+    await _pump(tester, http: http, thread: thread);
+    await _ask(tester, '¿Quién necesita ayuda?');
+
+    // Signing out takes the console down with the question still out.
+    await tester.pumpWidget(const SizedBox.shrink());
+    thread.dispose();
+    http.held.complete(_reply());
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets("an empty thread offers this screen's questions", (tester) async {

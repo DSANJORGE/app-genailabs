@@ -233,4 +233,33 @@ void main() {
     await tester.pumpAndSettle();
     expect(line().duration, Duration.zero);
   });
+
+  // Reduced motion means less movement, not less feedback: with no fade to
+  // carry it, the ring has to stand still long enough to be noticed instead
+  // of blinking out on the next frame.
+  testWidgets('with animations off the pulse ring is held, not flashed',
+      (tester) async {
+    Color ring() {
+      final d = tester
+          .widget<AnimatedContainer>(find
+              .descendant(
+                  of: find.byType(Pulse),
+                  matching: find.byType(AnimatedContainer))
+              .first)
+          .decoration as BoxDecoration;
+      return d.border!.top.color;
+    }
+
+    await tester.pumpWidget(_app(MediaQuery(
+      data: const MediaQueryData(disableAnimations: true),
+      child: const Pulse(active: true, child: SizedBox(width: 40, height: 40)),
+    )));
+
+    await tester.pump();
+    expect(ring(), AdminTokens.focus);
+
+    await tester.pump(const Duration(milliseconds: 1600));
+    expect(ring(), Colors.transparent);
+  });
+
 }

@@ -80,9 +80,13 @@ class _InteractiveState extends State<_Interactive> {
         ButtonActivateIntent: CallbackAction<ButtonActivateIntent>(
             onInvoke: (_) => _activate()),
       },
+      // onTap here as well as on the GestureDetector: assistive technology
+      // presses the node that carries the label, and a node announced as a
+      // button with no action on it is one a screen reader cannot activate.
       child: Semantics(
         button: enabled,
         label: widget.semanticLabel,
+        onTap: widget.onTap,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: widget.onTap,
@@ -145,6 +149,7 @@ class Pulse extends StatefulWidget {
 
 class _PulseState extends State<Pulse> {
   bool _ring = false;
+  Timer? _hold;
 
   @override
   void initState() {
@@ -159,11 +164,30 @@ class _PulseState extends State<Pulse> {
   }
 
   /// Ring on instantly, then fade out over 600 ms — the fade is the pulse.
+  ///
+  /// With `disableAnimations` there is no fade to carry it, and dropping the
+  /// ring on the next frame would make it a flicker nobody sees. Reduced
+  /// motion means less movement, not less feedback, so the ring is simply
+  /// held still for 1.5 s instead.
   void _arm() {
+    _hold?.cancel();
     _ring = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) setState(() => _ring = false);
+      if (!mounted) return;
+      if (AdminTokens.dur(context, 600) != Duration.zero) {
+        setState(() => _ring = false);
+        return;
+      }
+      _hold = Timer(const Duration(milliseconds: 1500), () {
+        if (mounted) setState(() => _ring = false);
+      });
     });
+  }
+
+  @override
+  void dispose() {
+    _hold?.cancel();
+    super.dispose();
   }
 
   @override
@@ -1795,21 +1819,20 @@ class ConsoleIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TestuTokens.of(context);
-    return Semantics(
-      button: true,
-      label: label,
-      excludeSemantics: true,
-      child: _Interactive(
-        onTap: onTap,
-        radius: 8,
-        builder: (context, hovered) => SizedBox(
-          width: 40,
-          height: 40,
-          child: Center(
-            child: Text(
-              glyph,
-              style: TextStyle(fontSize: 13, color: hovered ? t.ink : t.mut),
-            ),
+    // The label goes through _Interactive, which is also what carries the tap
+    // action: an outer Semantics would announce a button with nothing to
+    // activate. Same wiring as CitationChip.
+    return _Interactive(
+      onTap: onTap,
+      radius: 8,
+      semanticLabel: label,
+      builder: (context, hovered) => SizedBox(
+        width: 40,
+        height: 40,
+        child: Center(
+          child: Text(
+            glyph,
+            style: TextStyle(fontSize: 13, color: hovered ? t.ink : t.mut),
           ),
         ),
       ),

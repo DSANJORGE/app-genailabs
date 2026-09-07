@@ -45,11 +45,19 @@ class IrisTurn {
 class IrisThread extends ChangeNotifier {
   final turns = <IrisTurn>[];
 
-  /// One question in flight per user; the composer is inert meanwhile.
+  /// One question in flight per user, and the only mutual exclusion here:
+  /// every entry point checks it before starting anything.
   bool busy = false;
 
-  /// Guards a reply that lands after [retry] moved the thread on.
-  int _request = 0;
+  /// A sign-out can dispose this while a question is still out; the reply
+  /// then has nobody to notify, and notifying anyway throws.
+  bool _disposed = false;
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
 
   /// The last six live turns as `{role, text}` — the only conversation the
   /// server ever sees, and it is built before the new question joins it. A
@@ -74,7 +82,6 @@ class IrisThread extends ChangeNotifier {
   }) async {
     if (busy) return;
     final history = _history();
-    final mine = ++_request;
     turns.add(IrisTurn.you(question));
     busy = true;
     notifyListeners();
@@ -93,9 +100,9 @@ class IrisThread extends ChangeNotifier {
       // AskUnavailable, and the console data is untouched either way.
       landed = IrisTurn.down();
     }
-    if (mine != _request) return;
     turns.add(landed);
     busy = false;
+    if (_disposed) return;
     notifyListeners();
   }
 
@@ -174,6 +181,18 @@ class _IrisPanelState extends State<IrisPanel> {
   void initState() {
     super.initState();
     widget.thread.addListener(_onThread);
+    // Reopening after an answer landed while the panel was closed has to show
+    // that answer, not the top of the thread.
+    _toBottom();
+  }
+
+  @override
+  void didUpdateWidget(IrisPanel old) {
+    super.didUpdateWidget(old);
+    if (widget.thread != old.thread) {
+      old.thread.removeListener(_onThread);
+      widget.thread.addListener(_onThread);
+    }
   }
 
   @override
