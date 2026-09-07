@@ -6,36 +6,51 @@ import 'package:genai_labs/admin/admin_models.dart';
 import 'package:genai_labs/admin/admin_nav.dart';
 import 'package:genai_labs/admin/admin_teams.dart';
 import 'package:genai_labs/admin/admin_ui.dart';
+import 'package:genai_labs/testu/testu_i18n.dart';
 import 'package:genai_labs/testu/testu_theme.dart';
 
-Future<(FakeEmeHttp, ConsoleNav)> _pump(WidgetTester tester, {AdminMe? me}) async {
+Map<String, dynamic> _teamsJson() => {
+      'teams': [
+        {'id': 'norte', 'name': 'Norte', 'manager': 'lider.norte'},
+        {'id': 'sur', 'name': 'Sur'},
+      ],
+    };
+
+Map<String, dynamic> _usersJson() => {
+      'users': [
+        {
+          'id': 'lider.norte',
+          'email': 'lider.norte@minsur.test',
+          'firstName': 'Lider',
+          'lastName': 'Norte',
+          'role': 'manager',
+          'team': 'norte',
+        },
+        {
+          'id': 'ana',
+          'email': 'ana@minsur.test',
+          'firstName': 'Ana',
+          'lastName': 'Quispe',
+          'role': 'users',
+          'team': 'norte',
+        },
+      ],
+    };
+
+Future<(FakeEmeHttp, ConsoleNav)> _pump(
+  WidgetTester tester, {
+  AdminMe? me,
+  Map<String, dynamic>? teams,
+  Map<String, dynamic>? users,
+  double width = 1440,
+}) async {
+  tester.view.physicalSize = Size(width, 1200);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+
   final http = FakeEmeHttp();
-  http.canned['services/testu/personas/teams.json'] = {
-    'teams': [
-      {'id': 'norte', 'name': 'Norte', 'manager': 'lider.norte'},
-      {'id': 'sur', 'name': 'Sur'},
-    ],
-  };
-  http.canned['services/testu/personas/users.json'] = {
-    'users': [
-      {
-        'id': 'lider.norte',
-        'email': 'lider.norte@minsur.test',
-        'firstName': 'Lider',
-        'lastName': 'Norte',
-        'role': 'manager',
-        'team': 'norte',
-      },
-      {
-        'id': 'ana',
-        'email': 'ana@minsur.test',
-        'firstName': 'Ana',
-        'lastName': 'Quispe',
-        'role': 'users',
-        'team': 'norte',
-      },
-    ],
-  };
+  http.canned['services/testu/personas/teams.json'] = teams ?? _teamsJson();
+  http.canned['services/testu/personas/users.json'] = users ?? _usersJson();
   final api = AdminApi(http: http);
   final nav = ConsoleNav();
   addTearDown(nav.dispose);
@@ -64,13 +79,54 @@ void main() {
     expect(find.text('0'), findsOneWidget);
   });
 
-  testWidgets("tapping 'View team' navigates to the team", (tester) async {
+  testWidgets('tapping a row navigates to the team', (tester) async {
     final (_, nav) = await _pump(tester);
 
-    await tester.tap(find.text('View team').first);
+    await tester.tap(find.text('Norte'));
     await tester.pumpAndSettle();
 
     expect(nav.value.section, 'team');
     expect(nav.value.entityId, 'norte');
+  });
+
+  // 1024 px of window minus the 220 px nav and the 24 px gutters is the
+  // narrowest content column the console supports (see
+  // test/admin_person_test.dart), minus this screen's own 20 px padding.
+  testWidgets('the Spanish page fits its narrowest supported column',
+      (tester) async {
+    testuLang.value = 'es';
+    addTearDown(() => testuLang.value = 'en');
+
+    await _pump(
+      tester,
+      width: 756,
+      teams: {
+        'teams': [
+          {
+            'id': 'norte',
+            'name': 'Operaciones Pisco Norte',
+            'manager': 'lider.norte',
+            'location': 'Pisco, Ica',
+            'costcenter': 'CC-1042-OPERACIONES',
+          },
+        ],
+      },
+      users: {
+        'users': [
+          {
+            'id': 'lider.norte',
+            'email': 'lider.norte.contreras@operaciones-minsur.test',
+            'firstName': 'Lider',
+            'lastName': 'Norte',
+            'role': 'manager',
+            'team': 'norte',
+          },
+        ],
+      },
+    );
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Operaciones Pisco Norte'), findsOneWidget);
+    expect(find.text('Lider Norte'), findsOneWidget);
   });
 }

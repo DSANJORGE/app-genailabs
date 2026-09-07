@@ -7,6 +7,7 @@ import '../testu/testu_widgets.dart';
 import 'admin_api.dart';
 import 'admin_models.dart';
 import 'admin_nav.dart';
+import 'admin_theme.dart';
 import 'admin_ui.dart';
 
 /// Equipos: list of teams with parent/manager/location/cost center, add and
@@ -116,6 +117,11 @@ class _AdminTeamsState extends State<AdminTeams> {
           ]),
           const SizedBox(height: 16),
           _table(teams, t),
+          if (_canViewTeam) ...[
+            const SizedBox(height: 10),
+            Text(L('Tap a row to open the team.', 'Toca una fila para ver el equipo.'),
+                style: AdminTokens.footnote),
+          ],
         ],
       ),
     );
@@ -123,45 +129,71 @@ class _AdminTeamsState extends State<AdminTeams> {
 
   Widget _table(List<AdminTeam> teams, TestuTokens t) => AdminTable<AdminTeam>(
         rows: teams,
+        onTap: _canViewTeam ? (team) => widget.nav.go('team', entityId: team.id) : null,
         emptyText: L('No teams yet.', 'Todavía no hay equipos.'),
         columns: [
-          AdminColumn(L('Id', 'Id'), (team) => Text(team.id, style: TextStyle(color: t.mut)),
-              sortKey: (team) => team.id, width: 90),
-          AdminColumn(L('Name', 'Nombre'), (team) => Text(team.name), sortKey: (team) => team.name, flex: 2),
-          AdminColumn(L('Parent', 'Padre'), (team) => Text(_teamName(team.parent), style: TextStyle(color: t.mut)),
-              sortKey: (team) => _teamName(team.parent), flex: 1),
-          AdminColumn('Manager', (team) => Text(_managerName(team.manager), style: TextStyle(color: t.mut)),
-              sortKey: (team) => _managerName(team.manager), flex: 1),
-          AdminColumn(L('Location', 'Ubicación'), (team) => Text(team.location ?? '—', style: TextStyle(color: t.mut)),
-              flex: 1),
-          AdminColumn(L('Cost center', 'Centro de costo'),
-              (team) => Text(team.costcenter ?? '—', style: TextStyle(color: t.mut)), flex: 1),
-          AdminColumn(L('Members', 'Miembros'), (team) => Text('${_memberCount(team.id)}'),
-              sortKey: (team) => _memberCount(team.id), width: 80, numeric: true),
-          AdminColumn('', (team) => _actions(team), width: 260),
+          AdminColumn(
+            L('Id', 'Id'),
+            (team) => Text(team.id, style: TextStyle(color: t.mut), maxLines: 1, overflow: TextOverflow.ellipsis),
+            sortKey: (team) => team.id,
+            width: 80,
+          ),
+          AdminColumn(
+            L('Name', 'Nombre'),
+            (team) => Text(team.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+            sortKey: (team) => team.name,
+            flex: 2,
+          ),
+          AdminColumn(
+            L('Parent', 'Padre'),
+            (team) =>
+                Text(_teamName(team.parent), style: TextStyle(color: t.mut), maxLines: 1, overflow: TextOverflow.ellipsis),
+            sortKey: (team) => _teamName(team.parent),
+            flex: 1,
+          ),
+          AdminColumn(
+            'Manager',
+            (team) => Text(_managerName(team.manager),
+                style: TextStyle(color: t.mut), maxLines: 1, overflow: TextOverflow.ellipsis),
+            sortKey: (team) => _managerName(team.manager),
+            flex: 1,
+          ),
+          AdminColumn(
+            L('Location', 'Ubicación'),
+            (team) => Text(team.location ?? '—',
+                style: TextStyle(color: t.mut), maxLines: 1, overflow: TextOverflow.ellipsis),
+            flex: 1,
+          ),
+          AdminColumn(
+            L('Cost center', 'Centro de costo'),
+            (team) => Text(team.costcenter ?? '—',
+                style: TextStyle(color: t.mut), maxLines: 1, overflow: TextOverflow.ellipsis),
+            flex: 1,
+          ),
+          AdminColumn(
+            L('Members', 'Miembros'),
+            (team) => Text('${_memberCount(team.id)}'),
+            sortKey: (team) => _memberCount(team.id),
+            width: 70,
+            numeric: true,
+          ),
+          AdminColumn('', (team) => _actions(team), width: 90),
         ],
       );
 
-  Widget _actions(AdminTeam team) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (_canViewTeam)
-            TestuAct(L('View team', 'Ver equipo'), onTap: () => widget.nav.go('team', entityId: team.id)),
-          if (_canOperate) ...[
-            if (_canViewTeam) const SizedBox(width: 8),
-            TextButton(
-              onPressed: () => _openEdit(team),
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                minimumSize: const Size(0, 28),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                textStyle: const TextStyle(fontFamily: 'Geist', fontSize: 12, fontWeight: FontWeight.w700),
-              ),
-              child: Text(L('Edit', 'Editar')),
-            ),
-          ],
-        ],
-      );
+  Widget _actions(AdminTeam team) {
+    if (!_canOperate) return const SizedBox.shrink();
+    return TextButton(
+      onPressed: () => _openEdit(team),
+      style: TextButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        minimumSize: const Size(0, 28),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        textStyle: const TextStyle(fontFamily: 'Geist', fontSize: 12, fontWeight: FontWeight.w700),
+      ),
+      child: Text(L('Edit', 'Editar')),
+    );
+  }
 
   // ponytail: no team deletion -- an unwanted team just empties out and
   // stays listed; add a delete endpoint when someone actually asks for it.

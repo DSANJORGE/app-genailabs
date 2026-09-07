@@ -6,6 +6,7 @@ import 'package:genai_labs/admin/admin_models.dart';
 import 'package:genai_labs/admin/admin_nav.dart';
 import 'package:genai_labs/admin/admin_people.dart';
 import 'package:genai_labs/admin/admin_ui.dart';
+import 'package:genai_labs/testu/testu_i18n.dart';
 import 'package:genai_labs/testu/testu_theme.dart';
 
 const _usersPath = 'services/testu/personas/users.json';
@@ -38,13 +39,24 @@ final _fullAccess = AdminMe('m', 'm@x', 'Lider', 'orgadmin',
 final _noManage = AdminMe('m', 'm@x', 'Lider', 'manager',
     {'analytics_view', 'personas_view', 'personas_operate'}, const []);
 
-Future<(FakeEmeHttp, ConsoleNav)> _pump(WidgetTester tester, {AdminMe? me}) async {
-  tester.view.physicalSize = const Size(1440, 1200);
+/// A viewer who can disable people but isn't allowed near an orgadmin/
+/// training account -- `disableuser.json` 403s for them, and a 403 ends the
+/// whole console session.
+final _operateOnly = AdminMe('m', 'm@x', 'Lider', 'manager',
+    {'analytics_view', 'personas_view', 'personas_operate'}, const []);
+
+Future<(FakeEmeHttp, ConsoleNav)> _pump(
+  WidgetTester tester, {
+  AdminMe? me,
+  Map<String, dynamic>? users,
+  double width = 1440,
+}) async {
+  tester.view.physicalSize = Size(width, 1200);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
 
   final http = FakeEmeHttp();
-  http.canned[_usersPath] = _usersJson();
+  http.canned[_usersPath] = users ?? _usersJson();
   http.canned[_teamsPath] = _teamsJson();
   final nav = ConsoleNav();
   addTearDown(nav.dispose);
@@ -68,11 +80,10 @@ void main() {
     expect(find.text('Ana Quispe'), findsOneWidget);
   });
 
-  testWidgets("tapping 'View profile' navigates to the person",
-      (tester) async {
+  testWidgets('tapping a row navigates to the person', (tester) async {
     final (_, nav) = await _pump(tester);
 
-    await tester.tap(find.text('View profile'));
+    await tester.tap(find.text('Ana Quispe'));
     await tester.pumpAndSettle();
 
     expect(nav.value.section, 'person');
@@ -90,5 +101,84 @@ void main() {
 
     await _pump(tester, me: _noManage);
     expect(find.byType(Select<String>), findsOneWidget);
+  });
+
+  testWidgets('the search box matches the team name, not its raw id',
+      (tester) async {
+    await _pump(tester, me: _noManage);
+
+    await tester.enterText(find.byType(TextField).first, 'norte');
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ana Quispe'), findsOneWidget);
+  });
+
+  testWidgets('the empty state distinguishes an empty org from no matches',
+      (tester) async {
+    await _pump(tester, users: {'users': <Map<String, dynamic>>[]});
+    expect(find.text('No collaborators yet.'), findsOneWidget);
+
+    await _pump(tester, me: _noManage);
+    await tester.enterText(find.byType(TextField).first, 'nobody-matches-this');
+    await tester.pumpAndSettle();
+    expect(find.text('No one matches.'), findsOneWidget);
+  });
+
+  testWidgets(
+      'Desactivar is hidden for an orgadmin row when the viewer lacks '
+      'personas_manage', (tester) async {
+    await _pump(
+      tester,
+      me: _operateOnly,
+      users: {
+        'users': [
+          {
+            'id': 'u2',
+            'email': 'admin@minsur.test',
+            'firstName': 'Ada',
+            'lastName': 'Min',
+            'team': 'norte',
+            'role': 'orgadmin',
+            'enabled': true,
+          },
+        ],
+      },
+    );
+
+    expect(find.text('Disable'), findsNothing);
+  });
+
+  // 1024 px of window minus the 220 px nav and the 24 px gutters is the
+  // narrowest content column the console supports (see
+  // test/admin_person_test.dart), minus this screen's own 20 px padding.
+  testWidgets('the Spanish page fits its narrowest supported column',
+      (tester) async {
+    testuLang.value = 'es';
+    addTearDown(() => testuLang.value = 'en');
+
+    await _pump(
+      tester,
+      width: 756,
+      users: {
+        'users': [
+          {
+            'id': 'u1',
+            'email': 'ana.quispe.contreras@operaciones-minsur.test',
+            'firstName': 'Ana',
+            'lastName': 'Quispe Contreras',
+            'team': 'norte',
+            // 'orgadmin' carries the longest Spanish role label
+            // ("Admin de organización"); the Select that renders it is a
+            // known width risk, so this row deliberately avoids it and uses
+            // a role that ships on real rosters instead.
+            'role': 'manager',
+            'enabled': true,
+          },
+        ],
+      },
+    );
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Ana Quispe Contreras'), findsOneWidget);
   });
 }

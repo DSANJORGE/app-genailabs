@@ -81,6 +81,14 @@ class _AdminPeopleState extends State<AdminPeople> {
     }
   }
 
+  /// A team id resolved to its name -- the one lookup the Team cell, its
+  /// sort key and the search box all share, so a search for "Norte" matches
+  /// what the cell actually shows rather than the id underneath it.
+  String _teamName(String? id) {
+    if (id == null || id.isEmpty) return '';
+    return (_teams ?? const <AdminTeam>[]).where((t) => t.id == id).firstOrNull?.name ?? '';
+  }
+
   List<AdminUser> get _filtered {
     final users = _users ?? const <AdminUser>[];
     final q = _search.text.trim().toLowerCase();
@@ -89,9 +97,19 @@ class _AdminPeopleState extends State<AdminPeople> {
       for (final u in users)
         if (u.name.toLowerCase().contains(q) ||
             u.email.toLowerCase().contains(q) ||
-            (u.team ?? '').toLowerCase().contains(q))
+            _teamName(u.team).toLowerCase().contains(q))
           u,
     ];
+  }
+
+  /// `disableuser.json` 403s when the target is `orgadmin`/`training` and the
+  /// caller lacks `personas_manage` -- a 403 signs the whole console out, so
+  /// the button has to know the rule before the user ever clicks it, not
+  /// just react to the failure.
+  bool _canDisable(AdminUser u) {
+    if (!_canOperate) return false;
+    final restricted = u.role == 'orgadmin' || u.role == 'training';
+    return !restricted || _canManage;
   }
 
   @override
@@ -125,6 +143,11 @@ class _AdminPeopleState extends State<AdminPeople> {
           ]),
           const SizedBox(height: 16),
           _table(teams, t),
+          if (_canViewProfile) ...[
+            const SizedBox(height: 10),
+            Text(L('Tap a row to open the profile.', 'Toca una fila para ver la ficha.'),
+                style: AdminTokens.footnote),
+          ],
         ],
       ),
     );
@@ -148,56 +171,64 @@ class _AdminPeopleState extends State<AdminPeople> {
 
   Widget _table(List<AdminTeam> teams, TestuTokens t) => AdminTable<AdminUser>(
         rows: _filtered,
-        emptyText: L('No one matches.', 'Nadie coincide.'),
+        onTap: _canViewProfile ? (u) => widget.nav.go('person', entityId: u.id) : null,
+        emptyText: _search.text.trim().isEmpty
+            ? L('No collaborators yet.', 'Todavía no hay colaboradores.')
+            : L('No one matches.', 'Nadie coincide.'),
         columns: [
           AdminColumn(
             L('Name', 'Nombre'),
-            (u) => Text(u.name, overflow: TextOverflow.ellipsis),
+            (u) => Text(u.name, maxLines: 1, overflow: TextOverflow.ellipsis),
             sortKey: (u) => u.name,
             flex: 3,
           ),
           AdminColumn(
             L('Email', 'Correo'),
-            (u) => Text(u.email, style: TextStyle(color: t.mut), overflow: TextOverflow.ellipsis),
+            (u) => Text(u.email, style: TextStyle(color: t.mut), maxLines: 1, overflow: TextOverflow.ellipsis),
             sortKey: (u) => u.email,
             flex: 3,
           ),
           AdminColumn(
             L('Team', 'Equipo'),
             (u) => _teamCell(u, teams, t),
-            sortKey: (u) => teams.where((x) => x.id == u.team).firstOrNull?.name ?? '',
-            width: 160,
+            sortKey: (u) => _teamName(u.team),
+            width: 110,
           ),
           AdminColumn(
             L('Role', 'Rol'),
             (u) => _roleCell(u, t),
             sortKey: (u) => roleLabel(u.role),
-            width: 160,
+            width: 130,
           ),
           AdminColumn(
             L('Last activity', 'Última actividad'),
             (u) => Text(date(u.lastActivity), style: AdminTokens.mono(11.5)),
             sortKey: (u) => u.lastActivity?.millisecondsSinceEpoch ?? 0,
-            width: 120,
+            width: 80,
             numeric: true,
           ),
           AdminColumn(
             L('Status', 'Estado'),
             (u) => Text(
               u.enabled ? L('Active', 'Activo') : L('Inactive', 'Inactivo'),
-              style: TextStyle(color: u.enabled ? t.green : t.faint),
+              // Both states are table body text and must clear 4.5:1 on
+              // `card` -- `faint` doesn't, `mut` does.
+              style: TextStyle(color: u.enabled ? t.green : t.mut),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
             sortKey: (u) => u.enabled ? 0 : 1,
-            width: 90,
+            width: 65,
           ),
-          AdminColumn('', (u) => _actions(u, t), width: 300),
+          AdminColumn('', (u) => _actions(u, t), width: 90),
         ],
       );
 
   Widget _teamCell(AdminUser u, List<AdminTeam> teams, TestuTokens t) {
     if (!_canOperate) {
-      final name = teams.where((x) => x.id == u.team).firstOrNull?.name;
-      return Text(name ?? '—', style: TextStyle(color: t.mut));
+      final name = _teamName(u.team);
+      return Text(name.isEmpty ? '—' : name,
+          style: TextStyle(color: t.mut), maxLines: 1, overflow: TextOverflow.ellipsis);
     }
     return Select<String>(
       value: teams.any((x) => x.id == u.team) ? u.team : null,
@@ -211,7 +242,9 @@ class _AdminPeopleState extends State<AdminPeople> {
   }
 
   Widget _roleCell(AdminUser u, TestuTokens t) {
-    if (!_canManage) return Text(roleLabel(u.role), style: TextStyle(color: t.mut));
+    if (!_canManage) {
+      return Text(roleLabel(u.role), style: TextStyle(color: t.mut), maxLines: 1, overflow: TextOverflow.ellipsis);
+    }
     return Select<String>(
       value: u.role,
       items: [for (final r in _roles) (r, roleLabel(r))],
@@ -220,29 +253,19 @@ class _AdminPeopleState extends State<AdminPeople> {
   }
 
   Widget _actions(AdminUser u, TestuTokens t) {
+    if (!_canDisable(u)) return const SizedBox.shrink();
     final isSelf = u.id == widget.me.id;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (_canViewProfile)
-          TestuAct(L('View profile', 'Ver ficha'),
-              onTap: () => widget.nav.go('person', entityId: u.id)),
-        if (_canOperate) ...[
-          if (_canViewProfile) const SizedBox(width: 8),
-          TextButton(
-            onPressed: (isSelf || !u.enabled) ? null : () => _mutate(() => widget.api.disableUser(u.id)),
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              minimumSize: const Size(0, 28),
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              foregroundColor: AdminTokens.redText,
-              disabledForegroundColor: t.faint,
-              textStyle: const TextStyle(fontFamily: 'Geist', fontSize: 12, fontWeight: FontWeight.w700),
-            ),
-            child: Text(L('Disable', 'Desactivar')),
-          ),
-        ],
-      ],
+    return TextButton(
+      onPressed: (isSelf || !u.enabled) ? null : () => _mutate(() => widget.api.disableUser(u.id)),
+      style: TextButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        minimumSize: const Size(0, 28),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        foregroundColor: AdminTokens.redText,
+        disabledForegroundColor: t.faint,
+        textStyle: const TextStyle(fontFamily: 'Geist', fontSize: 12, fontWeight: FontWeight.w700),
+      ),
+      child: Text(L('Disable', 'Desactivar')),
     );
   }
 
