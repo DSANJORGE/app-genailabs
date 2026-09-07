@@ -185,4 +185,44 @@ void main() {
     });
     expect(personReading(p), ['Ana has not answered anything yet.']);
   });
+
+  group('masteryReading', () {
+    AdminReport report(List<Map<String, Object?>> rows) => AdminReport(
+          [for (final r in rows) MasteryRow(r)],
+          ReportSummary(0, 0, const {}),
+          const {},
+        );
+
+    Map<String, Object?> row(String user, String topic, String section,
+            {required int mastered, required int answered}) =>
+        {
+          'user': user,
+          'name': user,
+          'entitytopic': topic.toLowerCase(),
+          'topic': topic,
+          'componentsection': section.toLowerCase(),
+          'section': section,
+          'answered': answered,
+          'mastered': mastered,
+        };
+
+    test('names the weakest topic by beginners and its weakest subtopic', () {
+      final r = report([
+        row('a', 'Ciberseguridad', 'Phishing', mastered: 1, answered: 6),
+        row('b', 'Ciberseguridad', 'Phishing', mastered: 1, answered: 5),
+        row('c', 'Ciberseguridad', 'Contraseñas', mastered: 5, answered: 5),
+        row('a', 'Derechos Humanos', 'Principios', mastered: 4, answered: 5),
+      ]);
+      expect(masteryReading(r), [
+        'Ciberseguridad is the weakest topic: 2 people at Beginner.',
+        '“Phishing” is the cohort’s weakest subtopic.',
+      ]);
+    });
+
+    test('nothing answered yet says so instead of naming a winner', () {
+      expect(masteryReading(report([])), [
+        'Nobody has answered anything yet, so there is no mastery to read.',
+      ]);
+    });
+  });
 }

@@ -138,6 +138,86 @@ List<String> activityReading(Activity a, Cohort c) {
   return out.take(3).toList();
 }
 
+/// Dominio (§6.3): the weakest topic, counted in people rather than rows,
+/// then the subtopic the whole cohort is weakest at.
+///
+/// Levels are per person: a learner is one Beginner in a topic no matter how
+/// many sections they answered there, which is why both rules aggregate
+/// user x topic and user x section before they count anything.
+List<String> masteryReading(AdminReport r) {
+  if (r.rows.every((row) => row.answered == 0)) {
+    return [
+      L('Nobody has answered anything yet, so there is no mastery to read.',
+          'Nadie ha respondido todavía, así que aún no hay dominio que leer.'),
+    ];
+  }
+
+  // topic -> user -> (mastered, answered), and the same per subtopic.
+  final byTopic = <String, Map<String, List<int>>>{};
+  final bySection = <String, Map<String, List<int>>>{};
+  final topicName = <String, String>{};
+  final sectionName = <String, String>{};
+  for (final row in r.rows) {
+    topicName[row.topicId] = row.topic;
+    final sectionKey = '${row.topicId}/${row.j['componentsection']}';
+    sectionName[sectionKey] = _section(row);
+    for (final (map, key) in [(byTopic, row.topicId), (bySection, sectionKey)]) {
+      final tally = map.putIfAbsent(key, () => {}).putIfAbsent(row.user, () => [0, 0]);
+      tally[0] += row.mastered;
+      tally[1] += row.answered;
+    }
+  }
+
+  /// People at Beginner in [key] — the count both sentences are ranked on.
+  int beginners(Map<String, Map<String, List<int>>> map, String key) => map[key]!
+      .values
+      .where((t) => levelOf(t[0], t[1]) == 'beginner')
+      .length;
+
+  String? worstTopic;
+  var worstCount = 0;
+  for (final key in byTopic.keys) {
+    final n = beginners(byTopic, key);
+    // Ties keep the first topic seen: the server's own order, not a coin toss.
+    if (n > worstCount) {
+      worstCount = n;
+      worstTopic = key;
+    }
+  }
+  if (worstTopic == null) {
+    return [
+      L('Nobody is at Beginner in any topic.',
+          'Nadie está en Principiante en ningún tema.'),
+    ];
+  }
+
+  final out = <String>[
+    L(
+      '${topicName[worstTopic]} is the weakest topic: $worstCount '
+          '${_people(worstCount)} at Beginner.',
+      '${topicName[worstTopic]} es el tema más flojo: $worstCount '
+          '${_people(worstCount)} en Principiante.',
+    ),
+  ];
+
+  String? worstSection;
+  var sectionCount = 0;
+  for (final key in bySection.keys) {
+    final n = beginners(bySection, key);
+    if (n > sectionCount) {
+      sectionCount = n;
+      worstSection = key;
+    }
+  }
+  if (worstSection != null) {
+    out.add(L(
+      '\u201C${sectionName[worstSection]}\u201D is the cohort\u2019s weakest subtopic.',
+      '\u00AB${sectionName[worstSection]}\u00BB es el subtema m\u00E1s d\u00E9bil de la cohorte.',
+    ));
+  }
+  return out;
+}
+
 /// Equipo (§6.5): the team's active share, against the organisation median
 /// when the server sent one (it withholds it under 5 learners).
 List<String> teamReading(TeamStat t, Overview o) {

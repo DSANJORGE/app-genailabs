@@ -140,6 +140,20 @@ class AdminTeam {
       );
 }
 
+/// Aggregate level for a mastery tally — one row, one user x topic, or a
+/// whole person — on the same thresholds as the app's own
+/// testu_topics.dart:masteryOf: under half right = beginner, under 90 % =
+/// competent, no answers = not started (null). The one place the console
+/// turns two counts into a level; admin_mastery.dart re-exports it, which is
+/// how the Dominio screen and the reading rules stay on one rule.
+String? levelOf(int mastered, int answered) {
+  if (answered == 0) return null;
+  final share = mastered / answered;
+  if (share >= 0.9) return 'expert';
+  if (share >= 0.5) return 'competent';
+  return 'beginner';
+}
+
 /// One user x topic-section mastery row from analytics/report.json (and,
 /// since Task 9, analytics/person.json's `rows[]`, same shape). Kept as a
 /// thin view over the raw map (rather than named fields for every column)

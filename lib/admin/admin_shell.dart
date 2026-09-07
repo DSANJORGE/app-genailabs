@@ -208,7 +208,8 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
       AdminActivity(api: widget.api, me: widget.me, filters: _filters, nav: _nav),
     'person' => _notYet(_label('person')),
     'team' => _notYet(_label('team')),
-    'mastery' => AdminMastery(api: widget.api, me: widget.me),
+    'mastery' =>
+      AdminMastery(api: widget.api, me: widget.me, filters: _filters, nav: _nav),
     'people' => AdminPeople(api: widget.api, me: widget.me),
     'teams' => AdminTeams(api: widget.api, me: widget.me),
     _ => _notYet(route.section),
@@ -220,9 +221,9 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
   );
 
   /// The shared context bar belongs to the screens that read the shared
-  /// filters. Dominio still carries its own v0 controls; Task 15 rebuilds it
-  /// on this bar and the set becomes the whole analytics trio.
-  static const _withContextBar = {'overview', 'activity'};
+  /// filters -- the whole analytics trio. Dominio ignores the period (mastery
+  /// is cumulative) and says so in its own footnote.
+  static const _withContextBar = {'overview', 'activity', 'mastery'};
 
   @override
   Widget build(BuildContext context) {
