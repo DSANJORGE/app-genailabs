@@ -6,13 +6,16 @@ import '../testu/testu_theme.dart';
 import '../testu/testu_widgets.dart';
 import 'admin_api.dart';
 import 'admin_models.dart';
+import 'admin_nav.dart';
+import 'admin_ui.dart';
 
 /// Equipos: list of teams with parent/manager/location/cost center, add and
 /// edit. Mirrors admin_people.dart's load/mutate/mounted pattern.
 class AdminTeams extends StatefulWidget {
-  const AdminTeams({super.key, required this.api, required this.me});
+  const AdminTeams({super.key, required this.api, required this.me, required this.nav});
   final AdminApi api;
   final AdminMe me;
+  final ConsoleNav nav;
 
   @override
   State<AdminTeams> createState() => _AdminTeamsState();
@@ -24,6 +27,7 @@ class _AdminTeamsState extends State<AdminTeams> {
   Object? _error;
 
   bool get _canOperate => widget.me.can('personas_operate');
+  bool get _canViewTeam => widget.me.can('analytics_view');
 
   @override
   void initState() {
@@ -59,7 +63,7 @@ class _AdminTeamsState extends State<AdminTeams> {
       rethrow;
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errText(e))));
+      showToast(context, errText(e), error: true);
     }
   }
 
@@ -79,21 +83,27 @@ class _AdminTeamsState extends State<AdminTeams> {
     return t?.name ?? id;
   }
 
+  /// The roster count, not the server's own `members` field: grouped off the
+  /// same users.json this screen already loads for the manager selects, so
+  /// this table and Equipo's own roster can never disagree about who is on a
+  /// team.
+  int _memberCount(String id) =>
+      (_users ?? const <AdminUser>[]).where((u) => u.team == id).length;
+
   @override
-  Widget build(BuildContext context) {
-    final t = TestuTokens.of(context);
+  Widget build(BuildContext context) => crossfade(_body(context));
+
+  Widget _body(BuildContext context) {
     if (_error != null) {
-      return Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text(L('Could not load teams.', 'No se pudieron cargar los equipos.'), style: TextStyle(color: t.mut)),
-          const SizedBox(height: 12),
-          TextButton(onPressed: _load, child: Text(L('Retry', 'Reintentar'))),
-        ]),
+      return ConsolePanelError(
+        text: L('Could not load teams.', 'No se pudieron cargar los equipos.'),
+        onRetry: _load,
       );
     }
     if (_teams == null || _users == null) {
-      return Center(child: CircularProgressIndicator(color: t.mut));
+      return const Skeleton(lines: 6, height: 22);
     }
+    final t = TestuTokens.of(context);
     final teams = _teams!;
     return Padding(
       padding: const EdgeInsets.all(20),
@@ -105,40 +115,51 @@ class _AdminTeamsState extends State<AdminTeams> {
               SizedBox(width: 140, child: TestuButton(L('New team', 'Nuevo equipo'), onTap: () => _openEdit(null))),
           ]),
           const SizedBox(height: 16),
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: SingleChildScrollView(
-                child: DataTable(
-                  columns: [
-                    DataColumn(label: Text(L('Id', 'Id'))),
-                    DataColumn(label: Text(L('Name', 'Nombre'))),
-                    DataColumn(label: Text(L('Parent', 'Padre'))),
-                    DataColumn(label: Text('Manager')),
-                    DataColumn(label: Text(L('Location', 'Ubicación'))),
-                    DataColumn(label: Text(L('Cost center', 'Centro de costo'))),
-                    DataColumn(label: Text(L('Members', 'Miembros'))),
-                  ],
-                  rows: [for (final team in teams) _rowFor(team, t)],
-                ),
-              ),
-            ),
-          ),
+          _table(teams, t),
         ],
       ),
     );
   }
 
-  DataRow _rowFor(AdminTeam team, TestuTokens t) => DataRow(
-        onSelectChanged: _canOperate ? (_) => _openEdit(team) : null,
-        cells: [
-          DataCell(Text(team.id, style: TextStyle(color: t.mut))),
-          DataCell(Text(team.name)),
-          DataCell(Text(_teamName(team.parent), style: TextStyle(color: t.mut))),
-          DataCell(Text(_managerName(team.manager), style: TextStyle(color: t.mut))),
-          DataCell(Text(team.location ?? '—', style: TextStyle(color: t.mut))),
-          DataCell(Text(team.costcenter ?? '—', style: TextStyle(color: t.mut))),
-          DataCell(Text('${team.members}')),
+  Widget _table(List<AdminTeam> teams, TestuTokens t) => AdminTable<AdminTeam>(
+        rows: teams,
+        emptyText: L('No teams yet.', 'Todavía no hay equipos.'),
+        columns: [
+          AdminColumn(L('Id', 'Id'), (team) => Text(team.id, style: TextStyle(color: t.mut)),
+              sortKey: (team) => team.id, width: 90),
+          AdminColumn(L('Name', 'Nombre'), (team) => Text(team.name), sortKey: (team) => team.name, flex: 2),
+          AdminColumn(L('Parent', 'Padre'), (team) => Text(_teamName(team.parent), style: TextStyle(color: t.mut)),
+              sortKey: (team) => _teamName(team.parent), flex: 1),
+          AdminColumn('Manager', (team) => Text(_managerName(team.manager), style: TextStyle(color: t.mut)),
+              sortKey: (team) => _managerName(team.manager), flex: 1),
+          AdminColumn(L('Location', 'Ubicación'), (team) => Text(team.location ?? '—', style: TextStyle(color: t.mut)),
+              flex: 1),
+          AdminColumn(L('Cost center', 'Centro de costo'),
+              (team) => Text(team.costcenter ?? '—', style: TextStyle(color: t.mut)), flex: 1),
+          AdminColumn(L('Members', 'Miembros'), (team) => Text('${_memberCount(team.id)}'),
+              sortKey: (team) => _memberCount(team.id), width: 80, numeric: true),
+          AdminColumn('', (team) => _actions(team), width: 260),
+        ],
+      );
+
+  Widget _actions(AdminTeam team) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_canViewTeam)
+            TestuAct(L('View team', 'Ver equipo'), onTap: () => widget.nav.go('team', entityId: team.id)),
+          if (_canOperate) ...[
+            if (_canViewTeam) const SizedBox(width: 8),
+            TextButton(
+              onPressed: () => _openEdit(team),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: const Size(0, 28),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                textStyle: const TextStyle(fontFamily: 'Geist', fontSize: 12, fontWeight: FontWeight.w700),
+              ),
+              child: Text(L('Edit', 'Editar')),
+            ),
+          ],
         ],
       );
 
@@ -185,23 +206,22 @@ class _AdminTeamsState extends State<AdminTeams> {
                   ],
                   TextField(controller: name, decoration: InputDecoration(hintText: L('Name', 'Nombre'))),
                   const SizedBox(height: 8),
-                  DropdownButton<String?>(
-                    isExpanded: true,
+                  Select<String>(
                     value: parentChoices.any((tm) => tm.id == parent) ? parent : null,
-                    hint: Text(L('Parent', 'Padre')),
+                    hint: L('Parent', 'Padre'),
                     items: [
-                      DropdownMenuItem(value: null, child: Text(L('None', 'Ninguno'))),
-                      for (final tm in parentChoices) DropdownMenuItem(value: tm.id, child: Text(tm.name)),
+                      (null, L('None', 'Ninguno')),
+                      for (final tm in parentChoices) (tm.id, tm.name),
                     ],
                     onChanged: (v) => setD(() => parent = v),
                   ),
-                  DropdownButton<String?>(
-                    isExpanded: true,
+                  const SizedBox(height: 8),
+                  Select<String>(
                     value: _managers.any((u) => u.id == manager) ? manager : null,
-                    hint: Text('Manager'),
+                    hint: 'Manager',
                     items: [
-                      DropdownMenuItem(value: null, child: Text(L('None', 'Ninguno'))),
-                      for (final u in _managers) DropdownMenuItem(value: u.id, child: Text(u.name)),
+                      (null, L('None', 'Ninguno')),
+                      for (final u in _managers) (u.id, u.name),
                     ],
                     onChanged: (v) => setD(() => manager = v),
                   ),

@@ -6,16 +6,19 @@ import '../testu/testu_widgets.dart';
 import 'admin_api.dart';
 import 'admin_csv.dart';
 import 'admin_models.dart';
+import 'admin_nav.dart';
 import 'admin_reading.dart';
+import 'admin_theme.dart';
+import 'admin_ui.dart';
 
 const _roles = ['users', 'manager', 'training', 'orgadmin'];
 
-
 /// Colaboradores: list + filter, add, team/role changes, disable, CSV import.
 class AdminPeople extends StatefulWidget {
-  const AdminPeople({super.key, required this.api, required this.me});
+  const AdminPeople({super.key, required this.api, required this.me, required this.nav});
   final AdminApi api;
   final AdminMe me;
+  final ConsoleNav nav;
 
   @override
   State<AdminPeople> createState() => _AdminPeopleState();
@@ -29,6 +32,7 @@ class _AdminPeopleState extends State<AdminPeople> {
 
   bool get _canOperate => widget.me.can('personas_operate');
   bool get _canManage => widget.me.can('personas_manage');
+  bool get _canViewProfile => widget.me.can('analytics_view');
 
   @override
   void initState() {
@@ -61,8 +65,8 @@ class _AdminPeopleState extends State<AdminPeople> {
     }
   }
 
-  /// Runs a mutating call, reloads the list on success, shows a SnackBar on
-  /// a plain Exception. EmeHttpException (401/403) is rethrown -- the
+  /// Runs a mutating call, reloads the list on success, toasts on a plain
+  /// Exception. EmeHttpException (401/403) is rethrown -- the
   /// AdminSession.onSignedOut hook already fired at the HTTP layer; this
   /// screen doesn't get to handle it too.
   Future<void> _mutate(Future<void> Function() action) async {
@@ -73,7 +77,7 @@ class _AdminPeopleState extends State<AdminPeople> {
       rethrow;
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errText(e))));
+      showToast(context, errText(e), error: true);
     }
   }
 
@@ -91,20 +95,19 @@ class _AdminPeopleState extends State<AdminPeople> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final t = TestuTokens.of(context);
+  Widget build(BuildContext context) => crossfade(_body(context));
+
+  Widget _body(BuildContext context) {
     if (_error != null) {
-      return Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text(L('Could not load people.', 'No se pudieron cargar los colaboradores.'), style: TextStyle(color: t.mut)),
-          const SizedBox(height: 12),
-          TextButton(onPressed: _load, child: Text(L('Retry', 'Reintentar'))),
-        ]),
+      return ConsolePanelError(
+        text: L('Could not load people.', 'No se pudieron cargar los colaboradores.'),
+        onRetry: _load,
       );
     }
     if (_users == null || _teams == null) {
-      return Center(child: CircularProgressIndicator(color: t.mut));
+      return const Skeleton(lines: 6, height: 22);
     }
+    final t = TestuTokens.of(context);
     final teams = _teams!;
     return Padding(
       padding: const EdgeInsets.all(20),
@@ -112,15 +115,7 @@ class _AdminPeopleState extends State<AdminPeople> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            Expanded(
-              child: TextField(
-                controller: _search,
-                decoration: InputDecoration(
-                  hintText: L('Search by name, email or team', 'Buscar por nombre, correo o equipo'),
-                  prefixIcon: const Icon(Icons.search),
-                ),
-              ),
-            ),
+            Expanded(child: _searchField(t)),
             if (_canOperate) ...[
               const SizedBox(width: 12),
               SizedBox(width: 140, child: TestuButton(L('Add', 'Añadir'), onTap: () => _openAdd(teams))),
@@ -129,67 +124,126 @@ class _AdminPeopleState extends State<AdminPeople> {
             ],
           ]),
           const SizedBox(height: 16),
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: SingleChildScrollView(
-                child: DataTable(
-                  columns: [
-                    DataColumn(label: Text(L('Name', 'Nombre'))),
-                    DataColumn(label: Text(L('Email', 'Correo'))),
-                    DataColumn(label: Text(L('Team', 'Equipo'))),
-                    DataColumn(label: Text(L('Role', 'Rol'))),
-                    DataColumn(label: Text(L('Last activity', 'Última actividad'))),
-                    DataColumn(label: Text(L('Status', 'Estado'))),
-                    const DataColumn(label: Text('')),
-                  ],
-                  rows: [for (final u in _filtered) _rowFor(u, teams, t)],
-                ),
-              ),
-            ),
-          ),
+          _table(teams, t),
         ],
       ),
     );
   }
 
-  DataRow _rowFor(AdminUser u, List<AdminTeam> teams, TestuTokens t) {
+  Widget _searchField(TestuTokens t) => TextField(
+        controller: _search,
+        style: TextStyle(fontFamily: 'Geist', fontSize: 12.5, color: t.ink),
+        decoration: InputDecoration(
+          hintText: L('Search by name, email or team', 'Buscar por nombre, correo o equipo'),
+          hintStyle: TextStyle(fontFamily: 'Geist', fontSize: 12.5, color: t.mut),
+          prefixIcon: Icon(Icons.search, size: 16, color: t.mut),
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(999), borderSide: BorderSide(color: t.line2)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(999), borderSide: BorderSide(color: t.line2)),
+          focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(999), borderSide: BorderSide(color: AdminTokens.focus)),
+        ),
+      );
+
+  Widget _table(List<AdminTeam> teams, TestuTokens t) => AdminTable<AdminUser>(
+        rows: _filtered,
+        emptyText: L('No one matches.', 'Nadie coincide.'),
+        columns: [
+          AdminColumn(
+            L('Name', 'Nombre'),
+            (u) => Text(u.name, overflow: TextOverflow.ellipsis),
+            sortKey: (u) => u.name,
+            flex: 3,
+          ),
+          AdminColumn(
+            L('Email', 'Correo'),
+            (u) => Text(u.email, style: TextStyle(color: t.mut), overflow: TextOverflow.ellipsis),
+            sortKey: (u) => u.email,
+            flex: 3,
+          ),
+          AdminColumn(
+            L('Team', 'Equipo'),
+            (u) => _teamCell(u, teams, t),
+            sortKey: (u) => teams.where((x) => x.id == u.team).firstOrNull?.name ?? '',
+            width: 160,
+          ),
+          AdminColumn(
+            L('Role', 'Rol'),
+            (u) => _roleCell(u, t),
+            sortKey: (u) => roleLabel(u.role),
+            width: 160,
+          ),
+          AdminColumn(
+            L('Last activity', 'Última actividad'),
+            (u) => Text(date(u.lastActivity), style: AdminTokens.mono(11.5)),
+            sortKey: (u) => u.lastActivity?.millisecondsSinceEpoch ?? 0,
+            width: 120,
+            numeric: true,
+          ),
+          AdminColumn(
+            L('Status', 'Estado'),
+            (u) => Text(
+              u.enabled ? L('Active', 'Activo') : L('Inactive', 'Inactivo'),
+              style: TextStyle(color: u.enabled ? t.green : t.faint),
+            ),
+            sortKey: (u) => u.enabled ? 0 : 1,
+            width: 90,
+          ),
+          AdminColumn('', (u) => _actions(u, t), width: 300),
+        ],
+      );
+
+  Widget _teamCell(AdminUser u, List<AdminTeam> teams, TestuTokens t) {
+    if (!_canOperate) {
+      final name = teams.where((x) => x.id == u.team).firstOrNull?.name;
+      return Text(name ?? '—', style: TextStyle(color: t.mut));
+    }
+    return Select<String>(
+      value: teams.any((x) => x.id == u.team) ? u.team : null,
+      hint: L('None', 'Ninguno'),
+      items: [
+        (null, L('None', 'Ninguno')),
+        for (final team in teams) (team.id, team.name),
+      ],
+      onChanged: (v) => _mutate(() => widget.api.setTeam(u.id, v)),
+    );
+  }
+
+  Widget _roleCell(AdminUser u, TestuTokens t) {
+    if (!_canManage) return Text(roleLabel(u.role), style: TextStyle(color: t.mut));
+    return Select<String>(
+      value: u.role,
+      items: [for (final r in _roles) (r, roleLabel(r))],
+      onChanged: (v) => v == null ? null : _mutate(() => widget.api.setRole(u.id, v)),
+    );
+  }
+
+  Widget _actions(AdminUser u, TestuTokens t) {
     final isSelf = u.id == widget.me.id;
-    return DataRow(cells: [
-      DataCell(Text(u.name)),
-      DataCell(Text(u.email, style: TextStyle(color: t.mut))),
-      DataCell(_canOperate
-          ? DropdownButton<String?>(
-              value: teams.any((x) => x.id == u.team) ? u.team : null,
-              hint: Text(L('None', 'Ninguno')),
-              items: [
-                DropdownMenuItem(value: null, child: Text(L('None', 'Ninguno'))),
-                for (final team in teams) DropdownMenuItem(value: team.id, child: Text(team.name)),
-              ],
-              onChanged: (v) => _mutate(() => widget.api.setTeam(u.id, v)),
-            )
-          : Text(u.team ?? '—', style: TextStyle(color: t.mut)))
-      ,
-      DataCell(_canManage
-          ? DropdownButton<String>(
-              value: u.role,
-              items: [for (final r in _roles) DropdownMenuItem(value: r, child: Text(roleLabel(r)))],
-              onChanged: (v) => v == null ? null : _mutate(() => widget.api.setRole(u.id, v)),
-            )
-          : Text(roleLabel(u.role), style: TextStyle(color: t.mut))),
-      DataCell(Text(date(u.lastActivity), style: TextStyle(color: t.mut))),
-      DataCell(Text(
-        u.enabled ? L('Active', 'Activo') : L('Inactive', 'Inactivo'),
-        style: TextStyle(color: u.enabled ? t.green : t.faint),
-      )),
-      DataCell(_canOperate
-          ? IconButton(
-              icon: Icon(Icons.block, color: t.red),
-              tooltip: L('Disable', 'Desactivar'),
-              onPressed: (isSelf || !u.enabled) ? null : () => _mutate(() => widget.api.disableUser(u.id)),
-            )
-          : const SizedBox.shrink()),
-    ]);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (_canViewProfile)
+          TestuAct(L('View profile', 'Ver ficha'),
+              onTap: () => widget.nav.go('person', entityId: u.id)),
+        if (_canOperate) ...[
+          if (_canViewProfile) const SizedBox(width: 8),
+          TextButton(
+            onPressed: (isSelf || !u.enabled) ? null : () => _mutate(() => widget.api.disableUser(u.id)),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              minimumSize: const Size(0, 28),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              foregroundColor: AdminTokens.redText,
+              disabledForegroundColor: t.faint,
+              textStyle: const TextStyle(fontFamily: 'Geist', fontSize: 12, fontWeight: FontWeight.w700),
+            ),
+            child: Text(L('Disable', 'Desactivar')),
+          ),
+        ],
+      ],
+    );
   }
 
   Future<void> _openAdd(List<AdminTeam> teams) async {
@@ -229,20 +283,19 @@ class _AdminPeopleState extends State<AdminPeople> {
                   const SizedBox(height: 8),
                   TextField(controller: last, decoration: InputDecoration(hintText: L('Last name', 'Apellidos'))),
                   const SizedBox(height: 8),
-                  DropdownButton<String?>(
-                    isExpanded: true,
+                  Select<String>(
                     value: team,
-                    hint: Text(L('Team', 'Equipo')),
+                    hint: L('Team', 'Equipo'),
                     items: [
-                      DropdownMenuItem(value: null, child: Text(L('None', 'Ninguno'))),
-                      for (final tm in teams) DropdownMenuItem(value: tm.id, child: Text(tm.name)),
+                      (null, L('None', 'Ninguno')),
+                      for (final tm in teams) (tm.id, tm.name),
                     ],
                     onChanged: (v) => setD(() => team = v),
                   ),
-                  DropdownButton<String>(
-                    isExpanded: true,
+                  const SizedBox(height: 8),
+                  Select<String>(
                     value: role,
-                    items: [for (final r in roles) DropdownMenuItem(value: r, child: Text(roleLabel(r)))],
+                    items: [for (final r in roles) (r, roleLabel(r))],
                     onChanged: (v) => setD(() => role = v ?? role),
                   ),
                   const SizedBox(height: 16),
@@ -320,21 +373,17 @@ class _AdminPeopleState extends State<AdminPeople> {
                     ConstrainedBox(
                       constraints: const BoxConstraints(maxHeight: 220),
                       child: SingleChildScrollView(
-                        child: DataTable(
+                        child: AdminTable<CsvRow>(
+                          rows: preview!.rows,
                           columns: [
-                            DataColumn(label: Text(L('Email', 'Correo'))),
-                            DataColumn(label: Text(L('Name', 'Nombre'))),
-                            DataColumn(label: Text(L('Team', 'Equipo'))),
-                            DataColumn(label: Text(L('Error', 'Error'))),
-                          ],
-                          rows: [
-                            for (final r in preview!.rows)
-                              DataRow(cells: [
-                                DataCell(Text(r.email)),
-                                DataCell(Text('${r.firstName} ${r.lastName}'.trim())),
-                                DataCell(Text(r.team)),
-                                DataCell(Text(r.error ?? '', style: TextStyle(color: r.error == null ? t.green : t.red))),
-                              ]),
+                            AdminColumn(L('Email', 'Correo'), (r) => Text(r.email), flex: 3),
+                            AdminColumn(L('Name', 'Nombre'), (r) => Text('${r.firstName} ${r.lastName}'.trim()), flex: 2),
+                            AdminColumn(L('Team', 'Equipo'), (r) => Text(r.team), width: 100),
+                            AdminColumn(
+                              L('Error', 'Error'),
+                              (r) => Text(r.error ?? '', style: TextStyle(color: r.error == null ? t.green : t.red)),
+                              flex: 2,
+                            ),
                           ],
                         ),
                       ),
@@ -353,8 +402,7 @@ class _AdminPeopleState extends State<AdminPeople> {
                               _mutate(() async {
                                 final n = await widget.api.importUsers(bytes);
                                 if (mounted) {
-                                  ScaffoldMessenger.of(context)
-                                      .showSnackBar(SnackBar(content: Text(L('Imported $n', 'Importadas $n'))));
+                                  showToast(context, L('Imported $n', 'Importadas $n'));
                                 }
                               });
                             }

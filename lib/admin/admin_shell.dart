@@ -227,8 +227,8 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
       ),
     'mastery' =>
       AdminMastery(api: widget.api, me: widget.me, filters: _filters, nav: _nav),
-    'people' => AdminPeople(api: widget.api, me: widget.me),
-    'teams' => AdminTeams(api: widget.api, me: widget.me),
+    'people' => AdminPeople(api: widget.api, me: widget.me, nav: _nav),
+    'teams' => AdminTeams(api: widget.api, me: widget.me, nav: _nav),
     _ => _notYet(route.section),
   };
 
