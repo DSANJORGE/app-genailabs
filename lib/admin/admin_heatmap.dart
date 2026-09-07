@@ -130,9 +130,7 @@ class HeatmapGrid extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(width: _labelW, child: _labels(t)),
-        Expanded(
-          child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: _grid(t)),
-        ),
+        Expanded(child: HScroll(child: _grid(t))),
       ],
     );
   }

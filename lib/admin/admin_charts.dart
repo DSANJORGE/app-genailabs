@@ -533,14 +533,15 @@ Widget hoursHeatmap(List<(int wd, int h, int n)> cells) {
       final w = box.maxWidth.isFinite
           ? ((box.maxWidth - labelW) / 24 - gap).clamp(12.0, 44.0)
           : 14.0;
-      // 7 rows plus the hour labels, inside whatever height the card allows:
-      // a card with a fixed height must not be overflowed by its own chart.
+      // Height follows width, so a wide card gets cells and not ribbons; a
+      // card with a fixed height still may not be overflowed by its own chart.
       final room = box.maxHeight.isFinite
-          ? ((box.maxHeight - 18) / 7 - gap).clamp(8.0, 20.0)
-          : 20.0;
-      // Not clamp(12, room): a very short card makes `room` smaller than the
+          ? ((box.maxHeight - 18) / 7 - gap).clamp(8.0, 28.0)
+          : 28.0;
+      final tall = (w * 0.6).clamp(14.0, 28.0);
+      // Not clamp(14, room): a very short card makes `room` smaller than the
       // floor, and clamp asserts when its bounds cross.
-      final h = w > room ? room : w;
+      final h = tall > room ? room : tall;
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -608,6 +609,10 @@ class _HeatCell extends StatelessWidget {
   Widget build(BuildContext context) {
     // 0.08 keeps an empty hour visible as a cell rather than a hole.
     final alpha = max == 0 || n == 0 ? 0.0 : 0.08 + 0.82 * (n / max);
+    // One step above the mastery grid's empty tint: 168 cells at #141417 on a
+    // #121215 card is a lattice nobody can see, and the empty hours ARE the
+    // reading here (nights and weekends).
+    const empty = Color(0xFF1D1D22);
     return Tooltip(
       message: '$label · $n',
       waitDuration: Duration.zero,
@@ -618,7 +623,7 @@ class _HeatCell extends StatelessWidget {
         height: height,
         decoration: BoxDecoration(
           color: alpha == 0
-              ? AdminTokens.levelTint(null)
+              ? empty
               : AdminTokens.focus.withValues(alpha: alpha),
           borderRadius: BorderRadius.circular(2),
         ),

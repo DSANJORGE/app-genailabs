@@ -189,17 +189,21 @@ class _AdminPeopleState extends State<AdminPeople> {
             sortKey: (u) => u.email,
             flex: 3,
           ),
+          // Fixed, not flexed: these two cells hold controls, and a control
+          // squeezed to "Oper…" is worse than a table that scrolls. 140 fits
+          // "Mantenimiento" and "Training / L&D" whole and leaves the longer
+          // names one tooltip away.
           AdminColumn(
             L('Team', 'Equipo'),
             (u) => _teamCell(u, teams, t),
             sortKey: (u) => _teamName(u.team),
-            flex: 2,
+            width: 140,
           ),
           AdminColumn(
             L('Role', 'Rol'),
             (u) => _roleCell(u, t),
             sortKey: (u) => roleLabel(u.role),
-            flex: 2,
+            width: 140,
           ),
           AdminColumn(
             L('Last activity', 'Última actividad'),
@@ -457,6 +461,15 @@ class _AdminPeopleState extends State<AdminPeople> {
 /// or why nothing was recognised at all. The dialog's own empty and error
 /// state -- a table of red cells does not tell a reader what to do next.
 String _csvSummary(CsvImport preview) {
+  if (preview.missingColumns.isNotEmpty) {
+    final missing = preview.missingColumns.join(', ');
+    return L(
+      'The header is missing $missing. The first line has to be: '
+          'email,firstName,lastName,team.',
+      'Al encabezado le faltan $missing. La primera línea debe ser: '
+          'email,firstName,lastName,team.',
+    );
+  }
   if (preview.rows.isEmpty) {
     return L(
       'No rows recognised. The first line has to be the header: '

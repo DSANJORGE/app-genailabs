@@ -262,11 +262,18 @@ class _AdminActivityState extends State<AdminActivity>
     ];
     final labels = a.iris.labels;
     // Nobody has asked anything: a bar with no segments and a legend with no
-    // entries is a card that says nothing at all.
-    if (segments.every((s) => s.$3 == 0)) {
+    // entries is a card that says nothing at all. Guarded on the question
+    // count, not on the theme totals -- a period WITH questions whose themes
+    // the classifier has not written yet is a different state, and it keeps
+    // its bar (everything lands in "Otro").
+    if (a.iris.questions == 0) {
       return ChartCard(
         eyebrow: L('Question themes', 'Temas de las preguntas'),
         height: null,
+        // The privacy rule holds in the empty state too: it is the promise
+        // the app makes every learner, not a caption for the bar.
+        footnote: L('Aggregated: no individual question is ever shown.',
+            'Agregado: nunca se muestra ninguna pregunta individual.'),
         child: EmptyState(
           eyebrow: L('No questions yet', 'Todavía sin preguntas'),
           text: L(

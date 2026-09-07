@@ -103,6 +103,59 @@ class ConsoleInteractiveState extends State<ConsoleInteractive> {
   }
 }
 
+/// Horizontal scroll with a thumb you can see and drag. Used by [AdminTable]
+/// when its columns outrun the card and by the heatmap grid, which has always
+/// scrolled -- silently, which is how a reader misses a column.
+class HScroll extends StatefulWidget {
+  const HScroll({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  State<HScroll> createState() => _HScrollState();
+}
+
+class _HScrollState extends State<HScroll> {
+  final _controller = ScrollController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TestuTokens.of(context);
+    // Material's default thumb is a bright bar across a dark console; this is
+    // the same hairline vocabulary as everything else here.
+    return ScrollbarTheme(
+      data: ScrollbarThemeData(
+        thickness: const WidgetStatePropertyAll(4),
+        radius: const Radius.circular(2),
+        thumbColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.hovered) ? t.mut : t.line2,
+        ),
+        trackColor: const WidgetStatePropertyAll(Colors.transparent),
+        trackBorderColor: const WidgetStatePropertyAll(Colors.transparent),
+      ),
+      child: Scrollbar(
+        controller: _controller,
+        thumbVisibility: true,
+        child: Padding(
+          // Room for the thumb, so it never sits on the last row's hairline.
+          padding: const EdgeInsets.only(bottom: 10),
+          child: SingleChildScrollView(
+            controller: _controller,
+            scrollDirection: Axis.horizontal,
+            child: widget.child,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// 1 px `line` rule — the console's only separator.
 class _Hairline extends StatelessWidget {
   const _Hairline({this.vertical = false});
@@ -316,6 +369,18 @@ class AdminScaffold extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: t.card,
                     border: Border(left: BorderSide(color: t.line)),
+                    // The one shadow in the console, and only when the panel
+                    // is over the content rather than beside it: without it a
+                    // floating panel reads as a clipped column.
+                    boxShadow: float
+                        ? [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.45),
+                              blurRadius: 18,
+                              offset: const Offset(-2, 0),
+                            ),
+                          ]
+                        : null,
                   ),
                   child: endPanel,
                 );
@@ -711,6 +776,11 @@ const double _eyebrowH = 24;
 
 /// One headline number. Four of these sit hairline-separated in a
 /// [StatRow] — deliberately not four cards.
+///
+/// **Only inside a [StatRow].** The sparkline is pushed to the floor of the
+/// block with a [Spacer], which needs a bounded height; [StatRow]'s
+/// `IntrinsicHeight` is what supplies it. In a bare unbounded Column this
+/// throws, and that is the contract rather than an accident.
 class StatBlock extends StatelessWidget {
   const StatBlock({
     super.key,
@@ -929,11 +999,19 @@ class LevelBar extends StatelessWidget {
       for (final k in _order)
         if ((levels[k] ?? 0) > 0) k,
     ];
+    final reading = [
+      for (final k in present) '${_levelLabel(k)} ${levels[k]}',
+    ].join(', ');
     return Semantics(
-      label: [
-        for (final k in present) '${_levelLabel(k)} ${levels[k]}',
-      ].join(', '),
-      child: ClipRRect(
+      label: reading,
+      child: Tooltip(
+        // The same sentence the screen reader gets: four colours in a 6 px bar
+        // are not a reading for anybody, sighted or not.
+        message: reading.isEmpty ? _levelLabel(null) : reading,
+        waitDuration: Duration.zero,
+        textStyle: AdminTokens.mono(11),
+        decoration: AdminTokens.tip,
+        child: ClipRRect(
         borderRadius: BorderRadius.circular(height / 2),
         child: SizedBox(
           height: height,
@@ -954,6 +1032,7 @@ class LevelBar extends StatelessWidget {
                       ),
                   ],
                 ),
+        ),
         ),
       ),
     );
@@ -1427,10 +1506,7 @@ class _AdminTableState<T> extends State<AdminTable<T>> {
           }
           // Everything still readable, one gesture away -- the same answer
           // the heatmap gives when its columns outrun the card.
-          return SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: SizedBox(width: _minWidth, child: table),
-          );
+          return HScroll(child: SizedBox(width: _minWidth, child: table));
         },
       );
 
@@ -1552,6 +1628,10 @@ class _HeaderCell<T> extends StatelessWidget {
   }
 }
 
+/// Horizontal padding, caret and its gap: everything in a [Select] that is
+/// not the label, and therefore what the label does not get.
+const double _selectChrome = 46;
+
 /// Quiet bordered select on a `MenuAnchor`. Replaces `DropdownButton`, whose
 /// Material menu, ripple and underline belong to another design system.
 class Select<T> extends StatelessWidget {
@@ -1627,18 +1707,29 @@ class Select<T> extends StatelessWidget {
         semanticLabel: semanticLabel ?? hint,
         builder: (context, hovered) => LayoutBuilder(
           builder: (context, box) {
+            final style = TextStyle(
+              fontFamily: 'Geist',
+              fontSize: 11.5,
+              // A locked team is still the manager's own team name: readable,
+              // not decorative.
+              color: enabled ? t.ink : t.mut,
+            );
             final text = Text(
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontFamily: 'Geist',
-                fontSize: 11.5,
-                // A locked team is still the manager's own team name:
-                // readable, not decorative.
-                color: enabled ? t.ink : t.mut,
-              ),
+              style: style,
             );
+            // "Operacione…" with the rest of the name nowhere on screen is
+            // what a fixed table cell does to a Spanish team name. Measure it,
+            // and hand the whole label to a tooltip when it does not fit.
+            final clipped = box.maxWidth.isFinite &&
+                (TextPainter(
+                          text: TextSpan(text: label, style: style),
+                          textDirection: TextDirection.ltr,
+                        )..layout())
+                        .width >
+                    box.maxWidth - _selectChrome;
             return Container(
               padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
               decoration: BoxDecoration(
@@ -1654,7 +1745,20 @@ class Select<T> extends StatelessWidget {
                   // painting overflow stripes over the row. In the context
                   // bar the select sits in a Wrap with no width to give way
                   // to, and a flexible child there is a layout error.
-                  box.maxWidth.isFinite ? Flexible(child: text) : text,
+                  if (!box.maxWidth.isFinite)
+                    text
+                  else if (clipped)
+                    Flexible(
+                      child: Tooltip(
+                        message: label,
+                        waitDuration: Duration.zero,
+                        textStyle: AdminTokens.mono(11),
+                        decoration: AdminTokens.tip,
+                        child: text,
+                      ),
+                    )
+                  else
+                    Flexible(child: text),
                   const SizedBox(width: 10),
                   Text('▼', style: AdminTokens.mono(8, color: t.mut)),
                 ],

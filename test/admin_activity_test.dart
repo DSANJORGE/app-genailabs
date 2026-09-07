@@ -329,6 +329,7 @@ void main() {
   testWidgets('no questions at all is a sentence, not a bare bar',
       (tester) async {
     final canned = _canned();
+    (canned['iris'] as Map)['questions'] = 0;
     (canned['iris'] as Map)['themes'] = [];
     (canned['iris'] as Map)['labels'] = [];
     await _pump(tester, canned: canned);
@@ -337,6 +338,24 @@ void main() {
     expect(find.text('NO QUESTIONS YET'), findsOneWidget);
     expect(find.textContaining('Nobody has asked Iris anything'),
         findsOneWidget);
+    // The promise the app makes every learner holds in the empty state too.
+    expect(find.text('Aggregated: no individual question is ever shown.'),
+        findsOneWidget);
+  });
+
+  // Questions with no theme split yet (the classifier runs on its own clock)
+  // is not the same state as no questions: the bar stays, everything in it
+  // lands in "Other".
+  testWidgets('questions the classifier has not reached keep their bar',
+      (tester) async {
+    final canned = _canned();
+    (canned['iris'] as Map)['themes'] = [
+      {'theme': 'unclassified', 'count': 42},
+    ];
+    await _pump(tester, canned: canned);
+
+    expect(find.byType(StackedBar), findsOneWidget);
+    expect(find.text('Other · 42'), findsOneWidget);
   });
 
   // The counts are on hover, and the footnote used to promise them in the

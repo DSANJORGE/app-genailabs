@@ -441,8 +441,12 @@ Map<String, int> _bars(Levels l) => {
 /// A gap read out loud: the three counters that make it a gap, in the order
 /// a training lead acts on them.
 String _gapLine(Gap g) => L(
-      '${g.beginners} at Beginner, ${g.questions} questions to Iris, '
-          '${g.misconceptions} misconceptions',
-      '${g.beginners} en Principiante, ${g.questions} preguntas a Iris, '
-          '${g.misconceptions} conceptos erróneos',
+      '${g.beginners} at Beginner, ${g.questions} '
+          '${g.questions == 1 ? 'question' : 'questions'} to Iris, '
+          '${g.misconceptions} '
+          '${g.misconceptions == 1 ? 'misconception' : 'misconceptions'}',
+      '${g.beginners} en Principiante, ${g.questions} '
+          '${g.questions == 1 ? 'pregunta' : 'preguntas'} a Iris, '
+          '${g.misconceptions} '
+          '${g.misconceptions == 1 ? 'concepto erróneo' : 'conceptos erróneos'}',
     );

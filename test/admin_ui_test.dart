@@ -1,8 +1,10 @@
 import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart' show SemanticsAction, SemanticsNode;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genai_labs/admin/admin_charts.dart';
+import 'package:genai_labs/admin/admin_heatmap.dart';
 import 'package:genai_labs/admin/admin_models.dart';
 import 'package:genai_labs/admin/admin_nav.dart';
 import 'package:genai_labs/admin/admin_theme.dart';
@@ -493,10 +495,63 @@ void main() {
       ),
     )));
 
-    expect(find.byType(SingleChildScrollView), findsOneWidget);
     // 96 + 96 + 150, each with its 12 px gutter: the third column starts
     // beyond the box instead of everything sharing 138 px.
     expect(tester.getTopLeft(find.text('Niveles')).dx, greaterThan(200));
+
+    // And it scrolls, with a thumb that says so.
+    expect(find.byType(Scrollbar), findsOneWidget);
+    await tester.drag(find.text('Nombre'), const Offset(-80, 0));
+    await tester.pumpAndSettle();
+    final scroller = tester.widget<SingleChildScrollView>(
+        find.byType(SingleChildScrollView));
+    expect(scroller.controller!.offset, greaterThan(0));
+    expect(tester.getTopLeft(find.text('Niveles')).dx, lessThan(200),
+        reason: 'the last column comes into view');
+  });
+
+  // The heatmap's own copy of this primitive painted its focus ring on hover
+  // as well; the shared one does not, and the pinned name column now uses it.
+  testWidgets('a heatmap row label hovers like every other console control',
+      (tester) async {
+    await tester.pumpWidget(_app(HeatmapGrid(
+      cols: const [HeatCol('Tema', 'Uno')],
+      rowHeader: 'Persona',
+      onRow: (_) {},
+      rows: const [
+        HeatRow(id: 'u:1', label: 'Ana Quispe', cells: [
+          HeatCell(title: 'Ana · Uno', level: 'beginner', mastered: 1, answered: 4),
+        ]),
+      ],
+    )));
+
+    BoxDecoration? labelBox() {
+      final boxes = find.ancestor(
+          of: find.text('Ana Quispe'), matching: find.byType(DecoratedBox));
+      if (boxes.evaluate().isEmpty) return null;
+      return tester.widget<DecoratedBox>(boxes.first).decoration
+          as BoxDecoration;
+    }
+
+    expect(labelBox()?.color, isNull, reason: 'nothing painted at rest');
+
+    // What a mouse-driven desktop session sets on the first pointer move.
+    // `FocusableActionDetector.onShowHoverHighlight` is gated on it, which is
+    // why the heatmap's own copy of this primitive used a bare MouseRegion.
+    FocusManager.instance.highlightStrategy =
+        FocusHighlightStrategy.alwaysTraditional;
+    addTearDown(() => FocusManager.instance.highlightStrategy =
+        FocusHighlightStrategy.automatic);
+
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    addTearDown(mouse.removePointer);
+    await mouse.addPointer(location: Offset.zero);
+    await mouse.moveTo(tester.getCenter(find.text('Ana Quispe')));
+    await tester.pumpAndSettle();
+
+    expect(labelBox()?.color, AdminTokens.hover);
+    expect(labelBox()?.border, isNull,
+        reason: 'the ring belongs to keyboard focus, not to the mouse');
   });
 
 }

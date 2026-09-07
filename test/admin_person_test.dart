@@ -215,8 +215,10 @@ void main() {
     // call the same level two different things.
     expect(find.text('Competent · Review soon'), findsOneWidget);
     expect(find.text('Beginner · Needs practice'), findsWidgets);
-    expect(find.text('5 of 8 questions · review Debida diligencia'),
-        findsOneWidget);
+    // The counts and the subtopic to revisit are two lines, so the pill
+    // cannot eat the second half of one.
+    expect(find.text('5 of 8 questions'), findsOneWidget);
+    expect(find.text('review Debida diligencia'), findsOneWidget);
     // No weakest section for the second topic: the clause is dropped, not
     // printed with a null.
     expect(find.text('1 of 4 questions'), findsOneWidget);

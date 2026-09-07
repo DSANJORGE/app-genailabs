@@ -49,6 +49,7 @@ Future<(FakeEmeHttp, ConsoleNav)> _pump(
   WidgetTester tester, {
   AdminMe? me,
   Map<String, dynamic>? users,
+  Map<String, dynamic>? teams,
   double width = 1440,
 }) async {
   tester.view.physicalSize = Size(width, 1200);
@@ -57,7 +58,7 @@ Future<(FakeEmeHttp, ConsoleNav)> _pump(
 
   final http = FakeEmeHttp();
   http.canned[_usersPath] = users ?? _usersJson();
-  http.canned[_teamsPath] = _teamsJson();
+  http.canned[_teamsPath] = teams ?? _teamsJson();
   final nav = ConsoleNav();
   addTearDown(nav.dispose);
 
@@ -226,11 +227,19 @@ void main() {
       await _pump(tester);
       await paste(tester, 'pegué cualquier cosa');
 
+      // The header, once -- not the same error repeated on every row.
       expect(
-        find.textContaining('No rows recognised.'),
+        find.textContaining('The header is missing email, firstName'),
         findsOneWidget,
       );
       expect(find.text('Import 0 rows'), findsOneWidget);
+    });
+
+    testWidgets('a header with no rows under it says so', (tester) async {
+      await _pump(tester);
+      await paste(tester, 'email,firstName,lastName,team');
+
+      expect(find.textContaining('No rows recognised.'), findsOneWidget);
     });
 
     testWidgets('rows it rejects are counted, not just coloured',
@@ -261,6 +270,37 @@ void main() {
       expect(find.text('2 rows ready to import.'), findsOneWidget);
       expect(find.text('Import 2 rows'), findsOneWidget);
     });
+  });
+
+
+  // "Oper…" in a 140 px cell with the rest of the name nowhere on screen is
+  // what the roster did to every Spanish team.
+  testWidgets('a clipped Select hands its whole label to a tooltip',
+      (tester) async {
+    await _pump(tester, me: _fullAccess, users: {
+      'users': [
+        {
+          'id': 'u1',
+          'email': 'ana@minsur.test',
+          'firstName': 'Ana',
+          'lastName': 'Quispe',
+          'team': 'norte',
+          'role': 'users',
+          'enabled': true,
+        },
+      ],
+    }, teams: {
+      'teams': [
+        {'id': 'norte', 'name': 'Operaciones Pisco Norte y Sur'},
+      ],
+    });
+
+    expect(find.byTooltip('Operaciones Pisco Norte y Sur'), findsOneWidget);
+  });
+
+  testWidgets('a Select that fits carries no tooltip', (tester) async {
+    await _pump(tester, me: _fullAccess);
+    expect(find.byTooltip('Norte'), findsNothing);
   });
 
 }

@@ -429,13 +429,27 @@ class _TopicRow extends StatelessWidget {
                 style: AdminTokens.table, overflow: TextOverflow.ellipsis),
           ),
           const SizedBox(width: 12),
+          // Two lines, not one long one: the level pill is ~150 px of a 410 px
+          // card, so "8 de 13 preguntas · revisar Debida diligencia" on one
+          // line always ended at "· re…" -- and the subtopic to revisit is the
+          // half a reader acts on.
           Expanded(
-            child: Text(
-              weak == null || weak.isEmpty
-                  ? detail
-                  : '$detail · ${L('review', 'revisar')} ${sectionName(weak)}',
-              style: AdminTokens.muted,
-              overflow: TextOverflow.ellipsis,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(detail,
+                    style: AdminTokens.muted,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+                if (weak != null && weak.isNotEmpty)
+                  Text(
+                    '${L('review', 'revisar')} ${sectionName(weak)}',
+                    style: kLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+              ],
             ),
           ),
           const SizedBox(width: 12),
