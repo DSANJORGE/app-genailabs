@@ -1,9 +1,18 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:eme_app_package/eme_http.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'testu_client.dart';
 import 'testu_i18n.dart';
 import 'testu_icons.dart';
+import 'testu_live.dart';
+import 'testu_session.dart';
+import 'testu_shell.dart';
 import 'testu_theme.dart';
+import 'testu_topics.dart';
 import 'testu_widgets.dart';
 
 /// Rule of the split: Today carries everything ACTIONABLE (do this now);
@@ -11,19 +20,112 @@ import 'testu_widgets.dart';
 /// was reviewed, content updated, certificate issued). Nothing informative
 /// goes on Today anymore.
 class TestuNotice {
-  TestuNotice(this.title, this.body, this.when, {this.unread = true});
+  TestuNotice(this.title, this.body, this.when,
+      {this.unread = true,
+      this.id,
+      this.type,
+      this.channel,
+      this.messageId,
+      this.tutorialId,
+      this.topicId,
+      this.questionId,
+      this.date});
+
+  /// One row of `services/testu/social/notifications.json`. Empty ids from
+  /// the server (`entityquestion` on a topic review) read as none.
+  factory TestuNotice.fromJson(Map<String, dynamic> j) {
+    final type = '${j['type'] ?? ''}';
+    final date = DateTime.tryParse('${j['date'] ?? ''}')?.toLocal();
+    return TestuNotice(
+      testuNoticeTitle(type, '${j['actorname'] ?? ''}'.trim()),
+      '${j['text'] ?? ''}',
+      date == null ? L('Now', 'Ahora') : '${date.day}/${date.month}',
+      unread: j['read'] != true,
+      id: _nz(j['id']),
+      type: type,
+      channel: _nz(j['channel']),
+      messageId: _nz(j['messageid']),
+      tutorialId: _nz(j['entitytutorial']),
+      topicId: _nz(j['entitytopic']),
+      questionId: _nz(j['entityquestion']),
+      date: date,
+    );
+  }
+
   final String title;
   final String body;
-  final String when; // display string; real timestamps come with the backend
+  final String when; // display string; live rows also carry [date]
   bool unread;
+
+  /// Server identity and origin; null on demo/local rows (`id` null =
+  /// never posted to the server, survives a poll).
+  final String? id, type, channel, messageId, tutorialId, topicId, questionId;
+  final DateTime? date;
+
+  /// The «HOY» group: a real date today, or the demo's "Now" label.
+  bool get isToday {
+    final d = date;
+    if (d == null) return when == L('Now', 'Ahora');
+    final now = DateTime.now();
+    return d.year == now.year && d.month == now.month && d.day == now.day;
+  }
 }
 
+String? _nz(Object? v) => v == null || '$v'.isEmpty ? null : '$v';
+
+/// Title line per server type; the actor's display name is the subject.
+String testuNoticeTitle(String type, String actor) => switch (type) {
+      'reply' => L('$actor replied to you', '$actor te respondió'),
+      'mention' => L('$actor mentioned you', '$actor te mencionó'),
+      'reaction' => L('$actor reacted to your comment',
+          '$actor reaccionó a tu comentario'),
+      'tutorreply' =>
+        L('${client.tutor} answered you', '${client.tutor} te respondió'),
+      _ => actor,
+    };
+
+/// Where a tap on [n] lands: a shell tab to select, or a screen to push
+/// (question session, else the topic's review tab). Pure, so the routing
+/// table is a unit test; the screen turns it into navigation.
+typedef TestuNoticeTarget = ({
+  int? tab,
+  String? topicId,
+  String? questionId,
+  String? messageId,
+  String? tutorialId,
+});
+
+TestuNoticeTarget testuNoticeTarget(TestuNotice n) => switch (n.type) {
+      'tutorreply' => (
+          tab: 2,
+          topicId: null,
+          questionId: null,
+          messageId: null,
+          tutorialId: null
+        ),
+      'reply' || 'mention' || 'reaction' when n.topicId != null => (
+          tab: null,
+          topicId: n.topicId,
+          questionId: n.questionId,
+          messageId: n.messageId,
+          tutorialId: n.tutorialId,
+        ),
+      _ => (
+          tab: null,
+          topicId: null,
+          questionId: null,
+          messageId: null,
+          tutorialId: null
+        ),
+    };
+
 /// Store — demo-seeded lazily so `L()` resolves per language at first use.
+/// A live build starts empty and is filled by [refreshTestuNotices].
 final testuNotices = ValueNotifier<List<TestuNotice>>([]);
 bool _seeded = false;
 
 void _seed() {
-  if (_seeded) return;
+  if (_seeded || testuLive) return;
   _seeded = true;
   testuNotices.value = [
     TestuNotice(
@@ -57,12 +159,98 @@ void _seed() {
   ];
 }
 
-void addTestuNotice(String title, String body) {
+/// Notice-body preview: [splitCite]'s stripped text (no citation, quote or
+/// highlight markers), collapsed to one line and cut at [max] chars. Used
+/// for the `tutorreply` local notice so a multi-line reply with a trailing
+/// `[Title, p. N]` doesn't leak brackets/`>` into the notifications row.
+String noticePreview(String reply, {int max = 120}) {
+  final s = splitCite(reply).text.replaceAll(RegExp(r'\s+'), ' ').trim();
+  return s.length > max ? '${s.substring(0, max)}…' : s;
+}
+
+/// A local notice (demo events; live only `tutorreply`, see testu_tutor.dart).
+void addTestuNotice(String title, String body, {String? type}) {
   _seed();
   testuNotices.value = [
-    TestuNotice(title, body, L('Now', 'Ahora')),
+    TestuNotice(title, body, L('Now', 'Ahora'), type: type),
     ...testuNotices.value,
   ];
+}
+
+// ---- Live store.
+// ponytail: polling, switch to the websocket channel when EnterMedia exposes a per-user channel.
+
+const _notificationsPath = 'services/testu/social/notifications.json';
+const _markreadPath = 'services/testu/social/markread.json';
+Timer? _poll;
+bool _refreshing = false;
+
+/// Swipe-deleted server rows, so a poll does not resurrect them.
+/// ponytail: in memory only; a server-side delete when someone asks for it.
+final _dismissed = <String>{};
+
+/// Replaces the server rows with the newest 50; local rows (`id == null`)
+/// stay in front. A failure keeps what is on screen.
+Future<void> refreshTestuNotices({EmeHttp? http}) async {
+  if (!testuLive || _refreshing) return;
+  _refreshing = true;
+  try {
+    final data = await (http ?? DioEmeHttp()).getJson(_notificationsPath);
+    testuNotices.value = [
+      ...testuNotices.value.where((n) => n.id == null),
+      for (final j in (data['notifications'] as List? ?? const []))
+        if (!_dismissed.contains('${(j as Map)['id']}'))
+          TestuNotice.fromJson(Map<String, dynamic>.from(j)),
+    ];
+  } catch (e) {
+    debugPrint('TestU: notifications ($e)');
+  } finally {
+    _refreshing = false;
+  }
+}
+
+/// Fetch now and every 60 s until [stopTestuNoticePolling]. Idempotent.
+void startTestuNoticePolling() {
+  if (!testuLive) return;
+  refreshTestuNotices();
+  _poll ??= Timer.periodic(
+      const Duration(seconds: 60), (_) => refreshTestuNotices());
+}
+
+void stopTestuNoticePolling() {
+  _poll?.cancel();
+  _poll = null;
+  // ponytail: a stranded true here (e.g. a torn-down refresh whose finally
+  // never ran) would wedge every future refresh into a silent no-op.
+  _refreshing = false;
+}
+
+/// Sign-out: nothing of this learner stays for the next one.
+void clearTestuNotices() {
+  stopTestuNoticePolling();
+  _dismissed.clear();
+  testuNotices.value = [];
+}
+
+void dismissTestuNotice(TestuNotice n) {
+  if (n.id != null) _dismissed.add(n.id!);
+  testuNotices.value = [
+    for (final x in testuNotices.value)
+      if (!identical(x, n)) x
+  ];
+}
+
+/// Tells the server these rows were seen. Local state is untouched: the
+/// screen's leave-marks-read sweep and swipe toggles keep their own rules.
+Future<void> markTestuNoticesRead(Iterable<String> ids, {EmeHttp? http}) async {
+  final list = ids.toList();
+  if (!testuLive || list.isEmpty) return;
+  try {
+    await (http ?? DioEmeHttp())
+        .postForm(_markreadPath, [MapEntry('ids', jsonEncode(list))]);
+  } catch (e) {
+    debugPrint('TestU: markread ($e)');
+  }
 }
 
 /// Bell for the Today header — avatar-sized circle, orange dot when unread
@@ -101,6 +289,7 @@ class TestuBell extends StatelessWidget {
                     top: 1,
                     right: 1,
                     child: Container(
+                      key: const ValueKey('testu-bell-dot'),
                       width: 8,
                       height: 8,
                       decoration: BoxDecoration(
@@ -132,6 +321,40 @@ class TestuNotificationsScreen extends StatefulWidget {
 
 class _TestuNotificationsScreenState extends State<TestuNotificationsScreen> {
   @override
+  void initState() {
+    super.initState();
+    // The server learns these were seen now; the rows stay bold until the
+    // learner leaves (dispose sweep) so what is new reads as new.
+    markTestuNoticesRead(
+        [for (final n in testuNotices.value) if (n.unread && n.id != null) n.id!]);
+  }
+
+  /// Reply, mention, reaction → the question's session (that question first,
+  /// thread open, comment tinted) or the topic's review tab; tutorreply →
+  /// the IRIS tab. Pops this screen first so the origin sits over the shell.
+  void _open(TestuNotice n) {
+    final target = testuNoticeTarget(n);
+    if (target.tab == null && target.topicId == null) return;
+    // The wrapping TestuPressable already fires the tap haptic.
+    final nav = Navigator.of(context);
+    nav.pop();
+    if (target.tab != null) {
+      TestuShell.tabRequest.value = target.tab;
+      return;
+    }
+    nav.push(MaterialPageRoute(
+        builder: (_) => target.questionId != null
+            ? TestuSessionScreen(
+                topicId: target.topicId,
+                questionId: target.questionId,
+                highlightMessageId: target.messageId)
+            : TestuTopicHomeScreen(
+                topicId: target.topicId,
+                initialTab: 3,
+                highlightMessageId: target.messageId)));
+  }
+
+  @override
   Widget build(BuildContext context) {
     final t = TestuTokens.of(context);
     return Scaffold(
@@ -156,8 +379,12 @@ class _TestuNotificationsScreenState extends State<TestuNotificationsScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
               child: Text(
-                L('Reviews of your reports, content updates, certificates. Anything that needs action stays on Today.',
-                    'Revisiones de tus reportes, cambios de contenido, certificados. Lo que requiere acción sigue en Hoy.'),
+                // Live: reports stay on-device for now, so no reviews to promise.
+                testuLive
+                    ? L('Replies, mentions and reactions on your comments, and answers from ${client.tutor} you missed. Anything that needs action stays on Today.',
+                        'Respuestas, menciones y reacciones a tus comentarios, y respuestas de ${client.tutor} que te perdiste. Lo que requiere acción sigue en Hoy.')
+                    : L('Reviews of your reports, content updates, certificates. Anything that needs action stays on Today.',
+                        'Revisiones de tus reportes, cambios de contenido, certificados. Lo que requiere acción sigue en Hoy.'),
                 style: TextStyle(
                     fontFamily: 'Geist',
                     fontSize: 11.5,
@@ -185,17 +412,23 @@ class _TestuNotificationsScreenState extends State<TestuNotificationsScreen> {
   void dispose() {
     // Leaving the screen marks everything read (bell dot clears),
     // except what the user deliberately kept unread.
-    for (final n in testuNotices.value) {
-      if (!_keepUnread.contains(n)) n.unread = false;
-    }
-    testuNotices.value = [...testuNotices.value];
+    // Deferred: the route unmounts mid-frame with the tree locked, and the
+    // bell's ValueListenableBuilder cannot rebuild until the frame ends.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      for (final n in testuNotices.value) {
+        if (!_keepUnread.contains(n)) n.unread = false;
+      }
+      testuNotices.value = [...testuNotices.value];
+    });
     super.dispose();
   }
 
   /// Row actions: swipe right = toggle read/unread (row springs back),
   /// swipe left = delete. Standard mail-app grammar, no hidden gestures.
-  Widget _item(TestuTokens t, TestuNotice n, {bool showWhen = true}) =>
-      Dismissible(
+  Widget _item(TestuTokens t, TestuNotice n, {bool showWhen = true}) {
+    final target = testuNoticeTarget(n);
+    final tappable = target.tab != null || target.topicId != null;
+    return Dismissible(
         key: ObjectKey(n),
         // Reveal labels sit close to the row edge, colored by consequence:
         // orange = the unread-dot accent, red = destructive.
@@ -222,6 +455,8 @@ class _TestuNotificationsScreenState extends State<TestuNotificationsScreen> {
                   fontWeight: FontWeight.w600,
                   color: t.red)),
         ),
+        // ponytail: right-swipe toggles are local; the server was told "read"
+        // on open, so a row kept unread here reads as read after the next poll.
         confirmDismiss: (dir) async {
           if (dir == DismissDirection.endToStart) return true;
           // Right swipe: toggle, never dismiss the row.
@@ -231,12 +466,13 @@ class _TestuNotificationsScreenState extends State<TestuNotificationsScreen> {
           testuNotices.value = [...testuNotices.value];
           return false;
         },
-        onDismissed: (_) => testuNotices.value = [
-          for (final x in testuNotices.value)
-            if (!identical(x, n)) x
-        ],
-        child: _row(t, n, showWhen: showWhen),
+        onDismissed: (_) => dismissTestuNotice(n),
+        child: TestuPressable(
+          onTap: tappable ? () => _open(n) : null,
+          child: _row(t, n, showWhen: showWhen),
+        ),
       );
+  }
 
   Widget _row(TestuTokens t, TestuNotice n, {bool showWhen = true}) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 10),
@@ -285,21 +521,27 @@ class _TestuNotificationsScreenState extends State<TestuNotificationsScreen> {
   Widget _grouped(TestuTokens t, List<TestuNotice> items) {
     final today = [
       for (final n in items)
-        if (n.when == L('Now', 'Ahora')) n
+        if (n.isToday) n
     ];
     final earlier = [
       for (final n in items)
-        if (n.when != L('Now', 'Ahora')) n
+        if (!n.isToday) n
     ];
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 4, 18, 24),
       children: [
+        if (items.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: Text(L('Nothing here yet.', 'Nada por aquí todavía.'),
+                style: kMeta),
+          ),
         if (today.isNotEmpty) ...[
           TestuEyebrow(L('TODAY', 'HOY')),
           for (final n in today) _item(t, n, showWhen: false),
           const SizedBox(height: 14),
         ],
-        TestuEyebrow(L('EARLIER', 'ANTERIORES')),
+        if (earlier.isNotEmpty) TestuEyebrow(L('EARLIER', 'ANTERIORES')),
         for (final n in earlier) _item(t, n),
       ],
     );

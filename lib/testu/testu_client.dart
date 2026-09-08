@@ -96,12 +96,15 @@ const _minsur = TestuClient(
   tutor: 'IRIS',
   tutorAvatar: 'assets/img/iris.png',
   lang: 'es',
-  persona: 'Diego',
-  personaFull: 'Diego San Jorge',
+  // ponytail: neutral demo persona — the live build ships this const, so it
+  // must carry no real name or invented office (Part A string scan). The
+  // offline minsur demo (TESTU_LIVE=false) greets "Colaborador".
+  persona: 'Colaborador',
+  personaFull: 'Colaborador',
   personaAvatar: 'assets/img/p_diego.jpg',
   gender: 'm',
-  orgEn: 'Minsur · Lima',
-  orgEs: 'Minsur · Lima',
+  orgEn: 'Minsur',
+  orgEs: 'Minsur',
   // Section 1.1 of the DDHH tutorial (universality, inalienability, dignity).
   askEn: 'Explain again why human rights are inalienable',
   askEs: 'Explícame otra vez por qué los derechos humanos son inalienables',

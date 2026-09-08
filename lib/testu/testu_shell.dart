@@ -68,6 +68,7 @@ class _TestuShellState extends State<TestuShell> {
   void _onLang() => setState(() {});
 
   void _select(int i) {
+    if (i != _tab) refreshTestuNotices();
     TestuShell.currentTab.value = i;
     setState(() => _tab = i);
   }
@@ -212,14 +213,21 @@ class _TestuTodayScreenState extends State<TestuTodayScreen> {
     );
   }
 
+  // Certification (fake roster in its schedule sheet), the daily challenge
+  // and the risk note are prototype-only: nothing live feeds them, so a
+  // live build shows the hero alone.
   List<Widget> get _cards => [
-        _CertificationCard(scheduled: _scheduled, onSchedule: _openSchedule),
-        const SizedBox(height: 11),
-        const _DailyChallengeCard(),
-        const SizedBox(height: 12),
+        if (!testuLive) ...[
+          _CertificationCard(scheduled: _scheduled, onSchedule: _openSchedule),
+          const SizedBox(height: 11),
+          const _DailyChallengeCard(),
+          const SizedBox(height: 12),
+        ],
         _ContinueHero(promoted: _scheduled != null),
-        const SizedBox(height: 12),
-        const _RiskNote(),
+        if (!testuLive) ...[
+          const SizedBox(height: 12),
+          const _RiskNote(),
+        ],
       ];
 
   @override
@@ -305,10 +313,15 @@ class _TodayHeader extends StatelessWidget {
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    L('${_today()} · ${client.orgEn}',
-                        '${_today()} · ${client.orgEs}'),
-                    style: kCardBody,
+                  child: ValueListenableBuilder<String>(
+                    valueListenable: testuOrganization,
+                    builder: (_, org, _) => Text(
+                      testuLive
+                          ? (org.isEmpty ? _today() : '${_today()} · $org')
+                          : L('${_today()} · ${client.orgEn}',
+                              '${_today()} · ${client.orgEs}'),
+                      style: kCardBody,
+                    ),
                   ),
                 ),
               ),
@@ -326,13 +339,7 @@ class _TodayHeader extends StatelessWidget {
                     shape: BoxShape.circle,
                     border: Border.all(color: t.line2),
                   ),
-                  child: ValueListenableBuilder<String>(
-                    valueListenable: testuAvatar,
-                    builder: (_, src, child) => ClipOval(
-                      child: Image(
-                          image: testuAvatarImage(src), fit: BoxFit.cover),
-                    ),
-                  ),
+                  child: const TestuAvatar(size: 30),
                 ),
               ),
             ],
@@ -343,8 +350,8 @@ class _TodayHeader extends StatelessWidget {
               style: kH1,
               children: [
                 TextSpan(
-                    text: L('Good morning, ${client.persona}.\nHere’s what ',
-                        'Buenos días, ${client.persona}.\nEsto es lo que ')),
+                    text: L('Good morning, $testuFirstName.\nHere’s what ',
+                        'Buenos días, $testuFirstName.\nEsto es lo que ')),
                 TextSpan(text: client.tutor, style: TextStyle(color: t.orange)),
                 TextSpan(
                     text: L(' recommends today.', ' te recomienda hoy.')),
@@ -367,8 +374,12 @@ class _TodayHeader extends StatelessWidget {
                         '${client.tutor.toUpperCase()} · TU TUTOR')),
                     const SizedBox(height: 2),
                     Text(
-                      L('Two priorities today — one certification deadline, then reinforcement.',
-                          'Dos prioridades hoy — una certificación que vence, y después refuerzo.'),
+                      // Live: no plan is computed yet, so no invented one.
+                      testuLive
+                          ? L('Pick up where you left off.',
+                              'Retoma donde lo dejaste.')
+                          : L('Two priorities today — one certification deadline, then reinforcement.',
+                              'Dos prioridades hoy — una certificación que vence, y después refuerzo.'),
                       style: TextStyle(
                         fontFamily: 'Geist',
                         fontSize: 12,
@@ -490,8 +501,15 @@ class _ContinueHeroState extends State<_ContinueHero> {
       future: _head,
       builder: (context, snap) {
         final head = snap.data;
+        // Live with no topic yet: skeleton bars while the fetch is out, the
+        // Topics tab's empty copy after — never the prototype's 21 of 36.
+        final pending = testuLive && head == null;
+        final loading =
+            pending && snap.connectionState != ConnectionState.done;
         return TestuPressable(
-          onTap: () => Navigator.of(context).push(MaterialPageRoute(
+          onTap: pending
+              ? null
+              : () => Navigator.of(context).push(MaterialPageRoute(
               builder: (_) => head == null
                   ? const TestuTopicHomeScreen()
                   : TestuTopicHomeScreen(
@@ -508,16 +526,19 @@ class _ContinueHeroState extends State<_ContinueHero> {
               children: [
                 Positioned.fill(
                   child: head == null
-                      ? Image.asset(
-                          client.name == 'Minsur'
-                              ? 'assets/img/mine_hero.jpg'
-                              : 'assets/img/ramp.jpg',
-                          fit: BoxFit.cover,
-                          alignment: const Alignment(0, 0.44), // center 72%
-                        )
-                      : Image(
-                          image: testuImage(head.img),
-                          fit: BoxFit.cover,
+                      ? (testuLive
+                          // Live with no topic: the brand block, no mine.
+                          ? const TestuCover(title: '')
+                          : Image.asset(
+                              client.name == 'Minsur'
+                                  ? 'assets/img/mine_hero.jpg'
+                                  : 'assets/img/ramp.jpg',
+                              fit: BoxFit.cover,
+                              alignment: const Alignment(0, 0.44), // center 72%
+                            ))
+                      : TestuCover(
+                          image: head.img.isEmpty ? null : testuImage(head.img),
+                          title: head.title,
                           alignment: const Alignment(0, 0.44),
                         ),
                 ),
@@ -558,8 +579,14 @@ class _ContinueHeroState extends State<_ContinueHero> {
                             L('CONTINUE LEARN MODE', 'CONTINUAR MODO APRENDER'),
                             color: t.orange),
                         const SizedBox(height: 8),
+                        if (loading)
+                          const TestuSkeletonRow(thumb: 0, pill: false)
+                        else
                         Text(
-                          head?.title ??
+                          pending
+                              ? L('No topics assigned to you yet.',
+                                  'Aún no tienes temas asignados.')
+                              : head?.title ??
                               CL('Human Rights & Due Diligence',
                                   'Derechos Humanos y Debida Diligencia',
                                   'Ramp Safety & Aircraft Turnaround',
@@ -573,6 +600,7 @@ class _ContinueHeroState extends State<_ContinueHero> {
                             color: t.ink,
                           ),
                         ),
+                        if (!pending) ...[
                         const SizedBox(height: 8),
                         Row(
                           children: [
@@ -619,6 +647,7 @@ class _ContinueHeroState extends State<_ContinueHero> {
                                 : TestuButtonVariant.onimg,
                             onTap: () =>
                                 showTestuSession(context, topicId: head?.id)),
+                        ],
                       ],
                     ),
                   ),

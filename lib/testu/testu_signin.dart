@@ -2,10 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'testu_auth.dart';
 import 'testu_client.dart';
 import 'testu_i18n.dart';
+import 'testu_live.dart' show testuLive, testuPrivacyUrl;
 import 'testu_lock.dart';
 import 'testu_theme.dart';
 import 'testu_widgets.dart';
@@ -236,7 +238,9 @@ class _EmailStage extends StatelessWidget {
                   controller: s._email,
                   style: _fieldStyle,
                   decoration: testuFieldDecoration(t,
-                      hint: 'ana.ruiz@${client.wordmark}.com'),
+                      hint: testuLive
+                          ? 'correo@empresa.com'
+                          : 'ana.ruiz@${client.wordmark}.com'),
                   keyboardType: TextInputType.emailAddress,
                   autocorrect: false,
                   textInputAction: TextInputAction.done,
@@ -268,14 +272,30 @@ class _EmailStage extends StatelessWidget {
         ),
         const SizedBox(height: 14),
         Center(
-          child: Text(
-            L('By continuing you accept the terms of your organisation.',
-                'Al continuar aceptas los términos de tu organización.'),
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontFamily: 'Geist',
-              fontSize: 11,
-              color: t.faint,
+          child: GestureDetector(
+            // Tapping opens the GenAI Labs privacy policy once a build sets
+            // TESTU_PRIVACY_URL; with none the line is plain text.
+            onTap: testuPrivacyUrl.isEmpty
+                ? null
+                : () => launchUrl(Uri.parse(testuPrivacyUrl),
+                    mode: LaunchMode.externalApplication),
+            child: Text(
+              testuPrivacyUrl.isEmpty
+                  ? L('By continuing you accept the terms of your organisation.',
+                      'Al continuar aceptas los términos de tu organización.')
+                  : L('By continuing you accept the terms of your organisation '
+                          'and the privacy policy.',
+                      'Al continuar aceptas los términos de tu organización '
+                          'y la política de privacidad.'),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: 'Geist',
+                fontSize: 11,
+                color: t.faint,
+                decoration: testuPrivacyUrl.isEmpty
+                    ? null
+                    : TextDecoration.underline,
+              ),
             ),
           ),
         ),

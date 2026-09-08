@@ -27,6 +27,20 @@ String CL(String mEn, String mEs, String vEn, String vEs) =>
 /// setting when real accounts carry a gender field.
 final testuGender = ValueNotifier<String>(client.gender);
 
+// ponytail: mirrors testu_live.dart's `testuLive` const (same env key,
+// same default) instead of importing it — that file (via
+// testu_question_source.dart / testu_sully.dart) imports this one, so a
+// direct import would cycle.
+const _testuLiveGender =
+    bool.fromEnvironment('TESTU_LIVE', defaultValue: testuClientId == 'minsur');
+
 /// Gendered Spanish fragment: `G('seguro', 'segura')`. English is
 /// gender-neutral, so this only ever feeds the `es` side of `L()`.
-String G(String masc, String fem) => testuGender.value == 'f' ? fem : masc;
+///
+/// Live accounts carry no gender, so a live build writes the neutral slash
+/// form ("seguro/a"); every call site passes a pair that differs only in
+/// the last letter. ponytail: one line instead of 19 neutral rewrites;
+/// switch on a profile field when accounts get one.
+String G(String masc, String fem) => _testuLiveGender
+    ? '$masc/${fem.substring(fem.length - 1)}'
+    : (testuGender.value == 'f' ? fem : masc);

@@ -189,7 +189,7 @@ void main() {
 
   testWidgets('session', (tester) async {
     landscape(tester);
-    await pumpApp(tester, const TestuSessionScreen());
+    await pumpApp(tester, TestuSessionScreen(source: LocalQuestionSource()));
     await settleAndPrecache(tester, seconds: 8);
     await shot(tester, 'session');
     await tester.pump(const Duration(seconds: 8));
@@ -382,7 +382,7 @@ void main() {
 
     testWidgets('session', (tester) async {
       portrait(tester);
-      await pumpApp(tester, const TestuSessionScreen());
+      await pumpApp(tester, TestuSessionScreen(source: LocalQuestionSource()));
       await settleAndPrecache(tester, seconds: 8);
       await shot(tester, 'p_session');
       await tester.pump(const Duration(seconds: 8));

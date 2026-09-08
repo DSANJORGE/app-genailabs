@@ -3,12 +3,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'testu_auth.dart';
 import 'testu_i18n.dart';
 import 'testu_icons.dart';
+import 'testu_live.dart';
 import 'testu_lock.dart';
 import 'testu_theme.dart';
+import 'testu_usage.dart' show kTestuAppVersion;
 import 'testu_widgets.dart';
 import 'testu_client.dart';
 import 'testu_avatar_io.dart'
@@ -23,11 +26,19 @@ final testuAvatar = ValueNotifier<String>(_presetAvatars.first);
 /// these are the ones that can be removed again.
 final testuAvatarLibrary = ValueNotifier<List<String>>(const []);
 
+/// Value of [testuAvatar] meaning "no photo — draw the learner's initials".
+const kInitialsAvatar = 'initials';
+
 final _presetAvatars = [
-  client.personaAvatar,
-  'assets/img/p_ana.jpg',
-  'assets/img/p_laia.jpg',
-  'assets/img/p_miranda.jpg',
+  // Live: nobody's stock photo — initials until the learner adds a photo.
+  if (testuLive) kInitialsAvatar else client.personaAvatar,
+  // ponytail: the prototype faces are demo-only; a live user adds their
+  // own photo. Drops with the persona once profiles come from the server.
+  if (!testuLive) ...[
+    'assets/img/p_ana.jpg',
+    'assets/img/p_laia.jpg',
+    'assets/img/p_miranda.jpg',
+  ],
 ];
 
 const _kAvatarPref = 'testu_avatar';
@@ -37,7 +48,10 @@ Future<void> restoreTestuAvatar() async {
   testuAvatarLibrary.value = await avatarRestoreLibrary();
   final prefs = await SharedPreferences.getInstance();
   final saved = prefs.getString(_kAvatarPref);
-  if (saved != null && (saved.startsWith('assets/') || avatarExists(saved))) {
+  if (saved != null &&
+      (saved == kInitialsAvatar ||
+          (!testuLive && saved.startsWith('assets/')) ||
+          avatarExists(saved))) {
     testuAvatar.value = saved;
   }
 }
@@ -73,6 +87,44 @@ Future<void> _removeAvatar(String src) async {
 /// device, a data URL in the browser).
 ImageProvider testuAvatarImage(String src) =>
     src.startsWith('assets/') ? AssetImage(src) : avatarImage(src);
+
+/// The learner's picture wherever it appears: their chosen photo, or — live,
+/// before they add one — their initials on the brand colour.
+class TestuAvatar extends StatelessWidget {
+  const TestuAvatar({super.key, required this.size, this.src});
+
+  final double size;
+
+  /// A specific source (the picker's tiles); null follows [testuAvatar].
+  final String? src;
+
+  Widget _of(String s) => s == kInitialsAvatar
+      ? Container(
+          width: size,
+          height: size,
+          alignment: Alignment.center,
+          decoration:
+              BoxDecoration(shape: BoxShape.circle, color: client.brand),
+          child: Text(testuInitials,
+              style: TextStyle(
+                  fontFamily: 'Sora',
+                  fontWeight: FontWeight.w700,
+                  fontSize: size * 0.36,
+                  color: Colors.white)),
+        )
+      : ClipOval(
+          child: Image(
+              image: testuAvatarImage(s),
+              width: size,
+              height: size,
+              fit: BoxFit.cover));
+
+  @override
+  Widget build(BuildContext context) => src != null
+      ? _of(src!)
+      : ValueListenableBuilder<String>(
+          valueListenable: testuAvatar, builder: (_, s, _) => _of(s));
+}
 
 void showTestuProfile(BuildContext context) {
   Navigator.of(context).push(
@@ -138,13 +190,12 @@ class _TestuProfileScreenState extends State<TestuProfileScreen> {
               const _AvatarPicker(),
               const SizedBox(height: 10),
               _Note(
-                  L('${client.name} allows personal photos on internal apps. Your '
-                          'photo is visible to your team — never outside the '
-                          'company. Removing one here leaves it on your phone.',
-                      '${client.name} permite fotos personales en apps internas. Tu '
-                          'foto es visible para tu equipo — nunca fuera de la '
-                          'empresa. Quitar una aquí no la borra de tu '
-                          'teléfono.'),
+                  L('Your photo stays on this phone — TestU never uploads '
+                          'it. Removing one here leaves it in your camera '
+                          'roll.',
+                      'Tu foto se queda en este teléfono: TestU nunca la '
+                          'sube. Quitar una aquí no la borra de tu '
+                          'carrete.'),
                   t: t),
             ]),
             // No sensor in a browser tab; the card would only ever say
@@ -201,6 +252,12 @@ class _TestuProfileScreenState extends State<TestuProfileScreen> {
                     onChanged: (v) => setState(() => testuLang.value = v)),
               ),
             ]),
+            // ponytail: calendars and the whole notifications card (toggles,
+            // certification deadline, quiet hours) are prototype UI with
+            // nothing behind them — no push backend, no certification data;
+            // hidden in live builds, kept for the vueling demo. Show again
+            // when the backend grows an endpoint for each.
+            if (!testuLive)
             _ProfCard(children: [
               _H4(L('CALENDARS · ${client.tutor.toUpperCase()} USES THESE TO FIND QUIET SLOTS',
                   'CALENDARIOS · ${client.tutor.toUpperCase()} LOS USA PARA ENCONTRAR HUECOS')),
@@ -265,6 +322,7 @@ class _TestuProfileScreenState extends State<TestuProfileScreen> {
                       '${client.tutor} solo lee horas libres/ocupadas — nunca el contenido de los eventos.'),
                   t: t),
             ]),
+            if (!testuLive)
             _ProfCard(children: [
               _H4(L('NOTIFICATIONS', 'NOTIFICACIONES')),
               _SetRow(
@@ -308,13 +366,20 @@ class _TestuProfileScreenState extends State<TestuProfileScreen> {
             _ProfCard(children: [
               _H4(L('PRIVACY', 'PRIVACIDAD')),
               Text(
-                L('Your conversations with ${client.tutor} are private to you. Your '
-                        'managers see readiness signals and certification '
-                        'status — never your chats, never individual answers.',
-                    'Tus conversaciones con ${client.tutor} son privadas. Tus '
-                        'responsables ven señales de preparación y estado de '
-                        'certificación — nunca tus chats, nunca respuestas '
-                        'individuales.'),
+                testuLive
+                    ? L('Your conversations with ${client.tutor} are private to you. Your '
+                            'managers see readiness signals — never your chats, never '
+                            'individual answers.',
+                        'Tus conversaciones con ${client.tutor} son privadas. Tus '
+                            'responsables ven señales de preparación — nunca tus '
+                            'chats, nunca respuestas individuales.')
+                    : L('Your conversations with ${client.tutor} are private to you. Your '
+                            'managers see readiness signals and certification '
+                            'status — never your chats, never individual answers.',
+                        'Tus conversaciones con ${client.tutor} son privadas. Tus '
+                            'responsables ven señales de preparación y estado de '
+                            'certificación — nunca tus chats, nunca respuestas '
+                            'individuales.'),
                 style: TextStyle(
                   fontFamily: 'Geist',
                   fontSize: 11.5,
@@ -322,6 +387,20 @@ class _TestuProfileScreenState extends State<TestuProfileScreen> {
                   color: t.inkDim,
                 ),
               ),
+              if (testuPrivacyUrl.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                TestuPressable(
+                  onTap: () => launchUrl(Uri.parse(testuPrivacyUrl),
+                      mode: LaunchMode.externalApplication),
+                  child: _SetRow(
+                    title: L('Privacy policy', 'Política de privacidad'),
+                    sub: Uri.parse(testuPrivacyUrl).host,
+                    last: true,
+                    trailing: TestuIcon(TestuGlyph.chevronRight,
+                        size: 12, color: t.faint),
+                  ),
+                ),
+              ],
             ]),
             Padding(
               padding: const EdgeInsets.fromLTRB(18, 14, 18, 0),
@@ -338,7 +417,7 @@ class _TestuProfileScreenState extends State<TestuProfileScreen> {
                   ),
                   const SizedBox(height: 12),
                   TestuEyebrow(
-                    'TESTU LEARN · ${client.name.toUpperCase()} · DEMO BUILD',
+                    'TESTU LEARN · ${client.name.toUpperCase()} · ${testuLive ? kTestuAppVersion : 'DEMO BUILD'}',
                     color: t.faint,
                   ),
                 ],
@@ -393,23 +472,14 @@ class _Head extends StatelessWidget {
         children: [
           TestuIconButton(TestuGlyph.chevronLeft, onTap: onBack, size: 18),
           const SizedBox(width: 2),
-          ValueListenableBuilder<String>(
-            valueListenable: testuAvatar,
-            builder: (_, src, child) => ClipOval(
-              child: Image(
-                  image: testuAvatarImage(src),
-                  width: 62,
-                  height: 62,
-                  fit: BoxFit.cover),
-            ),
-          ),
+          const TestuAvatar(size: 62),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  client.personaFull,
+                  testuFullName,
                   style: TextStyle(
                     fontFamily: 'Sora',
                     fontWeight: FontWeight.w700,
@@ -419,18 +489,25 @@ class _Head extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 3),
-                Text(
-                  // No hand \n: the Spanish first half only just fits at
-                  // 390pt — let the text wrap where it needs to.
-                  CL('Operations · Safety Lead track · ${client.orgEn}',
-                      'Operaciones · Vía Líder de Seguridad · ${client.orgEs}',
-                      'Ramp Agent · Safety Lead track · ${client.orgEn}',
-                      'Agente de Rampa · Vía Líder de Seguridad · ${client.orgEs}'),
-                  style: TextStyle(
-                    fontFamily: 'Geist',
-                    fontSize: 11,
-                    height: 1.5,
-                    color: t.mut,
+                ValueListenableBuilder<String>(
+                  valueListenable: testuOrganization,
+                  builder: (_, org, _) => Text(
+                    // Live: what the account and the server say, nothing
+                    // more — email · organisation, or just the email.
+                    testuLive
+                        ? [testuEmail, org]
+                            .where((s) => s.isNotEmpty)
+                            .join(' · ')
+                        : CL('Operations · Safety Lead track · ${client.orgEn}',
+                            'Operaciones · Vía Líder de Seguridad · ${client.orgEs}',
+                            'Ramp Agent · Safety Lead track · ${client.orgEn}',
+                            'Agente de Rampa · Vía Líder de Seguridad · ${client.orgEs}'),
+                    style: TextStyle(
+                      fontFamily: 'Geist',
+                      fontSize: 11,
+                      height: 1.5,
+                      color: t.mut,
+                    ),
                   ),
                 ),
               ],
@@ -532,9 +609,7 @@ class _AvatarTile extends StatelessWidget {
                     color: selected ? t.primaryAction : Colors.transparent,
                   ),
                 ),
-                child: ClipOval(
-                    child:
-                        Image(image: testuAvatarImage(src), fit: BoxFit.cover)),
+                child: TestuAvatar(size: 42, src: src),
               ),
             ),
           ),

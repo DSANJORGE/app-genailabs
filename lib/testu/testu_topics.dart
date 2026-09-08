@@ -103,7 +103,8 @@ class TestuTopicsScreen extends StatelessWidget {
       testuLive ? const _LiveTopics() : _topicsBody(context, _topics);
 }
 
-/// Live variant: one fetch, hardcoded rows as the error/empty state.
+/// Live variant: one fetch; an honest empty state when it fails or has
+/// nothing — never the prototype rows.
 class _LiveTopics extends StatefulWidget {
   const _LiveTopics();
 
@@ -125,7 +126,12 @@ class _LiveTopicsState extends State<_LiveTopics> {
           final live = snap.data ?? const <TopicProgress>[];
           if (snap.hasError || live.isEmpty) {
             debugPrint('TestU: live topics unavailable (${snap.error})');
-            return _topicsBody(context, TestuTopicsScreen._topics);
+            return _topicsBody(context, const [],
+                empty: snap.hasError
+                    ? L('Could not load your topics. Try again later.',
+                        'No se pudieron cargar tus temas. Inténtalo más tarde.')
+                    : L('No topics assigned to you yet.',
+                        'Aún no tienes temas asignados.'));
           }
           return _topicsBody(context, [
             for (var i = 0; i < live.length; i++) _mapTopic(live[i], i),
@@ -134,15 +140,18 @@ class _LiveTopicsState extends State<_LiveTopics> {
       );
 }
 
-/// `Topic` → the row record `_TopicRow` already renders. The server's
-/// thumbnail when it has one, else a bundled picture.
-const _imgs = ['ramp.jpg', 'chocks.jpg', 'radio.jpg', 'marshal.jpg',
-    'cargo.jpg', 'winter.jpg', 'fire.jpg'];
+/// `img` is a bundled file name for prototype rows, an absolute URL for
+/// live ones, and '' for a live topic with no picture (no cover).
+ImageProvider? _topicImage(String img) => img.isEmpty
+    ? null
+    : testuImage(img.startsWith('http') ? img : 'assets/img/$img');
 
-/// `img` is a bundled file name for prototype rows and an absolute URL for
-/// live ones.
-ImageProvider _topicImage(String img) =>
-    testuImage(img.startsWith('http') ? img : 'assets/img/$img');
+/// A live [Topic]'s big cover URL: the server hands the row list the
+/// 200x200 rendition; the hero/big covers want the 3000x3000 the same
+/// generated path serves. Null when the topic has no picture.
+String? _liveCoverUrl(Topic? t) => t == null || t.thumbnail.isEmpty
+    ? null
+    : liveAssetUrl(t.thumbnail.replaceFirst('image200x200', 'image3000x3000'));
 
 /// The Today hero's slice of a live topic: cover URL plus the fields it
 /// needs to open the topic's Home. Public so [testu_shell] can render the
@@ -244,12 +253,7 @@ _Topic _mapTopic(TopicProgress p, int i) {
   final t = p.topic;
   final m = masteryOf(p.mastered, p.answered);
   return (
-    // The server hands out the 200x200 rendition; the hero wants the large
-    // one, which the same generated path serves.
-    img: t.thumbnail.isEmpty
-        ? _imgs[i % _imgs.length]
-        : liveAssetUrl(
-            t.thumbnail.replaceFirst('image200x200', 'image3000x3000')),
+    img: _liveCoverUrl(t) ?? '',
     title: t.title,
     sub: p.sections.isEmpty
         ? L('No content yet', 'Sin contenido todavía')
@@ -267,7 +271,7 @@ _Topic _mapTopic(TopicProgress p, int i) {
 }
 
 Widget _topicsBody(BuildContext context, List<_Topic> topics,
-    {bool loading = false}) {
+    {bool loading = false, String? empty}) {
     final t = TestuTokens.of(context);
     // Pinned header; only the topic list scrolls (user-requested cutoff at
     // the header's bottom edge).
@@ -282,15 +286,18 @@ Widget _topicsBody(BuildContext context, List<_Topic> topics,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(L('Your topics', 'Tus temas'), style: kH1),
-                const SizedBox(height: 4),
-                Text(
-                  CL('Operations, Safety Lead · 6 required for your role · 1 seasonal',
-                      'Operaciones, Líder de Seguridad · 6 obligatorios para tu rol · 1 estacional',
-                      'Ramp Agent, Safety Lead · 6 required for your role · 1 seasonal',
-                      'Agente de Rampa, Líder de Seguridad · 6 obligatorios para tu rol · 1 estacional'),
-                  style: TextStyle(
-                      fontFamily: 'Geist', fontSize: 11.5, color: t.mut),
-                ),
+                // The role line is prototype copy; nothing live feeds it.
+                if (!testuLive) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    CL('Operations, Safety Lead · 6 required for your role · 1 seasonal',
+                        'Operaciones, Líder de Seguridad · 6 obligatorios para tu rol · 1 estacional',
+                        'Ramp Agent, Safety Lead · 6 required for your role · 1 seasonal',
+                        'Agente de Rampa, Líder de Seguridad · 6 obligatorios para tu rol · 1 estacional'),
+                    style: TextStyle(
+                        fontFamily: 'Geist', fontSize: 11.5, color: t.mut),
+                  ),
+                ],
               ],
             ),
           ),
@@ -302,6 +309,11 @@ Widget _topicsBody(BuildContext context, List<_Topic> topics,
                 // Live rows on their way: the list's shape, not a blank.
                 if (loading)
                   for (var i = 0; i < 5; i++) const TestuSkeletonRow(),
+                if (empty != null)
+                  Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Text(empty, style: kMeta),
+                  ),
                 for (final topic in topics)
                   _TopicRow(
                     topic: topic,
@@ -356,8 +368,8 @@ class _TopicRow extends StatelessWidget {
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(11),
-                child: Image(
-                    image: _topicImage(topic.img), fit: BoxFit.cover),
+                child: TestuCover(
+                    image: _topicImage(topic.img), title: topic.title),
               ),
             ),
             const SizedBox(width: 13),
@@ -396,26 +408,32 @@ class TestuTopicHomeScreen extends StatefulWidget {
     super.key,
     this.topicId,
     this.title,
-    this.img = 'ramp.jpg',
+    this.img,
     this.pill,
     this.pillColor,
     this.pillBorder,
+    this.initialTab = 0,
+    this.highlightMessageId,
   });
 
   /// Live topic the session CTAs draw questions from; null → first topic.
   final String? topicId;
-  final String? title; // null → the prototype's Ramp Safety title
-  final String img;
+  final String? title; // null → live topic's title, else the prototype's
+  final String? img; // null → live topic's cover, else the prototype's
   final String? pill; // null → the prototype's pill
   final Color? pillColor; // null → gold, the prototype's pill tone
   final Color? pillBorder;
+
+  /// Notification tap: open on the review tab (3) at that comment.
+  final int initialTab;
+  final String? highlightMessageId;
 
   @override
   State<TestuTopicHomeScreen> createState() => _TestuTopicHomeScreenState();
 }
 
 class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
-  int _tab = 0;
+  late int _tab = widget.initialTab;
   final Set<int> _openCmp = {};
   final Set<int> _openSub = {};
   late final List<TestuComment> _reviews = _mockReviews();
@@ -480,7 +498,8 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
       // Hero + tabs stay pinned; only the active pane scrolls under the
       // tab bar's hairline (the "cutoff line").
       body: Column(children: [
-        _TopicHero(meta: _meta, mastery: _live == null ? null : _mastery),
+        _TopicHero(
+            meta: _meta, mastery: _live == null ? null : _mastery, live: _live),
         // Tabs — instant pane swap, like the prototype.
         Container(
             // Full width so the tab row hugs the left edge — shrink-wrapped
@@ -542,7 +561,47 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
 
   // ---- Overview ----
 
-  List<Widget> _overview(TestuTokens t) => [
+  List<Widget> _overview(TestuTokens t) {
+    // Same shape as _subtopics: skeletons while the record is on its way,
+    // honest empty copy after — never the prototype's numbers.
+    if (testuLive && _live == null) {
+      if (!_loaded) {
+        return [
+          for (var i = 0; i < 3; i++)
+            const TestuSkeletonRow(thumb: 0, pill: false),
+        ];
+      }
+      return [
+        Padding(
+          padding: const EdgeInsets.all(18),
+          child: Text(L('Nothing here yet.', 'Nada por aquí todavía.'),
+              style: kMeta),
+        ),
+      ];
+    }
+    // ponytail: required level, retention, competencies and certificate are
+    // prototype-only until the server has them; live shows mastery +
+    // progress in one row.
+    final masteryFact = _live == null
+        ? _Fact(L('CURRENT MASTERY', 'DOMINIO ACTUAL'),
+            L('Competent · Strong', 'Competente · Sólido'),
+            sub: L('Review soon', 'Repasar pronto'), valueColor: t.gold)
+        : _Fact(L('CURRENT MASTERY', 'DOMINIO ACTUAL'), _mastery.label,
+            sub: _mastery.status.isEmpty
+                ? L('Answer to find out', 'Responde para saberlo')
+                : _mastery.status,
+            valueColor: _mastery.color);
+    final progressFact = _live == null
+        ? _Fact(L('PROGRESS', 'PROGRESO'), L('21 of 36', '21 de 36'),
+            sub: L('15 questions left in Learn Mode',
+                '15 preguntas restantes en Modo Aprender'))
+        : _Fact(L('PROGRESS', 'PROGRESO'),
+            L('${_live!.answered} of ${_live!.questions}',
+                '${_live!.answered} de ${_live!.questions}'),
+            sub: L(
+                '${_live!.questions - _live!.answered} questions left in Learn Mode',
+                '${_live!.questions - _live!.answered} preguntas restantes en Modo Aprender'));
+    return [
         Padding(
           padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
           // Readable measure in landscape — full-width 13px prose runs
@@ -590,46 +649,26 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Expanded(
-                        child: _live == null
-                            ? _Fact(L('CURRENT MASTERY', 'DOMINIO ACTUAL'),
-                                L('Competent · Strong', 'Competente · Sólido'),
-                                sub: L('Review soon', 'Repasar pronto'),
-                                valueColor: t.gold)
-                            : _Fact(L('CURRENT MASTERY', 'DOMINIO ACTUAL'),
-                                _mastery.label,
-                                sub: _mastery.status.isEmpty
-                                    ? L('Answer to find out',
-                                        'Responde para saberlo')
-                                    : _mastery.status,
-                                valueColor: _mastery.color)),
+                    Expanded(child: masteryFact),
                     const SizedBox(width: 9),
                     Expanded(
-                        child: _Fact(L('REQUIRED LEVEL', 'NIVEL REQUERIDO'),
-                            L('Expert', 'Experto'),
-                            sub: L('Required for your Safety Lead assignment',
-                                'Requerido para tu puesto de Líder de Seguridad'),
-                            subUnderline: true)),
+                        child: testuLive
+                            ? progressFact
+                            : _Fact(L('REQUIRED LEVEL', 'NIVEL REQUERIDO'),
+                                L('Expert', 'Experto'),
+                                sub: L('Required for your Safety Lead assignment',
+                                    'Requerido para tu puesto de Líder de Seguridad'),
+                                subUnderline: true)),
                   ],
                 ),
               ),
+              if (!testuLive) ...[
               const SizedBox(height: 9),
               IntrinsicHeight(
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Expanded(
-                        child: _live == null
-                            ? _Fact(L('PROGRESS', 'PROGRESO'),
-                                L('21 of 36', '21 de 36'),
-                                sub: L('15 questions left in Learn Mode',
-                                    '15 preguntas restantes en Modo Aprender'))
-                            : _Fact(L('PROGRESS', 'PROGRESO'),
-                                L('${_live!.answered} of ${_live!.questions}',
-                                    '${_live!.answered} de ${_live!.questions}'),
-                                sub: L(
-                                    '${_live!.questions - _live!.answered} questions left in Learn Mode',
-                                    '${_live!.questions - _live!.answered} preguntas restantes en Modo Aprender'))),
+                    Expanded(child: progressFact),
                     const SizedBox(width: 9),
                     Expanded(
                         child: _Fact(
@@ -641,9 +680,11 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
                   ],
                 ),
               ),
+              ],
             ],
           ),
         ),
+        if (!testuLive) ...[
         Padding(
           padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
           child: _CompetenciesCard(
@@ -666,6 +707,7 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
                         fontFamily: 'Geist', fontSize: 12, color: t.mut))),
           ]),
         ),
+        ],
         Padding(
           padding: const EdgeInsets.fromLTRB(18, 18, 18, 0),
           child: TestuButton(
@@ -673,12 +715,14 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
               variant: TestuButtonVariant.primary,
               onTap: _open),
         ),
+        if (!testuLive)
         Padding(
           padding: const EdgeInsets.fromLTRB(18, 10, 18, 0),
           child: TestuButton(L('Review progress', 'Ver progreso'),
               onTap: _nothing),
         ),
       ];
+  }
 
   // ---- Subtopics ----
 
@@ -866,7 +910,6 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
                             '${d.chapters.length} capítulos · video de referencia')
                         : L('${d.pages} pages · reference document',
                             '${d.pages} páginas · documento de referencia'),
-                    required: true,
                     onTap: () => d.isVideo
                         ? showTestuVideo(context, d)
                         : showTestuPdf(context, doc: d)),
@@ -914,18 +957,38 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
 
   /// The topic's review tab IS the house thread (full-alignment rule:
   /// vote, reply, report work here exactly like the question conversation).
-  List<Widget> _review(TestuTokens t) => [
+  /// Live it is the tutorial's `t-<id>` channel; the demo keeps its sample.
+  List<Widget> _review(TestuTokens t) {
+    final tutorialId = _live?.tutorialId;
+    if (testuLive && tutorialId == null) {
+      return [
         Padding(
           padding: const EdgeInsets.fromLTRB(18, 14, 18, 0),
-          child: TestuThread(
-            comments: _reviews,
-            composerHint: L('Add a review or comment…',
-                'Añade una reseña o comentario…'),
-            reportEyebrow: L('REVIEWS · REPORT', 'RESEÑAS · REPORTAR'),
-            reportTitle: L('Report this review', 'Reportar esta reseña'),
-          ),
+          child: Text(
+              _loaded
+                  ? L('This topic has no tutorial yet, so no reviews.',
+                      'Este tema aún no tiene tutorial, así que no hay reseñas.')
+                  : L('Loading…', 'Cargando…'),
+              style: TextStyle(fontFamily: 'Geist', fontSize: 12.5, color: t.mut)),
         ),
       ];
+    }
+    return [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(18, 14, 18, 0),
+        child: TestuThread(
+          key: ValueKey('review-${tutorialId ?? 'demo'}'),
+          comments: testuLive ? null : _reviews,
+          channel: testuLive ? 't-$tutorialId' : null,
+          composerHint: L('Add a review or comment…',
+              'Añade una reseña o comentario…'),
+          reportEyebrow: L('REVIEWS · REPORT', 'RESEÑAS · REPORTAR'),
+          reportTitle: L('Report this review', 'Reportar esta reseña'),
+          highlightMessageId: widget.highlightMessageId,
+        ),
+      ),
+    ];
+  }
 }
 
 /// Sample reviews; Minsur reads them in the DDHH context, Vueling in Ramp
@@ -964,7 +1027,7 @@ List<TestuComment> _mockReviews() {
 }
 
 class _TopicHero extends StatelessWidget {
-  const _TopicHero({required this.meta, this.mastery});
+  const _TopicHero({required this.meta, this.mastery, this.live});
 
   /// "With IRIS · n questions · m subtopics" line under the title.
   final String meta;
@@ -973,11 +1036,27 @@ class _TopicHero extends StatelessWidget {
   /// row that opened this screen is stale by then.
   final TestuMastery? mastery;
 
+  /// The screen's own load (e.g. a notification tap, which pushes the
+  /// screen with only a topicId — no title/img): fills in what the
+  /// constructor didn't get, once it comes back.
+  final TopicProgress? live;
+
   @override
   Widget build(BuildContext context) {
-    // Hero copy comes from the Topic Home that owns it.
+    // Hero copy comes from the Topic Home that owns it, or — when it wasn't
+    // given any (a notification tap knows only the topicId) — from the live
+    // load, falling back to the prototype's copy same as before.
     final home =
         context.findAncestorWidgetOfExactType<TestuTopicHomeScreen>()!;
+    final title = home.title ??
+        live?.topic.title ??
+        CL('Human Rights & Due Diligence', 'Derechos Humanos y Debida Diligencia',
+            'Ramp Safety & Aircraft Turnaround', 'Seguridad en Rampa y Turnaround');
+    // A live topic with no thumbnail shows the flat brand block, not the
+    // demo's ramp photo (no-stock-photo rule) — the fallback stays
+    // 'ramp.jpg' only when there is no live topic at all.
+    final img = home.img ??
+        (live != null ? (_liveCoverUrl(live!.topic) ?? '') : 'ramp.jpg');
     final t = TestuTokens.of(context);
     final topPad = MediaQuery.paddingOf(context).top;
     return SizedBox(
@@ -988,8 +1067,9 @@ class _TopicHero extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          Image(image: _topicImage(home.img),
-              fit: BoxFit.cover,
+          TestuCover(
+              image: _topicImage(img),
+              title: title,
               alignment: const Alignment(0, 0.24)), // center 62%
           // The hero height is pinned, so the pill/title/meta stack grows
           // upward with Dynamic Type. Past XXL it climbed clear of the
@@ -1037,13 +1117,7 @@ class _TopicHero extends StatelessWidget {
                     borderColor:
                         mastery?.border ?? home.pillBorder ?? t.goldBorder),
                 const SizedBox(height: 12),
-                Text(
-                    home.title ??
-                        CL('Human Rights & Due Diligence',
-                            'Derechos Humanos y Debida Diligencia',
-                            'Ramp Safety & Aircraft Turnaround',
-                            'Seguridad en Rampa y Turnaround'),
-                    style: kH1.copyWith(height: 1.2)),
+                Text(title, style: kH1.copyWith(height: 1.2)),
                 const SizedBox(height: 8),
                 Row(children: [
                   ClipOval(
@@ -1564,13 +1638,16 @@ class _ResRow extends StatelessWidget {
       {required this.icon,
       required this.title,
       required this.sub,
-      required this.required,
+      this.required,
       required this.onTap});
 
   final String icon;
   final String title;
   final String sub;
-  final bool required;
+
+  /// true = REQUIRED, false = OPTIONAL, null = the source has no such
+  /// flag, so no badge (the server does not send one yet).
+  final bool? required;
   final VoidCallback onTap;
 
   @override
@@ -1597,23 +1674,28 @@ class _ResRow extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(width: 10),
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(vertical: 2, horizontal: 7),
-              decoration: BoxDecoration(
-                border: Border.all(
-                    color: required ? t.amberBorder : t.line2),
-                borderRadius: BorderRadius.circular(99),
+            if (required != null) ...[
+              const SizedBox(width: 10),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(vertical: 2, horizontal: 7),
+                decoration: BoxDecoration(
+                  border: Border.all(
+                      color: required! ? t.amberBorder : t.line2),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+                child: Text(
+                    required!
+                        ? L('REQUIRED', 'OBLIGATORIO')
+                        : L('OPTIONAL', 'OPCIONAL'),
+                    style: TextStyle(
+                        fontFamily: 'GeistMono',
+                        fontWeight: FontWeight.w500,
+                        fontSize: 8.5,
+                        letterSpacing: 0.85,
+                        color: required! ? t.amber : t.mut)),
               ),
-              child: Text(required ? L('REQUIRED', 'OBLIGATORIO') : L('OPTIONAL', 'OPCIONAL'),
-                  style: TextStyle(
-                      fontFamily: 'GeistMono',
-                      fontWeight: FontWeight.w500,
-                      fontSize: 8.5,
-                      letterSpacing: 0.85,
-                      color: required ? t.amber : t.mut)),
-            ),
+            ],
           ]),
         ),
       ),

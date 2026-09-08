@@ -14,10 +14,12 @@ import 'testu_notifications.dart';
 import 'testu_question_source.dart';
 import 'testu_report_sheet.dart';
 import 'testu_social.dart';
+import 'testu_social_api.dart';
 import 'testu_session_engine.dart';
 import 'testu_shell.dart';
 import 'testu_sully.dart';
 import 'testu_theme.dart';
+import 'testu_topics.dart' show masteryOf;
 import 'testu_usage.dart';
 import 'testu_widgets.dart';
 import 'testu_client.dart';
@@ -69,10 +71,26 @@ const _bold = TextStyle(fontWeight: FontWeight.w700);
 /// Learn Mode session — a chat with Sully. Confidence tap IS the submit;
 /// the debrief follows the last question.
 class TestuSessionScreen extends StatefulWidget {
-  const TestuSessionScreen({super.key, this.topicId, this.sectionId});
+  const TestuSessionScreen(
+      {super.key,
+      this.topicId,
+      this.sectionId,
+      this.questionId,
+      this.highlightMessageId,
+      this.source});
 
   final String? topicId;
   final String? sectionId;
+
+  /// From a notification: start on this question and, once it is answered,
+  /// open its thread on [highlightMessageId].
+  final String? questionId;
+  final String? highlightMessageId;
+
+  /// Where the questions come from; null = the build's default (live server
+  /// for minsur, the bundled demo for vueling). Tests pass
+  /// [LocalQuestionSource] explicitly — a live build never falls back to it.
+  final TestuQuestionSource? source;
 
   @override
   State<TestuSessionScreen> createState() => _TestuSessionScreenState();
@@ -91,6 +109,10 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
   Timer? _sullyTimeout;
   bool _waitingSully = false;
 
+  /// Set when the 90 s line was shown: the next tutor message on the channel
+  /// still lands as the late answer instead of being dropped.
+  bool _lateSully = false;
+
   /// Keys on each question's framing bubble, and the one the auto-scroll is
   /// currently not allowed to push above the viewport top.
   final _anchors = <int, GlobalKey>{};
@@ -102,13 +124,17 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
   bool _stick = true;
   static const _stickSlack = 80.0;
 
-  /// Adapter picked by the compile-time flag; falls back to local if the
-  /// live load fails, so it is not final.
-  late TestuQuestionSource _source = testuLive
-      ? EmeQuestionSource(topicId: widget.topicId, sectionId: widget.sectionId)
-      : LocalQuestionSource();
+  /// Adapter picked by the compile-time flag (or handed in by a test).
+  late final TestuQuestionSource _source = widget.source ??
+      (testuLive
+          ? EmeQuestionSource(
+              topicId: widget.topicId,
+              sectionId: widget.sectionId,
+              questionId: widget.questionId)
+          : LocalQuestionSource());
   List<TestuQ> _qs = const [];
   bool _loading = true;
+  bool _error = false;
 
   @override
   void initState() {
@@ -134,9 +160,9 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
     _boot();
   }
 
-  /// Load the batch, then start the engine. A live source that throws or
-  /// comes back empty falls back to the offline demo — that is the error
-  /// state.
+  /// Load the batch, then start the engine. A source that throws or comes
+  /// back empty is the error state — never the bundled demo standing in
+  /// for the live server.
   Future<void> _boot() async {
     var qs = const <TestuQ>[];
     try {
@@ -144,17 +170,21 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
     } catch (e) {
       debugPrint('TestU: question load failed ($e)');
     }
-    if (qs.isEmpty && _source is! LocalQuestionSource) {
-      debugPrint('TestU: live questions unavailable — falling back to local');
-      _source = LocalQuestionSource();
-      qs = await _source.load();
-    }
     if (!mounted) return;
     setState(() {
       _qs = qs;
       _loading = false;
+      _error = qs.isEmpty;
     });
-    _controller.start();
+    if (!_error) _controller.start();
+  }
+
+  void _retry() {
+    setState(() {
+      _loading = true;
+      _error = false;
+    });
+    _boot();
   }
 
   @override
@@ -273,8 +303,10 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
       void sullySays(String s) {
         // Only the reply to an open question: the server also posts its
         // own feedback after `chat_tutor_answer`, and the local verdict
-        // already covers that.
-        if (!mounted || !_waitingSully) return;
+        // already covers that. After the 90 s line the next message still
+        // counts (late replies append).
+        if (!mounted || !(_waitingSully || _lateSully)) return;
+        _lateSully = false;
         _sullyTimeout?.cancel();
         setState(() {
           _waitingSully = false;
@@ -284,20 +316,31 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
       }
 
       _sullySub ??= sullyReplies().listen(sullySays);
-      setState(() => _waitingSully = true);
+      setState(() {
+        _waitingSully = true;
+        _lateSully = false;
+      });
       // The server acknowledges the follow-up before the tutor answers, and
       // the answer may never come (minsur, 2026-09-02) — don't spin forever.
       _sullyTimeout?.cancel();
       _sullyTimeout = Timer(const Duration(seconds: 90), () {
-        if (_waitingSully) sullySays(sullySlowReply());
+        if (!_waitingSully) return;
+        sullySays(sullySlowReply());
+        // ponytail: whatever the tutor posts next is taken as the late
+        // answer; match on a reply id when the server sends one.
+        _lateSully = true;
       });
       askSully(q, text, attempt: _attemptFor(q))
-          .catchError((_) => sullySays(sullyUnavailable()));
+          .catchError((Object e) => sullySays(sullyFailure(e)));
     } else {
+      // The canned demo lines belong to the bundled questions only; a live
+      // question that cannot reach the tutor says so instead.
       setState(() => _chat.add((
         _controller.transcript.length,
         false,
-        offlineAnswer ?? sullyDemoReply()
+        _source is LocalQuestionSource
+            ? offlineAnswer ?? sullyDemoReply()
+            : sullyUnavailable()
       )));
       _scrollDown();
     }
@@ -314,7 +357,9 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
     final (_, user, text) = c;
     if (!user) {
       // Live reply: markdown rendered, citation block, source link.
-      return _Rise(child: SullyMessage.reply(text, bottomPadding: 16));
+      return _Rise(
+          child: SullyMessage.reply(text,
+              bottomPadding: 16, onFollowUp: (s) => _sendChat(s)));
     }
     // The shared sent-message bubble — same as the tutor tab and sheets.
     return _Rise(child: TestuYouMsg(text: text));
@@ -554,6 +599,10 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
       onGrew: _scrollDown,
       extra: _VerdictExtras(
         q: q,
+        highlightMessageId:
+            q.questionId != null && q.questionId == widget.questionId
+                ? widget.highlightMessageId
+                : null,
         onAsk: (text, offline) =>
             _sendChat(text, q: q, offlineAnswer: offline),
         onFlag: (reason, note) =>
@@ -572,16 +621,24 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
       spans: [
         TextSpan(
             text: L(
-                'Are you sure you want to stop here? You have only $qword to go in this block — finishing it is what moves ',
-                '¿${G('Seguro', 'Segura')} que quieres parar aquí? Te quedan solo $qword en este bloque — terminarlo es lo que saca ')),
+                'Are you sure you want to stop here? You have only $qword to go in this block — finishing it is what moves ${testuLive ? 'your mastery of ' : ''}',
+                '¿${G('Seguro', 'Segura')} que quieres parar aquí? Te quedan solo $qword en este bloque — terminarlo es lo que ${testuLive ? 'hace avanzar tu dominio en ' : 'saca '}')),
+        // ponytail: live names the topic in play; the "Review soon" band is
+        // the demo's script until the backend keeps a per-topic status.
         TextSpan(
-            text: CL('Due diligence', 'Debida diligencia',
-                'Aircraft arrival & chocking', 'Llegada y calzado'),
+            text: testuLive
+                ? _source.topic
+                : CL('Due diligence', 'Debida diligencia',
+                    'Aircraft arrival & chocking', 'Llegada y calzado'),
             style: kItalic),
         TextSpan(
-            text: L(
-                ' out of "Review soon". Stopping now records a partial session and slows your mastery.',
-                ' de «Repasar pronto». Parar ahora registra una sesión parcial y frena tu dominio.')),
+            text: testuLive
+                ? L(
+                    ' forward. Stopping now records a partial session and slows your mastery.',
+                    '. Parar ahora registra una sesión parcial y frena tu dominio.')
+                : L(
+                    ' out of "Review soon". Stopping now records a partial session and slows your mastery.',
+                    ' de «Repasar pronto». Parar ahora registra una sesión parcial y frena tu dominio.')),
       ],
       extra: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -626,8 +683,10 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
                     children: [
                       Expanded(
                         child: TestuEyebrow(
-                          '${L('LEARN MODE', 'MODO APRENDER')} · '
-                          '${_source.topic.toUpperCase()}',
+                          // No topic name on the error screen: the source's
+                          // fallback title is the prototype's.
+                          '${L('LEARN MODE', 'MODO APRENDER')}'
+                          '${_error ? '' : ' · ${_source.topic.toUpperCase()}'}',
                           fontSize: 10.5,
                           letterSpacing: 1.47, // +0.14em
                         ),
@@ -693,6 +752,23 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
                             key: ValueKey('sully-loading'),
                             spans: [],
                             delay: 600000),
+                      // ponytail: the error state is Sully saying so, with a
+                      // retry chip — no dedicated error widget exists yet.
+                      if (_error)
+                        _SullyBubble(
+                          key: const ValueKey('sully-error'),
+                          spans: [
+                            TextSpan(
+                                text: L(
+                                    'I couldn’t load your questions right now. Check your connection and try again.',
+                                    'No pude cargar tus preguntas ahora mismo. Revisa tu conexión e inténtalo de nuevo.')),
+                          ],
+                          extra: Padding(
+                            padding: const EdgeInsets.only(top: 12),
+                            child: TestuChip(L('Try again', 'Reintentar'),
+                                primary: true, onTap: _retry),
+                          ),
+                        ),
                       for (final (i, e) in _controller.transcript.indexed) ...[
                         _entryWidget(e),
                         for (final c in _chat)
@@ -862,15 +938,18 @@ class _FakePlayer extends StatelessWidget {
                 ],
               ),
             ),
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 11),
-              color: t.card2,
-              child: Text(
-                L('Turnaround groundhandling, Frankfurt — demo footage · CC BY-SA Lufthansa Cargo',
-                    'Handling de turnaround, Fráncfort — metraje de demo · CC BY-SA Lufthansa Cargo'),
-                style: kCaption,
+            // The demo clip's credit line; a live build has no demo footage.
+            if (!testuLive)
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(vertical: 7, horizontal: 11),
+                color: t.card2,
+                child: Text(
+                  L('Turnaround groundhandling, Frankfurt — demo footage · CC BY-SA Lufthansa Cargo',
+                      'Handling de turnaround, Fráncfort — metraje de demo · CC BY-SA Lufthansa Cargo'),
+                  style: kCaption,
+                ),
               ),
-            ),
           ],
         ),
       ),
@@ -1231,16 +1310,23 @@ class _Option extends StatelessWidget {
 /// verdict — everything that makes the answer explainable.
 class _VerdictExtras extends StatefulWidget {
   const _VerdictExtras(
-      {required this.q, required this.onAsk, required this.onFlag});
+      {required this.q,
+      required this.onAsk,
+      required this.onFlag,
+      this.highlightMessageId});
 
   final TestuQ q;
+
+  /// Comment the thread opens on (notification tap); null otherwise.
+  final String? highlightMessageId;
 
   /// Chip tapped: send [question] into the chat as the user; the second
   /// argument is the canned answer used when the session is offline.
   final void Function(String question, String offlineAnswer) onAsk;
 
-  /// Report dialog confirmed: hand (reason, optional note) to the source.
-  final void Function(String reason, String? note) onFlag;
+  /// Report sheet confirmed: hand (reason id, optional note) to the source.
+  /// Resolves when the server has it (live) or at once (demo).
+  final Future<void> Function(String reason, String? note) onFlag;
 
   @override
   State<_VerdictExtras> createState() => _VerdictExtrasState();
@@ -1248,8 +1334,11 @@ class _VerdictExtras extends StatefulWidget {
 
 class _VerdictExtrasState extends State<_VerdictExtras> {
   // "Was this helpful" — same reaction module as threads (app-wide rule).
-  // ponytail: base count is demo data until the backend returns real ones.
-  final _qReacts = <TestuReaction, int>{TestuReaction.like: 12};
+  // ponytail: base count is demo data; live starts at zero until the
+  // backend returns real ones.
+  final _qReacts = <TestuReaction, int>{
+    if (!testuLive) TestuReaction.like: 12
+  };
   TestuReaction? _qMine;
   bool _flagged = false;
   bool _wrongs = false; // "why are the others wrong?" chip consumed
@@ -1260,36 +1349,38 @@ class _VerdictExtrasState extends State<_VerdictExtras> {
     setState(fn);
   }
 
-  /// Report-question dialog. UI is final; the send lands in
-  /// [TestuQuestionSource.reportFlag] (no-op until the backend exists) and
-  /// leaves a "review pending" notice on Today.
-  /// One report surface app-wide: the shared sheet (see
-  /// testu_report_sheet.dart). Send lands in [TestuQuestionSource.reportFlag]
-  /// (no-op until the backend exists) and leaves an informative notice
-  /// behind the Today bell.
+  /// One report surface app-wide: the shared sheet (testu_report_sheet.dart).
+  /// Live, the send lands in services/testu/social/flag.json through
+  /// [TestuQuestionSource.reportFlag]; the demo records nothing and says so.
   void _openFlagDialog() {
     HapticFeedback.selectionClick();
+    final labels = [for (final r in testuFlagReasons) flagReasonLabel(r)];
     showTestuReportSheet(
       context,
       eyebrow: L('QUESTION · REPORT', 'PREGUNTA · REPORTAR'),
       title: L('Report this question', 'Reportar esta pregunta'),
-      subtitle: L(
-          'It goes to the content team for review. You\u2019ll hear back in Notifications.',
-          'Llega al equipo de contenido para su revisi\u00f3n. Te avisaremos en Notificaciones.'),
-      reasons: [
-        L('Incorrect or outdated', 'Incorrecta o desactualizada'),
-        L('Confusing or badly worded', 'Confusa o mal redactada'),
-        L('Typo or formatting issue', 'Errata o problema de formato'),
-        L('Other', 'Otro'),
-      ],
-      onSend: (reason, note) {
-        widget.onFlag(reason, note);
-        addTestuNotice(
-          L('Question report sent', 'Reporte de pregunta enviado'),
-          L('\u201c$reason\u201d \u2014 under review by the content team.',
-              '\u00ab$reason\u00bb \u2014 en revisi\u00f3n por el equipo de contenido.'),
-        );
-        _tap(() => _flagged = true);
+      subtitle: testuLive
+          ? L('Goes to the content team with your name and this question.',
+              'Llega al equipo de contenido con tu nombre y esta pregunta.')
+          : L('Your report is recorded on this device.',
+              'Tu reporte queda registrado en este dispositivo.'),
+      reasons: labels,
+      sentText: testuLive
+          ? L('Sent to the content team. Thanks for flagging it.',
+              'Enviado al equipo de contenido. Gracias por avisar.')
+          : null,
+      onSend: (reasonIndex, note) async {
+        await widget.onFlag(testuFlagReasons[reasonIndex], note);
+        // Demo only: the local bell. Live notices are Part D's.
+        if (!testuLive) {
+          final reason = labels[reasonIndex];
+          addTestuNotice(
+            L('Question report recorded', 'Reporte de pregunta registrado'),
+            L('\u201c$reason\u201d \u2014 recorded on this device.',
+                '\u00ab$reason\u00bb \u2014 registrado en este dispositivo.'),
+          );
+        }
+        if (mounted) _tap(() => _flagged = true);
       },
     );
   }
@@ -1371,8 +1462,12 @@ class _VerdictExtrasState extends State<_VerdictExtras> {
             ),
           ],
         ),
-        // Social thread: inline (decided 2026-08-31).
-        const SocialThreadEntry(),
+        // Social thread: inline (decided 2026-08-31). Live on the question's
+        // channel; the demo keeps its mock thread.
+        if (!testuLive || q.questionId != null)
+          SocialThreadEntry(
+              channel: testuLive && q.questionId != null ? 'q-${q.questionId}' : null,
+              highlightMessageId: widget.highlightMessageId),
         const SizedBox(height: 6),
         // Suggested follow-ups: tapping one sends it into the chat as the
         // user's own message; Sully answers in the chat flow.
@@ -1541,6 +1636,7 @@ class TestuDebriefScreen extends StatelessWidget {
     final calibrated =
         attempts.where((a) => (a.confidence >= 2) == a.correct).length;
     final calPct = total == 0 ? '—' : '${(100 * calibrated / total).round()}%';
+    final mastery = masteryOf(correct, total);
     return Scaffold(
       backgroundColor: t.bg,
       body: SafeArea(
@@ -1558,8 +1654,8 @@ class TestuDebriefScreen extends StatelessWidget {
                 color: t.orange),
             const SizedBox(height: 10),
             Text(
-              L('Here’s what today’s session means, ${client.persona}.',
-                  'Esto es lo que significa la sesión de hoy, ${client.persona}.'),
+              L('Here’s what today’s session means, $testuFirstName.',
+                  'Esto es lo que significa la sesión de hoy, $testuFirstName.'),
               style: kH1,
             ),
             const SizedBox(height: 20),
@@ -1596,16 +1692,21 @@ class TestuDebriefScreen extends StatelessWidget {
                     child: _statMono('$correct / $total', t.ink)),
                 _Stat(L('CALIBRATION', 'CALIBRACIÓN'),
                     child: _statMono(calPct, t.ink)),
-                // ponytail: mastery band is illustrative — a real band needs
-                // the backend's mastery model, not 3 questions of evidence.
+                // Live: this session's right/total through the Topics
+                // list's thresholds, so 0/5 never reads "Competent". The
+                // demo keeps its scripted band.
                 _Stat(L('MASTERY', 'DOMINIO'),
                     child: Text(
-                      L('Competent · Strong ↑', 'Competente · Sólido ↑'),
+                      !testuLive
+                          ? L('Competent · Strong ↑', 'Competente · Sólido ↑')
+                          : mastery.status.isEmpty
+                              ? mastery.label
+                              : '${mastery.label} · ${mastery.status}',
                       style: TextStyle(
                         fontFamily: 'Geist',
                         fontWeight: FontWeight.w600,
                         fontSize: 12,
-                        color: t.greenText,
+                        color: testuLive ? mastery.color : t.greenText,
                       ),
                     )),
             ]),
@@ -1619,6 +1720,9 @@ class TestuDebriefScreen extends StatelessWidget {
                 ],
               ),
             ),
+            // ponytail: curve is demo-only until the backend has a
+            // trajectory; the illustrative painter never shows in live.
+            if (!testuLive) ...[
             const SizedBox(height: 18),
             // ponytail: mastery curve is illustrative — real trajectory data
             // arrives with the backend's mastery model.
@@ -1639,6 +1743,7 @@ class TestuDebriefScreen extends StatelessWidget {
                 ],
               ),
             ),
+            ],
             const SizedBox(height: 18),
             TestuButton(L('SEE WHAT CHANGED', 'VER QUÉ HA CAMBIADO'),
                 variant: TestuButtonVariant.primary,

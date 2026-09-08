@@ -273,6 +273,9 @@ class _ResSheetState extends State<_ResSheet> {
   final _player = GlobalKey<_MiniPlayerState>();
   static const _typing = ValueKey('typing');
   StreamSubscription<String>? _sub;
+  bool _waiting = false;
+  bool _late = false;
+  Timer? _timeout;
 
   /// This video cited with a time → seek here; anything else opens on top.
   void _openSource(Cite c) => c.title == widget.doc!.title
@@ -288,6 +291,7 @@ class _ResSheetState extends State<_ResSheet> {
   @override
   void dispose() {
     _sub?.cancel();
+    _timeout?.cancel();
     _scroll.dispose();
     super.dispose();
   }
@@ -320,18 +324,24 @@ class _ResSheetState extends State<_ResSheet> {
   void _send(String text) {
     setState(() => _chat.add(TestuYouMsg(text: text)));
     if (widget.doc != null) {
-      // Live: the tutor answers over the socket (same path as the PDF sheet).
+      // Live: the tutor answers over the socket (same path and same 90 s
+      // ceiling as the PDF sheet). After the timeout the next message still
+      // lands (late replies append).
       void says(String s) {
-        if (!mounted) return;
+        if (!mounted || !(_waiting || _late)) return;
+        _late = false;
+        _timeout?.cancel();
         final key = GlobalKey();
         setState(() {
+          _waiting = false;
           _chat.removeWhere((w) => w.key == _typing);
           _chat.add(SullyMessage.reply(s,
               key: key,
               bottomPadding: 12,
               fallbackTitle: widget.doc!.title,
               inDoc: widget.doc!.title,
-              onOpenSource: _openSource));
+              onOpenSource: _openSource,
+              onFollowUp: _send));
         });
         // Read from the top of the answer; a timed cite seeks on its own.
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -341,12 +351,27 @@ class _ResSheetState extends State<_ResSheet> {
                 alignment: 0, duration: const Duration(milliseconds: 350));
           }
         });
-        _openSource(splitCite(s));
+        // Only a real citation moves the player; a failure line or the
+        // not-found sentence has none (opening a null title used to raise
+        // the "source not available" snackbar).
+        final c = splitCite(s);
+        if (c.title != null) _openSource(c);
       }
 
       _sub ??= sullyReplies().listen(says);
-      _chat.add(const SullyMessage.typing(key: _typing));
-      askSullyFree(text).catchError((_) => says(sullyUnavailable()));
+      setState(() {
+        _waiting = true;
+        _late = false;
+        _chat.add(const SullyMessage.typing(key: _typing));
+      });
+      _timeout?.cancel();
+      _timeout = Timer(const Duration(seconds: 90), () {
+        if (!_waiting) return;
+        says(sullySlowReply());
+        // ponytail: the next tutor message is taken as the late answer.
+        _late = true;
+      });
+      askSullyFree(text).catchError((Object e) => says(sullyFailure(e)));
     } else {
       setState(() => _chat.add(SullyMessage.text(widget.res.live,
           delay: 850, sourceLine: widget.res.title, bottomPadding: 12)));
@@ -876,20 +901,23 @@ class _MiniPlayerState extends State<_MiniPlayer> {
               ]),
             ),
           ),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 11),
-            decoration: BoxDecoration(
-              color: t.card2,
-              border: Border(top: BorderSide(color: t.line)),
+          // A live doc shows its own credit or none; the demo clip's line
+          // belongs to the offline demo only.
+          if (widget.doc?.credit != null || (widget.doc == null && !testuLive))
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 11),
+              decoration: BoxDecoration(
+                color: t.card2,
+                border: Border(top: BorderSide(color: t.line)),
+              ),
+              child: Text(
+                widget.doc?.credit ??
+                    L('Turnaround groundhandling, Frankfurt — demo footage · CC BY-SA Lufthansa Cargo',
+                        'Handling de turnaround, Fráncfort — metraje de demo · CC BY-SA Lufthansa Cargo'),
+                style: kCaption,
+              ),
             ),
-            child: Text(
-              widget.doc?.credit ??
-                  L('Turnaround groundhandling, Frankfurt — demo footage · CC BY-SA Lufthansa Cargo',
-                      'Handling de turnaround, Fráncfort — metraje de demo · CC BY-SA Lufthansa Cargo'),
-              style: kCaption,
-            ),
-          ),
         ],
       ),
     );

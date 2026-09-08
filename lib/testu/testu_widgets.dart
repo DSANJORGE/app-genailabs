@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'testu_client.dart';
 import 'testu_icons.dart';
 import 'testu_theme.dart';
 
@@ -11,6 +12,55 @@ import 'testu_theme.dart';
 /// images are served without auth).
 ImageProvider testuImage(String src) =>
     src.startsWith('http') ? NetworkImage(src) : AssetImage(src);
+
+/// A topic's cover: its picture from the server, or — when there is none —
+/// a flat block in the brand colour with the title's initial. Never a stock
+/// photo standing in for a topic it does not show.
+class TestuCover extends StatelessWidget {
+  const TestuCover(
+      {super.key,
+      this.image,
+      required this.title,
+      this.alignment = Alignment.center});
+
+  final ImageProvider? image;
+  final String title;
+  final Alignment alignment;
+
+  @override
+  Widget build(BuildContext context) {
+    final image = this.image;
+    if (image != null) {
+      // A broken/missing remote asset falls back to the same flat block as
+      // no image at all — never a grey error icon standing in for a cover.
+      return Image(
+          image: image,
+          fit: BoxFit.cover,
+          alignment: alignment,
+          errorBuilder: (context, error, stackTrace) => _block());
+    }
+    return _block();
+  }
+
+  Widget _block() {
+    final t = title.trim();
+    return Container(
+      color: client.brand,
+      alignment: Alignment.center,
+      // Scales with the box: a 52px thumbnail and a 300px hero share it.
+      child: FractionallySizedBox(
+        heightFactor: 0.4,
+        child: FittedBox(
+          child: Text(t.isEmpty ? '' : t.characters.first.toUpperCase(),
+              style: const TextStyle(
+                  fontFamily: 'Sora',
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white)),
+        ),
+      ),
+    );
+  }
+}
 
 /// True past the Dynamic Type size where a label and a pill stop fitting on
 /// one line — iOS XXL and up. Below it the approved v6 layout is untouched;

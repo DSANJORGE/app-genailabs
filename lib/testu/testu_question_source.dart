@@ -88,14 +88,14 @@ abstract class TestuQuestionSource {
     required bool correct,
   }) {}
 
-  /// Fire-and-forget: the user flagged a question for the content team.
-  /// ponytail: no-op until the content-review endpoint exists — the live
-  /// adapter will override this with the real POST.
-  void reportFlag({
+  /// The user flagged a question for the content team. No-op for local
+  /// data; the live adapter posts it. Completes (or throws) so the report
+  /// sheet can say whether it went through.
+  Future<void> reportFlag({
     required TestuQ q,
     required String reason,
     String? note,
-  }) {}
+  }) async {}
 }
 
 /// The approved prototype's hardcoded questions. [load] completes

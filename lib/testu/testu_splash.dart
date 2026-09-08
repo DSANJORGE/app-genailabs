@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'testu_client.dart';
 import 'testu_i18n.dart';
+import 'testu_live.dart';
 import 'testu_theme.dart';
 
 const _t = TestuTokens.instance;
@@ -225,11 +226,19 @@ class _TestuSplashState extends State<TestuSplash>
                               child: Transform.translate(
                                 offset: Offset(0, 10 * (1 - hi)),
                                 child: Text(
-                                  widget.welcomeBack
-                                      ? L('${client.persona}, welcome back.',
-                                          '${client.persona}, ${G('bienvenido', 'bienvenida')} de nuevo.')
-                                      : L('${client.persona}, welcome.',
-                                          '${client.persona}, ${G('bienvenido', 'bienvenida')}.'),
+                                  testuLive
+                                      // Live: no gendered "bienvenido/a"
+                                      // — the account carries no gender.
+                                      ? (widget.welcomeBack
+                                          ? L('$testuFirstName, welcome back.',
+                                              'Hola de nuevo, $testuFirstName.')
+                                          : L('$testuFirstName, welcome.',
+                                              'Hola, $testuFirstName.'))
+                                      : (widget.welcomeBack
+                                          ? L('${client.persona}, welcome back.',
+                                              '${client.persona}, ${G('bienvenido', 'bienvenida')} de nuevo.')
+                                          : L('${client.persona}, welcome.',
+                                              '${client.persona}, ${G('bienvenido', 'bienvenida')}.')),
                                   style: kSheetTitle.copyWith(
                                       height: null,
                                       color: _t.primaryAction),
