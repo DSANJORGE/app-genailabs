@@ -101,6 +101,11 @@ void main() {
     source = EmeQuestionSource(http: http);
   });
 
+  test('before anything loads the topic is a neutral word, not the prototype\'s',
+      () {
+    expect(source.topic, 'Topic');
+  });
+
   test('walks topics -> tutorials -> detail with the right params', () async {
     await source.load();
 

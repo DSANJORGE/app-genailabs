@@ -1,8 +1,10 @@
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'testu_client.dart';
 import 'testu_icons.dart';
 import 'testu_theme.dart';
 
@@ -11,6 +13,55 @@ import 'testu_theme.dart';
 ImageProvider testuImage(String src) =>
     src.startsWith('http') ? NetworkImage(src) : AssetImage(src);
 
+/// A topic's cover: its picture from the server, or — when there is none —
+/// a flat block in the brand colour with the title's initial. Never a stock
+/// photo standing in for a topic it does not show.
+class TestuCover extends StatelessWidget {
+  const TestuCover(
+      {super.key,
+      this.image,
+      required this.title,
+      this.alignment = Alignment.center});
+
+  final ImageProvider? image;
+  final String title;
+  final Alignment alignment;
+
+  @override
+  Widget build(BuildContext context) {
+    final image = this.image;
+    if (image != null) {
+      // A broken/missing remote asset falls back to the same flat block as
+      // no image at all — never a grey error icon standing in for a cover.
+      return Image(
+          image: image,
+          fit: BoxFit.cover,
+          alignment: alignment,
+          errorBuilder: (context, error, stackTrace) => _block());
+    }
+    return _block();
+  }
+
+  Widget _block() {
+    final t = title.trim();
+    return Container(
+      color: client.brand,
+      alignment: Alignment.center,
+      // Scales with the box: a 52px thumbnail and a 300px hero share it.
+      child: FractionallySizedBox(
+        heightFactor: 0.4,
+        child: FittedBox(
+          child: Text(t.isEmpty ? '' : t.characters.first.toUpperCase(),
+              style: const TextStyle(
+                  fontFamily: 'Sora',
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white)),
+        ),
+      ),
+    );
+  }
+}
+
 /// True past the Dynamic Type size where a label and a pill stop fitting on
 /// one line — iOS XXL and up. Below it the approved v6 layout is untouched;
 /// above it, rows built for a phone-width line stack instead of overflowing
@@ -18,12 +69,49 @@ ImageProvider testuImage(String src) =>
 bool testuBigText(BuildContext context) =>
     MediaQuery.textScalerOf(context).scale(100) > 120;
 
+/// Window width from which the browser build wears the desktop frame
+/// (left rail, centred column, sheets as dialogs — spec: testu-learn-web).
+/// Below it every surface is the phone app unchanged.
+const double kTestuWide = 700;
+
+/// The frame is a browser thing: an iPhone on its side is 874pt wide and
+/// must stay the phone app. Tests flip this to exercise the frame on the VM.
+@visibleForTesting
+bool testuDesktop = kIsWeb;
+
+bool testuWide(BuildContext context) =>
+    testuDesktop && MediaQuery.sizeOf(context).width >= kTestuWide;
+
+/// Screen padding. The phone trusts the status bar for top air (14 below
+/// it) and reserves the translucent bottom nav under the scrolling content
+/// (110); the desktop frame has neither, so the title lines up with the
+/// rail's logo (26) and the list ends a normal margin above the window edge.
+double testuTopPad(BuildContext context) => testuWide(context) ? 26 : 14;
+double testuBottomPad(BuildContext context) => testuWide(context) ? 32 : 110;
+
 /// Press feedback per spec: opacity .75 + scale .985 + selectionClick haptic.
+/// In the browser (spec: minsur-pilot-readiness E1) it is also a button to
+/// the keyboard and the screen reader: hover dims it like a half-press,
+/// focus draws a 2px orange ring, Enter/Space press it. One widget, every
+/// button in the app inherits it. Same shape as the console's Pressable
+/// (admin_ui.dart).
 class TestuPressable extends StatefulWidget {
-  const TestuPressable({super.key, required this.child, this.onTap});
+  const TestuPressable({
+    super.key,
+    required this.child,
+    this.onTap,
+    this.semanticLabel,
+    this.radius = 12,
+  });
 
   final Widget child;
   final VoidCallback? onTap;
+
+  /// What a screen reader calls this. Null keeps the child's own text.
+  final String? semanticLabel;
+
+  /// Corner radius of the focus ring, matched to the child's own corners.
+  final double radius;
 
   @override
   State<TestuPressable> createState() => _TestuPressableState();
@@ -31,28 +119,71 @@ class TestuPressable extends StatefulWidget {
 
 class _TestuPressableState extends State<TestuPressable> {
   bool _down = false;
+  bool _hover = false;
+  bool _focus = false;
+
+  void _press() {
+    HapticFeedback.selectionClick();
+    widget.onTap!();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown: (_) => setState(() => _down = true),
-      onTapCancel: () => setState(() => _down = false),
-      onTapUp: (_) => setState(() => _down = false),
-      onTap: widget.onTap == null
-          ? null
-          : () {
-              HapticFeedback.selectionClick();
-              widget.onTap!();
-            },
-      child: AnimatedScale(
-        scale: _down ? 0.985 : 1,
-        duration: const Duration(milliseconds: 90),
-        curve: TestuTokens.curve,
-        child: AnimatedOpacity(
-          opacity: _down ? 0.75 : 1,
-          duration: const Duration(milliseconds: 90),
-          child: widget.child,
+    final enabled = widget.onTap != null;
+    final t = TestuTokens.of(context);
+    return FocusableActionDetector(
+      enabled: enabled,
+      // Desktop: a hand cursor says "this presses"; haptics are silent there.
+      mouseCursor: enabled ? SystemMouseCursors.click : MouseCursor.defer,
+      onShowHoverHighlight: (v) => setState(() => _hover = v),
+      onShowFocusHighlight: (v) => setState(() => _focus = v),
+      actions: {
+        // Space everywhere; Enter is ActivateIntent on the platforms and
+        // ButtonActivateIntent in WidgetsApp's web shortcuts.
+        ActivateIntent:
+            CallbackAction<ActivateIntent>(onInvoke: (_) => _press()),
+        ButtonActivateIntent:
+            CallbackAction<ButtonActivateIntent>(onInvoke: (_) => _press()),
+      },
+      // One semantics node: the Semantics carries the name, the button flag
+      // and the tap; the GestureDetector is excluded so it cannot add a
+      // second tappable node underneath.
+      child: Semantics(
+        button: enabled,
+        label: widget.semanticLabel,
+        onTap: enabled ? _press : null,
+        // ponytail: only drop the child's own semantics (e.g. its Text)
+        // when we're substituting a label for it — otherwise the ~43
+        // existing callers that never pass semanticLabel lose their
+        // accessible name (it comes from the child text merging up).
+        excludeSemantics: widget.semanticLabel != null,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          excludeFromSemantics: true,
+          onTapDown: (_) => setState(() => _down = true),
+          onTapCancel: () => setState(() => _down = false),
+          onTapUp: (_) => setState(() => _down = false),
+          onTap: enabled ? _press : null,
+          child: AnimatedScale(
+            scale: _down ? 0.985 : 1,
+            duration: const Duration(milliseconds: 90),
+            curve: TestuTokens.curve,
+            child: AnimatedOpacity(
+              // ponytail: hover rides the press channel (a light dim), not a
+              // fill overlay — the children own their corners and images.
+              opacity: _down ? 0.75 : (_hover ? 0.88 : 1),
+              duration: const Duration(milliseconds: 90),
+              child: Container(
+                foregroundDecoration: _focus
+                    ? BoxDecoration(
+                        border: Border.all(color: t.orange, width: 2),
+                        borderRadius: BorderRadius.circular(widget.radius),
+                      )
+                    : null,
+                child: widget.child,
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -86,11 +217,11 @@ class TestuButton extends StatelessWidget {
     final t = TestuTokens.of(context);
     var (Color fg, Color? bg, Color? borderColor) = switch (variant) {
       TestuButtonVariant.primary => (t.onPrimaryAction, t.primaryAction, null),
-      TestuButtonVariant.quiet => (const Color(0xFFD8D7D3), null, t.line2),
+      TestuButtonVariant.quiet => (t.ink, null, t.line2),
       TestuButtonVariant.onimg => (
           t.primaryAction,
           const Color(0x6E0A0A0B),
-          const Color(0x38FFFFFF),
+          t.onImgLine,
         ),
     };
     // Hard rule (app-wide): a button whose action isn't available yet never
@@ -182,7 +313,7 @@ class TestuAct extends StatelessWidget {
             color: color ??
                 (disabled
                     ? t.faint
-                    : primary ? t.onPrimaryAction : const Color(0xFFE9E8E4)),
+                    : primary ? t.onPrimaryAction : t.ink),
           ),
         ),
       ),
@@ -190,8 +321,10 @@ class TestuAct extends StatelessWidget {
   }
 }
 
-/// Outlined status pill — never filled. Call sites pick the semantic colors
-/// (gold #8A7A3A border, amber #7A5C1E, green #2F6A4C, gray line2).
+/// Outlined status pill — never filled. One tone per meaning (spec): gold =
+/// Review soon, green = Stable/Strong/Connected, amber = At risk/Building/
+/// Required, red = Beginner/severe, gray = Not started/Optional. The raw
+/// constructor exists for the live mastery record, which carries its tone.
 class TestuPill extends StatelessWidget {
   const TestuPill(
     this.label, {
@@ -199,6 +332,22 @@ class TestuPill extends StatelessWidget {
     required this.color,
     required this.borderColor,
   });
+
+  TestuPill.gold(this.label, {super.key})
+      : color = TestuTokens.instance.gold,
+        borderColor = TestuTokens.instance.goldBorder;
+  TestuPill.green(this.label, {super.key})
+      : color = TestuTokens.instance.greenText,
+        borderColor = TestuTokens.instance.greenBorder;
+  TestuPill.amber(this.label, {super.key})
+      : color = TestuTokens.instance.amber,
+        borderColor = TestuTokens.instance.amberBorder;
+  TestuPill.red(this.label, {super.key})
+      : color = TestuTokens.instance.redText,
+        borderColor = TestuTokens.instance.redBorder;
+  TestuPill.gray(this.label, {super.key})
+      : color = TestuTokens.instance.mut,
+        borderColor = TestuTokens.instance.line2;
 
   final String label;
   final Color color;
@@ -242,6 +391,18 @@ class TestuEyebrow extends StatelessWidget {
         fontSize = 9,
         letterSpacing = 1.26; // +0.14em
 
+  /// Name kicker over a tutor bubble, fact labels, question kickers.
+  TestuEyebrow.kicker(this.text, {super.key, Color? color})
+      : color = color ?? TestuTokens.instance.faint,
+        fontSize = 9,
+        letterSpacing = 1.44; // +0.16em
+
+  /// Smallest label: inner-group headers (SKILLS), stat labels, tags.
+  TestuEyebrow.tag(this.text, {super.key, Color? color})
+      : color = color ?? TestuTokens.instance.faint,
+        fontSize = 8.5,
+        letterSpacing = 1.02; // +0.12em
+
   final String text;
   final Color? color;
   final double fontSize;
@@ -277,7 +438,7 @@ class TestuHairline extends StatelessWidget {
       borderRadius: BorderRadius.circular(2),
       child: Container(
         height: 2,
-        color: trackColor ?? const Color(0xFF26262C),
+        color: trackColor ?? t.track,
         alignment: Alignment.centerLeft,
         child: FractionallySizedBox(
           widthFactor: fraction.clamp(0.0, 1.0),
@@ -389,7 +550,7 @@ class _TestuComposerState extends State<TestuComposer> {
     final pill = Container(
       padding: const EdgeInsets.only(left: 16, right: 4),
       decoration: BoxDecoration(
-        color: const Color(0xFF101013),
+        color: t.field,
         border: Border.all(color: t.line2),
         borderRadius: BorderRadius.circular(999),
       ),
@@ -401,10 +562,10 @@ class _TestuComposerState extends State<TestuComposer> {
               enabled: widget.onTap == null,
               onSubmitted: (_) => _send(),
               textInputAction: TextInputAction.send,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'Geist',
                 fontSize: 12.5,
-                color: Color(0xFFE9E8E4),
+                color: t.ink,
               ),
               decoration: InputDecoration(
                 isDense: true,
@@ -456,9 +617,18 @@ class _TestuComposerState extends State<TestuComposer> {
 /// User chat bubble — right-aligned, shared by every Sully chat surface
 /// (resource sheets, PDF viewer) so sent messages look identical app-wide.
 class TestuYouMsg extends StatelessWidget {
-  const TestuYouMsg({super.key, required this.text});
+  const TestuYouMsg(
+      {super.key, required this.text, this.fontSize = 12.5, this.alignEnd = true});
 
   final String text;
+
+  /// The app's chat size by default; the console's Iris panel passes its own
+  /// so a question and its answer read at one size.
+  final double fontSize;
+
+  /// Hung on the right, as chat does; the console's panel sets it left, in
+  /// line with the answers.
+  final bool alignEnd;
 
   @override
   Widget build(BuildContext context) {
@@ -466,20 +636,21 @@ class TestuYouMsg extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Align(
-        alignment: Alignment.centerRight,
+        alignment: alignEnd ? Alignment.centerRight : Alignment.centerLeft,
         child: Container(
           constraints: const BoxConstraints(maxWidth: 280),
           padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 13),
           decoration: BoxDecoration(
-            color: const Color(0xFF1D1D22),
+            color: t.raised,
             border: Border.all(color: t.line2),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Text(text,
-              style: const TextStyle(
+              style: TextStyle(
                   fontFamily: 'Geist',
-                  fontSize: 12.5,
-                  color: Color(0xFFD6D4D0))),
+                  fontSize: fontSize,
+                  height: 1.5,
+                  color: t.inkSoft)),
         ),
       ),
     );
@@ -502,7 +673,8 @@ class TestuCheckPulse extends StatelessWidget {
         tween: Tween(begin: 0, end: 1),
         duration: const Duration(milliseconds: 1900),
         builder: (_, v, _) => CustomPaint(
-          painter: TestuCheckPainter(progress: v, green: t.green),
+          painter: TestuCheckPainter(
+              progress: v, green: t.green, ring: t.greenBorder),
         ),
       ),
     );
@@ -510,16 +682,17 @@ class TestuCheckPulse extends StatelessWidget {
 }
 
 class TestuCheckPainter extends CustomPainter {
-  const TestuCheckPainter({required this.progress, required this.green});
+  const TestuCheckPainter(
+      {required this.progress, required this.green, required this.ring});
 
   final double progress;
   final Color green;
+  final Color ring;
 
   @override
   void paint(Canvas canvas, Size size) {
     final ms = progress * 1900;
     final center = size.center(Offset.zero);
-    const ring = Color(0xFF2F6A4C);
 
     final pulse = ((ms - 300) / 1600).clamp(0.0, 1.0);
     if (pulse > 0 && pulse < 1) {
@@ -563,4 +736,412 @@ class TestuCheckPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(TestuCheckPainter old) => old.progress != progress;
+}
+
+/// Conversational chip — follow-ups under a tutor message, report reasons,
+/// canned questions. Pill, Geist 11.5. `primary` = the white recommendation
+/// (one per screen); `selected` = picked but not yet sent (light border +
+/// raised tint, the same grammar as a chosen answer option).
+class TestuChip extends StatelessWidget {
+  const TestuChip(
+    this.label, {
+    super.key,
+    this.primary = false,
+    this.selected = false,
+    this.onTap,
+  });
+
+  final String label;
+  final bool primary;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TestuTokens.of(context);
+    return TestuPressable(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 14),
+        decoration: BoxDecoration(
+          color: primary
+              ? t.primaryAction
+              : selected
+                  ? t.raised
+                  : null,
+          border: Border.all(
+              color: primary
+                  ? t.primaryAction
+                  : selected
+                      ? t.selectedBorder
+                      : t.line2),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'Geist',
+            fontSize: 11.5,
+            fontWeight: primary
+                ? FontWeight.w700
+                : selected
+                    ? FontWeight.w600
+                    : FontWeight.w400,
+            color: primary
+                ? t.onPrimaryAction
+                : selected
+                    ? t.ink
+                    : t.inkDim,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 44×44 tap target around a 15px house glyph — every ✕ / ‹ / ↻ / ☰ in a
+/// header. `onImage` = the blurred scrim circle used over photography.
+class TestuIconButton extends StatelessWidget {
+  const TestuIconButton(
+    this.glyph, {
+    super.key,
+    required this.onTap,
+    this.size = 15,
+    this.color,
+    this.onImage = false,
+  });
+
+  final TestuGlyph glyph;
+  final VoidCallback onTap;
+  final double size;
+  final Color? color;
+  final bool onImage;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TestuTokens.of(context);
+    Widget icon = TestuIcon(glyph, size: size, color: color ?? t.mut);
+    if (onImage) {
+      icon = ClipOval(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+          child: Container(
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: t.scrim,
+              shape: BoxShape.circle,
+              border: Border.all(color: t.onImgLine),
+            ),
+            child: TestuIcon(glyph, size: size, color: color ?? t.ink),
+          ),
+        ),
+      );
+    }
+    return TestuPressable(
+      onTap: onTap,
+      child: SizedBox(width: 44, height: 44, child: Center(child: icon)),
+    );
+  }
+}
+
+/// Document-type badge (PDF / VID / DOC): mono label in a card2 box.
+class TestuDocBadge extends StatelessWidget {
+  const TestuDocBadge(this.kind, {super.key, this.size = 36});
+
+  final String kind;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TestuTokens.of(context);
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: t.card2,
+        border: Border.all(color: t.line),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(kind,
+          style: TextStyle(
+              fontFamily: 'GeistMono',
+              fontWeight: FontWeight.w500,
+              fontSize: 9.5,
+              letterSpacing: 0.38,
+              color: t.mut)),
+    );
+  }
+}
+
+/// Grab handle at the top of every sheet body.
+class TestuGrabber extends StatelessWidget {
+  const TestuGrabber({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    // A dialog has nothing to drag; keep only the sheet's top breathing room.
+    if (testuWide(context)) return const SizedBox(height: 16);
+    final t = TestuTokens.of(context);
+    return Center(
+      child: Container(
+        width: 36,
+        height: 4,
+        margin: const EdgeInsets.only(top: 12, bottom: 16),
+        decoration: BoxDecoration(
+          color: t.line2,
+          borderRadius: BorderRadius.circular(2),
+        ),
+      ),
+    );
+  }
+}
+
+/// THE bottom-sheet chrome (spec: 22px top radius, card fill, hairline
+/// edge, 66% backdrop, 88% height cap, Material's 640px landscape cap,
+/// backdrop-tap closes unless [dismissible] is false). Bodies start with a
+/// [TestuGrabber] and own their scrolling. On a desktop window
+/// (spec: testu-learn-web) the same body opens as a centred dialog — a
+/// 640px strip glued to the bottom of a 1920px window is a sheet in name
+/// only.
+Future<T?> showTestuSheet<T>(
+  BuildContext context, {
+  required WidgetBuilder builder,
+  double maxHeight = 0.88,
+  bool dismissible = true,
+}) {
+  final t = TestuTokens.of(context);
+  if (testuWide(context)) {
+    return showDialog<T>(
+      context: context,
+      barrierDismissible: dismissible,
+      barrierColor: t.barrier,
+      builder: (ctx) => Dialog(
+        backgroundColor: t.card,
+        insetPadding: const EdgeInsets.all(24),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(22),
+          side: BorderSide(color: t.line2),
+        ),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minWidth: 640,
+            maxWidth: 640,
+            maxHeight: MediaQuery.sizeOf(ctx).height * maxHeight,
+          ),
+          child: builder(ctx),
+        ),
+      ),
+    );
+  }
+  return showModalBottomSheet<T>(
+    context: context,
+    isScrollControlled: true,
+    isDismissible: dismissible,
+    backgroundColor: t.card,
+    barrierColor: t.barrier,
+    shape: RoundedRectangleBorder(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+      side: BorderSide(color: t.line2),
+    ),
+    constraints: BoxConstraints(
+      maxHeight: MediaQuery.sizeOf(context).height * maxHeight,
+      maxWidth: 640,
+    ),
+    builder: builder,
+  );
+}
+
+/// One row of a picker sheet: optional mono [tag] column (PDF / VIDEO),
+/// the label, optional mono [trailing] (p. 12), orange when [selected].
+typedef TestuSheetRow = ({
+  String? tag,
+  String label,
+  String? trailing,
+  bool selected,
+  bool indent,
+  VoidCallback onTap,
+});
+
+/// THE picker sheet — sources, table of contents, language. A mono
+/// eyebrow title over tappable rows; a row pops the sheet, then acts.
+Future<void> showTestuListSheet(
+  BuildContext context, {
+  required String title,
+  required List<TestuSheetRow> rows,
+  double maxHeight = 0.7,
+}) {
+  final t = TestuTokens.of(context);
+  final selected = rows.indexWhere((r) => r.selected);
+  return showTestuSheet<void>(
+    context,
+    maxHeight: maxHeight,
+    builder: (ctx) => SafeArea(
+      top: false,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const TestuGrabber(),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
+            child: TestuEyebrow(title),
+          ),
+          Flexible(
+            child: ListView.builder(
+              shrinkWrap: true,
+              // Open with the current row two lines from the top.
+              controller: ScrollController(
+                  initialScrollOffset:
+                      (selected - 2).clamp(0, rows.length) * 44.0),
+              itemCount: rows.length,
+              itemBuilder: (_, i) {
+                final r = rows[i];
+                return TestuPressable(
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    r.onTap();
+                  },
+                  child: Padding(
+                    padding:
+                        EdgeInsets.fromLTRB(r.indent ? 36 : 20, 12, 20, 12),
+                    child: Row(children: [
+                      if (r.tag != null)
+                        SizedBox(
+                          width: 44,
+                          child: TestuEyebrow.kicker(r.tag!, color: t.orange),
+                        ),
+                      Expanded(
+                        child: Text(
+                          r.label,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontFamily: 'Geist',
+                              fontSize: 13,
+                              color: r.selected ? t.orange : t.inkSoft),
+                        ),
+                      ),
+                      if (r.trailing != null) ...[
+                        const SizedBox(width: 12),
+                        Text(r.trailing!,
+                            style: TextStyle(
+                                fontFamily: 'GeistMono',
+                                fontSize: 10,
+                                color: r.selected ? t.orange : t.mut)),
+                      ] else if (r.selected)
+                        TestuIcon(TestuGlyph.check, size: 13, color: t.orange),
+                    ]),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    ),
+  );
+}
+
+/// THE centred dialog (spec: only for moments a sheet can't carry — the
+/// confidence consent, a one-field prompt). Card fill, 18px radius, hairline
+/// edge, same backdrop as sheets. No Material AlertDialog anywhere.
+Future<T?> showTestuDialog<T>(
+  BuildContext context, {
+  required Widget child,
+  bool dismissible = true,
+}) {
+  final t = TestuTokens.of(context);
+  return showDialog<T>(
+    context: context,
+    barrierDismissible: dismissible,
+    barrierColor: t.barrier,
+    builder: (_) => Dialog(
+      backgroundColor: t.card,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 22),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: t.line2),
+      ),
+      child: Padding(padding: const EdgeInsets.all(18), child: child),
+    ),
+  );
+}
+
+/// Field chrome shared by every free-standing text input (sign-in, the
+/// report note, go-to-page): [fill] one step under its surface, hairline
+/// border, ink focus ring, 10px radius.
+InputDecoration testuFieldDecoration(TestuTokens t,
+        {String? hint, Color? fill, double fontSize = 15}) =>
+    InputDecoration(
+      hintText: hint,
+      hintStyle: TextStyle(
+        fontFamily: 'Geist',
+        fontSize: fontSize,
+        color: t.faint,
+      ),
+      filled: true,
+      fillColor: fill ?? t.card,
+      contentPadding: const EdgeInsets.symmetric(vertical: 15, horizontal: 14),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: t.line2),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: t.primaryAction),
+      ),
+    );
+
+/// Loading placeholder for a list row: thumb box + two text bars in card2.
+/// Static on purpose — product surfaces load into a task; nobody should
+/// watch a shimmer. Also the reduced-motion answer.
+class TestuSkeletonRow extends StatelessWidget {
+  const TestuSkeletonRow({super.key, this.thumb = 58, this.pill = true});
+
+  final double thumb;
+  final bool pill;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TestuTokens.of(context);
+    Widget bar(double w, [double h = 10]) => Container(
+          width: w,
+          height: h,
+          decoration: BoxDecoration(
+            color: t.card2,
+            borderRadius: BorderRadius.circular(h / 2),
+          ),
+        );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 18),
+      child: Row(children: [
+        if (thumb > 0) ...[
+          Container(
+            width: thumb,
+            height: thumb,
+            decoration: BoxDecoration(
+              color: t.card2,
+              borderRadius: BorderRadius.circular(thumb > 40 ? 12 : 8),
+            ),
+          ),
+          const SizedBox(width: 13),
+        ],
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              bar(180, 12),
+              const SizedBox(height: 8),
+              bar(120),
+              if (pill) ...[const SizedBox(height: 8), bar(96, 18)],
+            ],
+          ),
+        ),
+      ]),
+    );
+  }
 }

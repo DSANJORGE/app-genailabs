@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:genai_labs/testu/testu_icons.dart';
 import 'package:genai_labs/testu/testu_lock.dart';
 import 'package:genai_labs/testu/testu_profile.dart';
 import 'package:genai_labs/testu/testu_theme.dart';
@@ -124,6 +125,9 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     // Three bundled presets carry no remove badge; the added photo does.
-    expect(find.text('✕'), findsOneWidget);
+    expect(
+        find.byWidgetPredicate(
+            (w) => w is TestuIcon && w.glyph == TestuGlyph.close),
+        findsOneWidget);
   });
 }

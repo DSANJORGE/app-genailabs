@@ -40,22 +40,37 @@ class AdminSession {
     // Mirrors testu_live.dart:59-61: eMe keeps one token per user, so a
     // login elsewhere 403s every call here from then on -- drop to sign-in
     // instead of leaving the screen stuck showing stale data.
-    EmeHttp.onUnauthorized = (_) {
-      if (AuthService.isLoggedIn) {
+    EmeHttp.onUnauthorized = (e) {
+      if (signsOut(e) && AuthService.isLoggedIn) {
         AuthService.logout();
         onSignedOut?.call();
       }
     };
   }
 
+  /// Whether a 401/403 means the session is gone.
+  ///
+  /// One endpoint answers 403 for a reason that has nothing to do with the
+  /// token: analytics/person.json refuses a learner outside the viewer's
+  /// teams (person.groovy). Signing the console out there would drop a
+  /// manager to the login screen for clicking a name in their own team list,
+  /// so Persona words that reply itself and the session survives it.
+  static bool signsOut(EmeHttpException e) => !(e.statusCode == 403 &&
+      e.uri.path.endsWith('analytics/person.json'));
+
   static Future<bool> restore() async {
     await init();
     return AuthService.isLoggedIn;
   }
 
+  /// `init()` is inside the try, not before it: a boot that throws (server
+  /// unreachable on the very first call) used to escape both of these, and
+  /// [AdminSignin] has nothing to catch it with -- the button stayed disabled
+  /// with no message until someone reloaded the page. A failed boot is just
+  /// another failed send.
   static Future<String> sendCode(String email) async {
-    await init();
     try {
+      await init();
       return (await AuthService.sendUserCode(email: email))['status']
               ?.toString() ??
           'error';
@@ -65,8 +80,8 @@ class AdminSession {
   }
 
   static Future<bool> login(String email, String code) async {
-    await init();
     try {
+      await init();
       return await AuthService.loginWithOtp(email, code);
     } catch (_) {
       return false;

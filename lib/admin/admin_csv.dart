@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import '../testu/testu_i18n.dart';
+
 class CsvRow {
   CsvRow(this.email, this.firstName, this.lastName, this.team, this.error);
   final String email, firstName, lastName, team;
@@ -7,8 +9,12 @@ class CsvRow {
 }
 
 class CsvImport {
-  CsvImport(this.rows);
+  CsvImport(this.rows, {this.missingColumns = const []});
   final List<CsvRow> rows;
+
+  /// Required headers the pasted text does not have. Every row then carries
+  /// the same error, and the dialog says so once instead of counting them.
+  final List<String> missingColumns;
   List<CsvRow> get valid => [for (final r in rows) if (r.error == null) r];
 
   List<int> toCsvBytes() => utf8.encode(
@@ -38,19 +44,20 @@ CsvImport parseUsersCsv(String text, {required Set<String> teamIds, required Set
     final team = cell('team').toLowerCase();
     String? error;
     if (missing.isNotEmpty) {
-      error = 'Faltan columnas: ${missing.join(', ')}';
+      error = L('Missing columns: ${missing.join(', ')}',
+          'Faltan columnas: ${missing.join(', ')}');
     } else if (!_email.hasMatch(email)) {
-      error = 'Correo inválido';
+      error = L('Invalid email', 'Correo inválido');
     } else if (!teamIds.contains(team)) {
-      error = 'Equipo desconocido: $team';
+      error = L('Unknown team: $team', 'Equipo desconocido: $team');
     } else if (!seen.add(email)) {
-      error = 'Correo repetido en el archivo';
+      error = L('Repeated in the file', 'Correo repetido en el archivo');
     } else if (existingEmails.contains(email)) {
-      error = 'Ya existe';
+      error = L('Already exists', 'Ya existe');
     }
     rows.add(CsvRow(email, cell('firstName'), cell('lastName'), team, error));
   }
-  return CsvImport(rows);
+  return CsvImport(rows, missingColumns: missing);
 }
 
 List<String> _split(String line) {

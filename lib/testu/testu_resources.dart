@@ -202,13 +202,18 @@ _Res _resource(String key) => switch (key) {
         ),
     };
 
+/// Landscape can't stack player + chapters + chat + composer under the
+/// usual 88% cap; the split layout gets 94%.
+double _sheetHeight(BuildContext context) {
+  final size = MediaQuery.sizeOf(context);
+  return size.width > size.height ? 0.94 : 0.88;
+}
+
 void showTestuResource(BuildContext context, String key) {
   HapticFeedback.selectionClick();
-  showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    barrierColor: const Color(0xA8000000),
+  showTestuSheet<void>(
+    context,
+    maxHeight: _sheetHeight(context),
     builder: (_) => _ResSheet(res: _resource(key)),
   );
 }
@@ -220,11 +225,9 @@ void showTestuVideo(BuildContext context, LiveDoc doc,
     {Duration at = Duration.zero}) {
   HapticFeedback.selectionClick();
   final n = doc.chapters.length;
-  showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    barrierColor: const Color(0xA8000000),
+  showTestuSheet<void>(
+    context,
+    maxHeight: _sheetHeight(context),
     builder: (_) => _ResSheet(
       doc: doc,
       at: at,
@@ -270,6 +273,9 @@ class _ResSheetState extends State<_ResSheet> {
   final _player = GlobalKey<_MiniPlayerState>();
   static const _typing = ValueKey('typing');
   StreamSubscription<String>? _sub;
+  bool _waiting = false;
+  bool _late = false;
+  Timer? _timeout;
 
   /// This video cited with a time → seek here; anything else opens on top.
   void _openSource(Cite c) => c.title == widget.doc!.title
@@ -285,6 +291,7 @@ class _ResSheetState extends State<_ResSheet> {
   @override
   void dispose() {
     _sub?.cancel();
+    _timeout?.cancel();
     _scroll.dispose();
     super.dispose();
   }
@@ -317,18 +324,24 @@ class _ResSheetState extends State<_ResSheet> {
   void _send(String text) {
     setState(() => _chat.add(TestuYouMsg(text: text)));
     if (widget.doc != null) {
-      // Live: the tutor answers over the socket (same path as the PDF sheet).
+      // Live: the tutor answers over the socket (same path and same 90 s
+      // ceiling as the PDF sheet). After the timeout the next message still
+      // lands (late replies append).
       void says(String s) {
-        if (!mounted) return;
+        if (!mounted || !(_waiting || _late)) return;
+        _late = false;
+        _timeout?.cancel();
         final key = GlobalKey();
         setState(() {
+          _waiting = false;
           _chat.removeWhere((w) => w.key == _typing);
           _chat.add(SullyMessage.reply(s,
               key: key,
               bottomPadding: 12,
               fallbackTitle: widget.doc!.title,
               inDoc: widget.doc!.title,
-              onOpenSource: _openSource));
+              onOpenSource: _openSource,
+              onFollowUp: _send));
         });
         // Read from the top of the answer; a timed cite seeks on its own.
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -338,12 +351,27 @@ class _ResSheetState extends State<_ResSheet> {
                 alignment: 0, duration: const Duration(milliseconds: 350));
           }
         });
-        _openSource(splitCite(s));
+        // Only a real citation moves the player; a failure line or the
+        // not-found sentence has none (opening a null title used to raise
+        // the "source not available" snackbar).
+        final c = splitCite(s);
+        if (c.title != null) _openSource(c);
       }
 
       _sub ??= sullyReplies().listen(says);
-      _chat.add(const SullyMessage.typing(key: _typing));
-      askSullyFree(text).catchError((_) => says(sullyUnavailable()));
+      setState(() {
+        _waiting = true;
+        _late = false;
+        _chat.add(const SullyMessage.typing(key: _typing));
+      });
+      _timeout?.cancel();
+      _timeout = Timer(const Duration(seconds: 90), () {
+        if (!_waiting) return;
+        says(sullySlowReply());
+        // ponytail: the next tutor message is taken as the late answer.
+        _late = true;
+      });
+      askSullyFree(text).catchError((Object e) => says(sullyFailure(e)));
     } else {
       setState(() => _chat.add(SullyMessage.text(widget.res.live,
           delay: 850, sourceLine: widget.res.title, bottomPadding: 12)));
@@ -367,8 +395,8 @@ class _ResSheetState extends State<_ResSheet> {
           children: [
             for (var i = 0; i < res.chips.length; i++)
               if (!_used.contains(i))
-                _ChipBtn(
-                  label: res.chips[i].t,
+                TestuChip(
+                  res.chips[i].t,
                   primary: res.chips[i].primary,
                   onTap: () => _tapChip(i),
                 ),
@@ -404,47 +432,17 @@ class _ResSheetState extends State<_ResSheet> {
     // continuous-tutor rule survives as a split instead: source pinned
     // left, chat and composer right.
     final split = res.video && size.width > size.height;
-    return Container(
-      constraints:
-          BoxConstraints(maxHeight: size.height * (split ? 0.94 : 0.88)),
-      decoration: BoxDecoration(
-        color: t.card,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
-        border: Border(top: BorderSide(color: t.line2)),
-      ),
+    return Padding(
       padding: EdgeInsets.only(
           bottom: 26 + MediaQuery.paddingOf(context).bottom),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 36,
-            height: 4,
-            margin: const EdgeInsets.only(top: 14, bottom: 16),
-            decoration: BoxDecoration(
-              color: t.line2,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
+          const TestuGrabber(),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 18),
             child: Row(children: [
-              Container(
-                width: 36,
-                height: 36,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: t.card2,
-                  border: Border.all(color: t.line),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(res.ic,
-                    style: TextStyle(
-                        fontFamily: 'GeistMono',
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w500,
-                        color: t.mut)),
-              ),
+              TestuDocBadge(res.ic),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -510,38 +508,6 @@ class _ResSheetState extends State<_ResSheet> {
             _composer(const EdgeInsets.fromLTRB(18, 12, 18, 0)),
           ],
         ],
-      ),
-    );
-  }
-}
-
-class _ChipBtn extends StatelessWidget {
-  const _ChipBtn(
-      {required this.label, required this.primary, required this.onTap});
-
-  final String label;
-  final bool primary;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = TestuTokens.of(context);
-    return TestuPressable(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 14),
-        decoration: BoxDecoration(
-          color: primary ? t.primaryAction : null,
-          border: Border.all(color: primary ? t.primaryAction : t.line2),
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Text(label,
-            style: TextStyle(
-              fontFamily: 'Geist',
-              fontSize: 11.5,
-              fontWeight: primary ? FontWeight.w700 : FontWeight.w400,
-              color: primary ? t.onPrimaryAction : const Color(0xFFC2C1BD),
-            )),
       ),
     );
   }
@@ -684,12 +650,25 @@ class _MiniPlayerState extends State<_MiniPlayer> {
           _ready
               ? '${_fmt(_ctrl.value.position)} / ${_fmt(_ctrl.value.duration)}'
               : '–:–',
-          style: const TextStyle(
+          style: TextStyle(
               fontFamily: 'GeistMono',
               fontSize: 9.5,
-              color: Color(0xFFD6D6DA)),
+              color: TestuTokens.of(context).inkSoft),
         ),
       ]);
+
+  /// The on-video play badge, shared by the card and the fullscreen view.
+  Widget _playBadge(TestuTokens t) => Container(
+        width: 52,
+        height: 52,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: t.scrim,
+          shape: BoxShape.circle,
+          border: Border.all(color: t.onImgLine),
+        ),
+        child: TestuIcon(TestuGlyph.play, size: 20, color: t.primaryAction),
+      );
 
   /// Full-screen playback — same lightbox grammar as showTestuZoom (PDF
   /// pages), so video and PDF share one "expand" behavior. The sheet's
@@ -716,13 +695,10 @@ class _MiniPlayerState extends State<_MiniPlayer> {
                         child: Text(_chapters[_currentCh].name, style: kLabel),
                       ),
                     ),
-                    TestuPressable(
-                      onTap: () => Navigator.of(context).pop(),
-                      child: Padding(
-                        padding: const EdgeInsets.all(14),
-                        child: Text('✕',
-                            style: TextStyle(fontSize: 16, color: t.mut)),
-                      ),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: TestuIconButton(TestuGlyph.close,
+                          onTap: () => Navigator.of(context).pop()),
                     ),
                   ]),
                   Expanded(
@@ -739,25 +715,7 @@ class _MiniPlayerState extends State<_MiniPlayer> {
                               aspectRatio: _ctrl.value.aspectRatio,
                               child: VideoPlayer(_ctrl)),
                         ),
-                        if (!_ctrl.value.isPlaying)
-                          Container(
-                            width: 52,
-                            height: 52,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              color: const Color(0xCC0A0A0B),
-                              shape: BoxShape.circle,
-                              border:
-                                  Border.all(color: const Color(0x2EFFFFFF)),
-                            ),
-                            child: const Padding(
-                              padding: EdgeInsets.only(left: 4),
-                              child: Text('▶',
-                                  style: TextStyle(
-                                      fontSize: 17,
-                                      color: Color(0xFFF4F2EE))),
-                            ),
-                          ),
+                        if (!_ctrl.value.isPlaying) _playBadge(t),
                       ]),
                     ),
                   ),
@@ -806,9 +764,7 @@ class _MiniPlayerState extends State<_MiniPlayer> {
                     fontFamily: 'Geist',
                     fontSize: 11.5,
                     fontWeight: current ? FontWeight.w600 : FontWeight.w400,
-                    color: current
-                        ? const Color(0xFFE9E8E4)
-                        : const Color(0xFFC2C1BD))),
+                    color: current ? t.ink : t.inkDim)),
           ),
         ]),
       ),
@@ -821,7 +777,7 @@ class _MiniPlayerState extends State<_MiniPlayer> {
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: const Color(0xFF0D0D0F),
+        color: t.well,
         border: Border.all(color: t.line),
         borderRadius: BorderRadius.circular(12),
       ),
@@ -859,24 +815,7 @@ class _MiniPlayerState extends State<_MiniPlayer> {
                           aspectRatio: ratio, child: VideoPlayer(_ctrl)),
                     ),
                   if (!_ready || !_ctrl.value.isPlaying)
-                    Center(
-                      child: Container(
-                        width: 52,
-                        height: 52,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: const Color(0xCC0A0A0B),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: const Color(0x2EFFFFFF)),
-                        ),
-                        child: const Padding(
-                          padding: EdgeInsets.only(left: 4),
-                          child: Text('▶',
-                              style: TextStyle(
-                                  fontSize: 17, color: Color(0xFFF4F2EE))),
-                        ),
-                      ),
-                    ),
+                    Center(child: _playBadge(t)),
                   // Always-available fullscreen (portrait and landscape) —
                   // the PDF's tap-to-zoom counterpart for video.
                   Positioned(
@@ -889,12 +828,12 @@ class _MiniPlayerState extends State<_MiniPlayer> {
                         height: 28,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: const Color(0xCC0A0A0B),
+                          color: t.scrim,
                           shape: BoxShape.circle,
-                          border: Border.all(color: const Color(0x2EFFFFFF)),
+                          border: Border.all(color: t.onImgLine),
                         ),
-                        child: const TestuIcon(TestuGlyph.expand,
-                            size: 13, color: Color(0xFFF4F2EE)),
+                        child: TestuIcon(TestuGlyph.expand,
+                            size: 13, color: t.primaryAction),
                       ),
                     ),
                   ),
@@ -957,25 +896,28 @@ class _MiniPlayerState extends State<_MiniPlayer> {
                         color: t.mut),
                   ),
                 ),
-                Text(_chaptersOpen ? '−' : '+',
-                    style: TextStyle(fontSize: 12, color: t.faint)),
+                TestuIcon(_chaptersOpen ? TestuGlyph.minus : TestuGlyph.plus,
+                    size: 12, color: t.faint),
               ]),
             ),
           ),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 11),
-            decoration: BoxDecoration(
-              color: t.card2,
-              border: Border(top: BorderSide(color: t.line)),
+          // A live doc shows its own credit or none; the demo clip's line
+          // belongs to the offline demo only.
+          if (widget.doc?.credit != null || (widget.doc == null && !testuLive))
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 11),
+              decoration: BoxDecoration(
+                color: t.card2,
+                border: Border(top: BorderSide(color: t.line)),
+              ),
+              child: Text(
+                widget.doc?.credit ??
+                    L('Turnaround groundhandling, Frankfurt — demo footage · CC BY-SA Lufthansa Cargo',
+                        'Handling de turnaround, Fráncfort — metraje de demo · CC BY-SA Lufthansa Cargo'),
+                style: kCaption,
+              ),
             ),
-            child: Text(
-              widget.doc?.credit ??
-                  L('Turnaround groundhandling, Frankfurt — demo footage · CC BY-SA Lufthansa Cargo',
-                      'Handling de turnaround, Fráncfort — metraje de demo · CC BY-SA Lufthansa Cargo'),
-              style: kCaption,
-            ),
-          ),
         ],
       ),
     );

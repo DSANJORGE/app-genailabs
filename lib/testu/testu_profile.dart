@@ -1,18 +1,21 @@
-import 'dart:io';
-
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:path_provider/path_provider.dart';
-
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'testu_auth.dart';
 import 'testu_i18n.dart';
+import 'testu_icons.dart';
+import 'testu_live.dart';
 import 'testu_lock.dart';
 import 'testu_theme.dart';
+import 'testu_usage.dart' show kTestuAppVersion;
 import 'testu_widgets.dart';
 import 'testu_client.dart';
+import 'testu_avatar_io.dart'
+    if (dart.library.js_interop) 'testu_avatar_web.dart';
 
 /// Ana's chosen avatar — the Today header listens so the photo swap
 /// propagates, like the prototype's setAvatar() updating every .ana-ava.
@@ -23,41 +26,32 @@ final testuAvatar = ValueNotifier<String>(_presetAvatars.first);
 /// these are the ones that can be removed again.
 final testuAvatarLibrary = ValueNotifier<List<String>>(const []);
 
+/// Value of [testuAvatar] meaning "no photo — draw the learner's initials".
+const kInitialsAvatar = 'initials';
+
 final _presetAvatars = [
-  client.personaAvatar,
-  'assets/img/p_ana.jpg',
-  'assets/img/p_laia.jpg',
-  'assets/img/p_miranda.jpg',
+  // Live: nobody's stock photo — initials until the learner adds a photo.
+  if (testuLive) kInitialsAvatar else client.personaAvatar,
+  // ponytail: the prototype faces are demo-only; a live user adds their
+  // own photo. Drops with the persona once profiles come from the server.
+  if (!testuLive) ...[
+    'assets/img/p_ana.jpg',
+    'assets/img/p_laia.jpg',
+    'assets/img/p_miranda.jpg',
+  ],
 ];
 
 const _kAvatarPref = 'testu_avatar';
 
-Future<Directory> _avatarDir() async {
-  final d =
-      Directory('${(await getApplicationDocumentsDirectory()).path}/avatars');
-  if (!d.existsSync()) d.createSync(recursive: true);
-  return d;
-}
-
 /// Restores the library and the selection; call once at startup.
 Future<void> restoreTestuAvatar() async {
-  final dir = await _avatarDir();
-  // Carried over from the single-photo cut, which saved one fixed avatar.jpg.
-  final legacy = File('${dir.parent.path}/avatar.jpg');
-  if (legacy.existsSync()) {
-    legacy.renameSync(
-        '${dir.path}/${DateTime.now().millisecondsSinceEpoch}.jpg');
-  }
-  testuAvatarLibrary.value = dir
-      .listSync()
-      .whereType<File>()
-      .map((f) => f.path)
-      .toList()
-    ..sort();
+  testuAvatarLibrary.value = await avatarRestoreLibrary();
   final prefs = await SharedPreferences.getInstance();
   final saved = prefs.getString(_kAvatarPref);
   if (saved != null &&
-      (saved.startsWith('assets/') || File(saved).existsSync())) {
+      (saved == kInitialsAvatar ||
+          (!testuLive && saved.startsWith('assets/')) ||
+          avatarExists(saved))) {
     testuAvatar.value = saved;
   }
 }
@@ -68,34 +62,69 @@ Future<void> _selectAvatar(String src) async {
   await prefs.setString(_kAvatarPref, src);
 }
 
-/// Copies the pick into the library under a unique name — FileImage caches by
-/// path, so reusing one filename would keep serving the previous photo.
 Future<void> _addAvatar() async {
   final picked = await ImagePicker()
       .pickImage(source: ImageSource.gallery, maxWidth: 512);
   if (picked == null) return;
-  final dir = await _avatarDir();
-  final dest = '${dir.path}/${DateTime.now().millisecondsSinceEpoch}.jpg';
-  await File(picked.path).copy(dest);
-  testuAvatarLibrary.value = [...testuAvatarLibrary.value, dest];
-  await _selectAvatar(dest);
+  final src = await avatarAdd(picked);
+  if (!testuAvatarLibrary.value.contains(src)) {
+    testuAvatarLibrary.value = [...testuAvatarLibrary.value, src];
+  }
+  await _selectAvatar(src);
 }
 
 /// Removes a photo from TestU (not from the phone's own library). If it was
 /// the one in use, the profile falls back to the first preset rather than
 /// leaving the header with a missing file.
-Future<void> _removeAvatar(String path) async {
-  final f = File(path);
-  if (f.existsSync()) f.deleteSync();
-  await FileImage(f).evict();
+Future<void> _removeAvatar(String src) async {
+  await avatarRemove(src);
   testuAvatarLibrary.value =
-      testuAvatarLibrary.value.where((p) => p != path).toList();
-  if (testuAvatar.value == path) await _selectAvatar(_presetAvatars.first);
+      testuAvatarLibrary.value.where((p) => p != src).toList();
+  if (testuAvatar.value == src) await _selectAvatar(_presetAvatars.first);
 }
 
-/// [testuAvatar] holds either a bundled asset key or a picked file path.
+/// [testuAvatar] holds a bundled asset key or a store key (a file path on
+/// device, a data URL in the browser).
 ImageProvider testuAvatarImage(String src) =>
-    src.startsWith('assets/') ? AssetImage(src) : FileImage(File(src));
+    src.startsWith('assets/') ? AssetImage(src) : avatarImage(src);
+
+/// The learner's picture wherever it appears: their chosen photo, or — live,
+/// before they add one — their initials on the brand colour.
+class TestuAvatar extends StatelessWidget {
+  const TestuAvatar({super.key, required this.size, this.src});
+
+  final double size;
+
+  /// A specific source (the picker's tiles); null follows [testuAvatar].
+  final String? src;
+
+  Widget _of(String s) => s == kInitialsAvatar
+      ? Container(
+          width: size,
+          height: size,
+          alignment: Alignment.center,
+          decoration:
+              BoxDecoration(shape: BoxShape.circle, color: client.brand),
+          child: Text(testuInitials,
+              style: TextStyle(
+                  fontFamily: 'Sora',
+                  fontWeight: FontWeight.w700,
+                  fontSize: size * 0.36,
+                  color: Colors.white)),
+        )
+      : ClipOval(
+          child: Image(
+              image: testuAvatarImage(s),
+              width: size,
+              height: size,
+              fit: BoxFit.cover));
+
+  @override
+  Widget build(BuildContext context) => src != null
+      ? _of(src!)
+      : ValueListenableBuilder<String>(
+          valueListenable: testuAvatar, builder: (_, s, _) => _of(s));
+}
 
 void showTestuProfile(BuildContext context) {
   Navigator.of(context).push(
@@ -161,49 +190,51 @@ class _TestuProfileScreenState extends State<TestuProfileScreen> {
               const _AvatarPicker(),
               const SizedBox(height: 10),
               _Note(
-                  L('${client.name} allows personal photos on internal apps. Your '
-                          'photo is visible to your team — never outside the '
-                          'company. Removing one here leaves it on your phone.',
-                      '${client.name} permite fotos personales en apps internas. Tu '
-                          'foto es visible para tu equipo — nunca fuera de la '
-                          'empresa. Quitar una aquí no la borra de tu '
-                          'teléfono.'),
+                  L('Your photo stays on this phone — TestU never uploads '
+                          'it. Removing one here leaves it in your camera '
+                          'roll.',
+                      'Tu foto se queda en este teléfono: TestU nunca la '
+                          'sube. Quitar una aquí no la borra de tu '
+                          'carrete.'),
                   t: t),
             ]),
-            _ProfCard(children: [
-              _H4(L('SECURITY', 'SEGURIDAD')),
-              _SetRow(
-                title: TestuLock.available
-                    ? L('Unlock with ${TestuLock.name}',
-                        'Desbloquear con ${TestuLock.name}')
-                    : L('Unlock with Face ID or fingerprint',
-                        'Desbloquear con Face ID o huella'),
-                sub: TestuLock.available
-                    ? L('Open the app without waiting for an emailed code',
-                        'Abre la app sin esperar un código por correo')
-                    : L('Set up Face ID or a fingerprint on this device first',
-                        'Configura Face ID o una huella en este dispositivo '
-                            'primero'),
-                last: true,
-                trailing: TestuLock.available
-                    ? _Toggle(on: TestuLock.enabled, onTap: _toggleLock)
-                    : Opacity(
-                        opacity: 0.55, child: _Toggle(on: false)),
-              ),
-              if (_lockError != null) ...[
+            // No sensor in a browser tab; the card would only ever say
+            // "set up Face ID first".
+            if (!kIsWeb)
+              _ProfCard(children: [
+                _H4(L('SECURITY', 'SEGURIDAD')),
+                _SetRow(
+                  title: TestuLock.available
+                      ? L('Unlock with ${TestuLock.name}',
+                          'Desbloquear con ${TestuLock.name}')
+                      : L('Unlock with Face ID or fingerprint',
+                          'Desbloquear con Face ID o huella'),
+                  sub: TestuLock.available
+                      ? L('Open the app without waiting for an emailed code',
+                          'Abre la app sin esperar un código por correo')
+                      : L('Set up Face ID or a fingerprint on this device first',
+                          'Configura Face ID o una huella en este dispositivo '
+                              'primero'),
+                  last: true,
+                  trailing: TestuLock.available
+                      ? _Toggle(on: TestuLock.enabled, onTap: _toggleLock)
+                      : Opacity(
+                          opacity: 0.55, child: _Toggle(on: false)),
+                ),
+                if (_lockError != null) ...[
+                  const SizedBox(height: 8),
+                  Text(_lockError!,
+                      style: TextStyle(
+                          fontFamily: 'Geist', fontSize: 11.5, color: t.red)),
+                ],
                 const SizedBox(height: 8),
-                Text(_lockError!,
-                    style: TextStyle(
-                        fontFamily: 'Geist', fontSize: 11.5, color: t.red)),
-              ],
-              const SizedBox(height: 8),
-              _Note(
-                  L('Your face or fingerprint stays on this phone — TestU '
-                          'never receives it. Signing out turns this off.',
-                      'Tu cara o tu huella se quedan en este teléfono: TestU '
-                          'nunca las recibe. Al cerrar sesión se desactiva.'),
-                  t: t),
-            ]),
+                _Note(
+                    L('Your face or fingerprint stays on this phone — TestU '
+                            'never receives it. Signing out turns this off.',
+                        'Tu cara o tu huella se quedan en este teléfono: TestU '
+                            'nunca las recibe. Al cerrar sesión se desactiva.'),
+                    t: t),
+              ]),
             _ProfCard(children: [
               _H4(L('LANGUAGE', 'IDIOMA')),
               _SetRow(
@@ -217,10 +248,16 @@ class _TestuProfileScreenState extends State<TestuProfileScreen> {
                 sub: L('Applies across TestU Learn, including ${client.tutor}',
                     'Se aplica en todo TestU Learn, incluido ${client.tutor}'),
                 last: true,
-                trailing: _LangDropdown(
+                trailing: _LangPicker(
                     onChanged: (v) => setState(() => testuLang.value = v)),
               ),
             ]),
+            // ponytail: calendars and the whole notifications card (toggles,
+            // certification deadline, quiet hours) are prototype UI with
+            // nothing behind them — no push backend, no certification data;
+            // hidden in live builds, kept for the vueling demo. Show again
+            // when the backend grows an endpoint for each.
+            if (!testuLive)
             _ProfCard(children: [
               _H4(L('CALENDARS · ${client.tutor.toUpperCase()} USES THESE TO FIND QUIET SLOTS',
                   'CALENDARIOS · ${client.tutor.toUpperCase()} LOS USA PARA ENCONTRAR HUECOS')),
@@ -285,6 +322,7 @@ class _TestuProfileScreenState extends State<TestuProfileScreen> {
                       '${client.tutor} solo lee horas libres/ocupadas — nunca el contenido de los eventos.'),
                   t: t),
             ]),
+            if (!testuLive)
             _ProfCard(children: [
               _H4(L('NOTIFICATIONS', 'NOTIFICACIONES')),
               _SetRow(
@@ -318,29 +356,51 @@ class _TestuProfileScreenState extends State<TestuProfileScreen> {
                 sub: L('No notifications 22:00 – 07:00',
                     'Sin notificaciones 22:00 – 07:00'),
                 last: true,
-                trailing: Text(
-                  '22:00–07:00 ›',
-                  style: kLabel,
-                ),
+                trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Text('22:00–07:00', style: kLabel),
+                  const SizedBox(width: 4),
+                  TestuIcon(TestuGlyph.chevronRight, size: 12, color: t.faint),
+                ]),
               ),
             ]),
             _ProfCard(children: [
               _H4(L('PRIVACY', 'PRIVACIDAD')),
               Text(
-                L('Your conversations with ${client.tutor} are private to you. Your '
-                        'managers see readiness signals and certification '
-                        'status — never your chats, never individual answers.',
-                    'Tus conversaciones con ${client.tutor} son privadas. Tus '
-                        'responsables ven señales de preparación y estado de '
-                        'certificación — nunca tus chats, nunca respuestas '
-                        'individuales.'),
-                style: const TextStyle(
+                testuLive
+                    ? L('Your conversations with ${client.tutor} are private to you. Your '
+                            'managers see readiness signals — never your chats, never '
+                            'individual answers.',
+                        'Tus conversaciones con ${client.tutor} son privadas. Tus '
+                            'responsables ven señales de preparación — nunca tus '
+                            'chats, nunca respuestas individuales.')
+                    : L('Your conversations with ${client.tutor} are private to you. Your '
+                            'managers see readiness signals and certification '
+                            'status — never your chats, never individual answers.',
+                        'Tus conversaciones con ${client.tutor} son privadas. Tus '
+                            'responsables ven señales de preparación y estado de '
+                            'certificación — nunca tus chats, nunca respuestas '
+                            'individuales.'),
+                style: TextStyle(
                   fontFamily: 'Geist',
                   fontSize: 11.5,
                   height: 1.6,
-                  color: Color(0xFFB9B8B4),
+                  color: t.inkDim,
                 ),
               ),
+              if (testuPrivacyUrl.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                TestuPressable(
+                  onTap: () => launchUrl(Uri.parse(testuPrivacyUrl),
+                      mode: LaunchMode.externalApplication),
+                  child: _SetRow(
+                    title: L('Privacy policy', 'Política de privacidad'),
+                    sub: Uri.parse(testuPrivacyUrl).host,
+                    last: true,
+                    trailing: TestuIcon(TestuGlyph.chevronRight,
+                        size: 12, color: t.faint),
+                  ),
+                ),
+              ],
             ]),
             Padding(
               padding: const EdgeInsets.fromLTRB(18, 14, 18, 0),
@@ -349,20 +409,16 @@ class _TestuProfileScreenState extends State<TestuProfileScreen> {
                   TestuButton(
                     L('Sign out', 'Cerrar sesión'),
                     color: t.red,
-                    borderColor: const Color(0x52C25555),
+                    borderColor: t.red.withValues(alpha: 0.32),
                     onTap: () {
                       Navigator.of(context).pop();
                       TestuAuth.signOut();
                     },
                   ),
                   const SizedBox(height: 12),
-                  Text(
-                    'TESTU LEARN · ${client.name.toUpperCase()} · DEMO BUILD',
-                    style: TextStyle(
-                      fontFamily: 'GeistMono',
-                      fontSize: 9.5,
-                      color: t.faint,
-                    ),
+                  TestuEyebrow(
+                    'TESTU LEARN · ${client.name.toUpperCase()} · ${testuLive ? kTestuAppVersion : 'DEMO BUILD'}',
+                    color: t.faint,
                   ),
                 ],
               ),
@@ -411,38 +467,19 @@ class _Head extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = TestuTokens.of(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 0, 18, 6),
+      padding: const EdgeInsets.fromLTRB(4, 0, 18, 6),
       child: Row(
         children: [
-          TestuPressable(
-            onTap: onBack,
-            child: Padding(
-              padding: const EdgeInsets.all(8),
-              child: Text(
-                '‹',
-                style: TextStyle(
-                    fontFamily: 'Sora', fontSize: 26, color: t.mut),
-              ),
-            ),
-          ),
-          const SizedBox(width: 6),
-          ValueListenableBuilder<String>(
-            valueListenable: testuAvatar,
-            builder: (_, src, child) => ClipOval(
-              child: Image(
-                  image: testuAvatarImage(src),
-                  width: 62,
-                  height: 62,
-                  fit: BoxFit.cover),
-            ),
-          ),
+          TestuIconButton(TestuGlyph.chevronLeft, onTap: onBack, size: 18),
+          const SizedBox(width: 2),
+          const TestuAvatar(size: 62),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  client.personaFull,
+                  testuFullName,
                   style: TextStyle(
                     fontFamily: 'Sora',
                     fontWeight: FontWeight.w700,
@@ -452,18 +489,25 @@ class _Head extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 3),
-                Text(
-                  // No hand \n: the Spanish first half only just fits at
-                  // 390pt — let the text wrap where it needs to.
-                  CL('Operations · Safety Lead track · ${client.orgEn}',
-                      'Operaciones · Vía Líder de Seguridad · ${client.orgEs}',
-                      'Ramp Agent · Safety Lead track · ${client.orgEn}',
-                      'Agente de Rampa · Vía Líder de Seguridad · ${client.orgEs}'),
-                  style: TextStyle(
-                    fontFamily: 'Geist',
-                    fontSize: 11,
-                    height: 1.5,
-                    color: t.mut,
+                ValueListenableBuilder<String>(
+                  valueListenable: testuOrganization,
+                  builder: (_, org, _) => Text(
+                    // Live: what the account and the server say, nothing
+                    // more — email · organisation, or just the email.
+                    testuLive
+                        ? [testuEmail, org]
+                            .where((s) => s.isNotEmpty)
+                            .join(' · ')
+                        : CL('Operations · Safety Lead track · ${client.orgEn}',
+                            'Operaciones · Vía Líder de Seguridad · ${client.orgEs}',
+                            'Ramp Agent · Safety Lead track · ${client.orgEn}',
+                            'Agente de Rampa · Vía Líder de Seguridad · ${client.orgEs}'),
+                    style: TextStyle(
+                      fontFamily: 'Geist',
+                      fontSize: 11,
+                      height: 1.5,
+                      color: t.mut,
+                    ),
                   ),
                 ),
               ],
@@ -515,9 +559,7 @@ class _AvatarPicker extends StatelessWidget {
                       shape: BoxShape.circle,
                       border: Border.all(color: t.line2),
                     ),
-                    child: Text('+',
-                        style: TextStyle(
-                            fontFamily: 'Sora', fontSize: 20, color: t.mut)),
+                    child: TestuIcon(TestuGlyph.plus, size: 16, color: t.mut),
                   ),
                 ),
               ),
@@ -564,13 +606,10 @@ class _AvatarTile extends StatelessWidget {
                   shape: BoxShape.circle,
                   border: Border.all(
                     width: 2,
-                    color:
-                        selected ? const Color(0xFFF4F2EE) : Colors.transparent,
+                    color: selected ? t.primaryAction : Colors.transparent,
                   ),
                 ),
-                child: ClipOval(
-                    child:
-                        Image(image: testuAvatarImage(src), fit: BoxFit.cover)),
+                child: TestuAvatar(size: 42, src: src),
               ),
             ),
           ),
@@ -597,8 +636,7 @@ class _AvatarTile extends StatelessWidget {
                       shape: BoxShape.circle,
                       border: Border.all(color: t.line2),
                     ),
-                    child: Text('✕',
-                        style: TextStyle(fontSize: 8.5, color: t.mut)),
+                    child: TestuIcon(TestuGlyph.close, size: 8, color: t.mut),
                   ),
                 ),
               ),
@@ -631,8 +669,8 @@ class _SetRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 11),
       decoration: last
           ? null
-          : const BoxDecoration(
-              border: Border(bottom: BorderSide(color: Color(0xFF17171A))),
+          : BoxDecoration(
+              border: Border(bottom: BorderSide(color: t.card2)),
             ),
       child: Row(
         children: [
@@ -640,15 +678,7 @@ class _SetRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontFamily: 'Geist',
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                    color: t.ink,
-                  ),
-                ),
+                Text(title, style: kRowTitle),
                 const SizedBox(height: 2),
                 Text(
                   sub,
@@ -674,6 +704,7 @@ class _Toggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = TestuTokens.of(context);
     return GestureDetector(
       onTap: onTap == null
           ? null
@@ -687,7 +718,7 @@ class _Toggle extends StatelessWidget {
         height: 24,
         padding: const EdgeInsets.all(3),
         decoration: BoxDecoration(
-          color: on ? const Color(0xFF2F6A4C) : const Color(0xFF2C2C33),
+          color: on ? t.greenBorder : t.line2,
           borderRadius: BorderRadius.circular(99),
         ),
         child: AnimatedAlign(
@@ -699,7 +730,7 @@ class _Toggle extends StatelessWidget {
             height: 18,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: on ? const Color(0xFFE9E8E4) : const Color(0xFF8B8F98),
+              color: on ? t.ink : t.mut,
             ),
           ),
         ),
@@ -714,56 +745,62 @@ class _GreenPill extends StatelessWidget {
   final String label;
 
   @override
-  Widget build(BuildContext context) {
-    return TestuPill(label,
-        color: const Color(0xFF7DBB9C), borderColor: const Color(0xFF2F6A4C));
-  }
+  Widget build(BuildContext context) => TestuPill.green(label);
 }
 
-/// Native dropdown listing [testuLanguages] — new locales appear
-/// automatically.
-class _LangDropdown extends StatelessWidget {
-  const _LangDropdown({required this.onChanged});
+/// Language: a quiet chip naming the current one; tapping opens the house
+/// picker sheet listing [testuLanguages] (was Material's DropdownButton —
+/// the one stock menu in the app, with a caret the fonts couldn't render).
+class _LangPicker extends StatelessWidget {
+  const _LangPicker({required this.onChanged});
 
   final ValueChanged<String> onChanged;
 
   @override
   Widget build(BuildContext context) {
     final t = TestuTokens.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: t.card2,
-        border: Border.all(color: t.line2),
-        borderRadius: BorderRadius.circular(7),
+    return TestuPressable(
+      onTap: () => showTestuListSheet(
+        context,
+        title: L('LANGUAGE', 'IDIOMA'),
+        maxHeight: 0.4,
+        rows: [
+          for (final e in testuLanguages.entries)
+            (
+              tag: null,
+              label: e.value,
+              trailing: null,
+              selected: e.key == testuLang.value,
+              indent: false,
+              onTap: () {
+                if (e.key != testuLang.value) {
+                  HapticFeedback.selectionClick();
+                  onChanged(e.key);
+                }
+              },
+            ),
+        ],
       ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: testuLang.value,
-          isDense: true,
-          dropdownColor: t.card2,
-          borderRadius: BorderRadius.circular(10),
-          icon: Padding(
-            padding: const EdgeInsets.only(left: 6),
-            child: Text('▾', style: TextStyle(fontSize: 11, color: t.mut)),
-          ),
-          style: TextStyle(
-            fontFamily: 'Geist',
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: t.ink,
-          ),
-          items: [
-            for (final e in testuLanguages.entries)
-              DropdownMenuItem(value: e.key, child: Text(e.value)),
-          ],
-          onChanged: (v) {
-            if (v != null && v != testuLang.value) {
-              HapticFeedback.selectionClick();
-              onChanged(v);
-            }
-          },
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 7, 8, 7),
+        decoration: BoxDecoration(
+          color: t.card2,
+          border: Border.all(color: t.line2),
+          borderRadius: BorderRadius.circular(7),
         ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Text(
+            testuLanguages[testuLang.value] ?? testuLang.value,
+            style: TextStyle(
+              fontFamily: 'Geist',
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: t.ink,
+            ),
+          ),
+          const SizedBox(width: 4),
+          TestuIcon(TestuGlyph.chevronDown, size: 12, color: t.mut),
+        ]),
       ),
     );
   }

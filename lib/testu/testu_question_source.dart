@@ -2,14 +2,14 @@ import 'package:flutter/painting.dart';
 
 import 'testu_i18n.dart';
 import 'testu_client.dart';
+import 'testu_theme.dart';
 
 /// Where session questions come from. The session screen only sees this
 /// seam, so a live EnterMedia-backed source can slot in later without
 /// touching the widgets or the engine.
 
 /// Italic accent inside framing copy; shared with the live adapter.
-const testuItal =
-    TextStyle(fontStyle: FontStyle.italic, color: Color(0xFFA9A8A4));
+final testuItal = kItalic;
 const _bold = TextStyle(fontWeight: FontWeight.w700);
 
 /// One session question, render-ready. Fields a backend can't supply are
@@ -88,14 +88,14 @@ abstract class TestuQuestionSource {
     required bool correct,
   }) {}
 
-  /// Fire-and-forget: the user flagged a question for the content team.
-  /// ponytail: no-op until the content-review endpoint exists — the live
-  /// adapter will override this with the real POST.
-  void reportFlag({
+  /// The user flagged a question for the content team. No-op for local
+  /// data; the live adapter posts it. Completes (or throws) so the report
+  /// sheet can say whether it went through.
+  Future<void> reportFlag({
     required TestuQ q,
     required String reason,
     String? note,
-  }) {}
+  }) async {}
 }
 
 /// The approved prototype's hardcoded questions. [load] completes

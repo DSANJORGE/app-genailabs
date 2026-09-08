@@ -7,16 +7,20 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'testu_i18n.dart';
+import 'testu_icons.dart';
 import 'testu_live.dart';
 import 'testu_pdf.dart';
 import 'testu_notifications.dart';
 import 'testu_question_source.dart';
 import 'testu_report_sheet.dart';
 import 'testu_social.dart';
+import 'testu_social_api.dart';
 import 'testu_session_engine.dart';
 import 'testu_shell.dart';
 import 'testu_sully.dart';
 import 'testu_theme.dart';
+import 'testu_topics.dart' show masteryOf;
+import 'testu_usage.dart';
 import 'testu_widgets.dart';
 import 'testu_client.dart';
 
@@ -46,29 +50,47 @@ List<String> get _conf => [
   L('Fairly sure', 'Bastante'),
   L('Certain', G('Seguro', 'Segura')),
 ];
-const _confColors = [
-  Color(0xFFC25555),
-  Color(0xFFD9A23F),
-  Color(0xFF9DB55C),
-  Color(0xFF4CA97A),
+const _t = TestuTokens.instance;
+final _confColors = [
+  _t.confGuessing,
+  _t.confUnsure,
+  _t.confFairlySure,
+  _t.confCertain,
 ];
-const _confSelectedBg = [
-  Color(0xFF2A1516),
-  Color(0xFF291F10),
-  Color(0xFF1D2212),
-  Color(0xFF12231B),
+// Tint behind the tapped level; the olive one is the fairly-sure tint and
+// exists nowhere else.
+final _confSelectedBg = [
+  _t.redTint,
+  _t.amberTint,
+  const Color(0xFF1D2212),
+  _t.greenTint,
 ];
 
-const _ital = TextStyle(fontStyle: FontStyle.italic, color: Color(0xFFA9A8A4));
 const _bold = TextStyle(fontWeight: FontWeight.w700);
 
 /// Learn Mode session — a chat with Sully. Confidence tap IS the submit;
 /// the debrief follows the last question.
 class TestuSessionScreen extends StatefulWidget {
-  const TestuSessionScreen({super.key, this.topicId, this.sectionId});
+  const TestuSessionScreen(
+      {super.key,
+      this.topicId,
+      this.sectionId,
+      this.questionId,
+      this.highlightMessageId,
+      this.source});
 
   final String? topicId;
   final String? sectionId;
+
+  /// From a notification: start on this question and, once it is answered,
+  /// open its thread on [highlightMessageId].
+  final String? questionId;
+  final String? highlightMessageId;
+
+  /// Where the questions come from; null = the build's default (live server
+  /// for minsur, the bundled demo for vueling). Tests pass
+  /// [LocalQuestionSource] explicitly — a live build never falls back to it.
+  final TestuQuestionSource? source;
 
   @override
   State<TestuSessionScreen> createState() => _TestuSessionScreenState();
@@ -87,6 +109,10 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
   Timer? _sullyTimeout;
   bool _waitingSully = false;
 
+  /// Set when the 90 s line was shown: the next tutor message on the channel
+  /// still lands as the late answer instead of being dropped.
+  bool _lateSully = false;
+
   /// Keys on each question's framing bubble, and the one the auto-scroll is
   /// currently not allowed to push above the viewport top.
   final _anchors = <int, GlobalKey>{};
@@ -98,13 +124,17 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
   bool _stick = true;
   static const _stickSlack = 80.0;
 
-  /// Adapter picked by the compile-time flag; falls back to local if the
-  /// live load fails, so it is not final.
-  late TestuQuestionSource _source = testuLive
-      ? EmeQuestionSource(topicId: widget.topicId, sectionId: widget.sectionId)
-      : LocalQuestionSource();
+  /// Adapter picked by the compile-time flag (or handed in by a test).
+  late final TestuQuestionSource _source = widget.source ??
+      (testuLive
+          ? EmeQuestionSource(
+              topicId: widget.topicId,
+              sectionId: widget.sectionId,
+              questionId: widget.questionId)
+          : LocalQuestionSource());
   List<TestuQ> _qs = const [];
   bool _loading = true;
+  bool _error = false;
 
   @override
   void initState() {
@@ -130,9 +160,9 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
     _boot();
   }
 
-  /// Load the batch, then start the engine. A live source that throws or
-  /// comes back empty falls back to the offline demo — that is the error
-  /// state.
+  /// Load the batch, then start the engine. A source that throws or comes
+  /// back empty is the error state — never the bundled demo standing in
+  /// for the live server.
   Future<void> _boot() async {
     var qs = const <TestuQ>[];
     try {
@@ -140,17 +170,21 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
     } catch (e) {
       debugPrint('TestU: question load failed ($e)');
     }
-    if (qs.isEmpty && _source is! LocalQuestionSource) {
-      debugPrint('TestU: live questions unavailable — falling back to local');
-      _source = LocalQuestionSource();
-      qs = await _source.load();
-    }
     if (!mounted) return;
     setState(() {
       _qs = qs;
       _loading = false;
+      _error = qs.isEmpty;
     });
-    _controller.start();
+    if (!_error) _controller.start();
+  }
+
+  void _retry() {
+    setState(() {
+      _loading = true;
+      _error = false;
+    });
+    _boot();
   }
 
   @override
@@ -269,8 +303,10 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
       void sullySays(String s) {
         // Only the reply to an open question: the server also posts its
         // own feedback after `chat_tutor_answer`, and the local verdict
-        // already covers that.
-        if (!mounted || !_waitingSully) return;
+        // already covers that. After the 90 s line the next message still
+        // counts (late replies append).
+        if (!mounted || !(_waitingSully || _lateSully)) return;
+        _lateSully = false;
         _sullyTimeout?.cancel();
         setState(() {
           _waitingSully = false;
@@ -280,20 +316,31 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
       }
 
       _sullySub ??= sullyReplies().listen(sullySays);
-      setState(() => _waitingSully = true);
+      setState(() {
+        _waitingSully = true;
+        _lateSully = false;
+      });
       // The server acknowledges the follow-up before the tutor answers, and
       // the answer may never come (minsur, 2026-09-02) — don't spin forever.
       _sullyTimeout?.cancel();
       _sullyTimeout = Timer(const Duration(seconds: 90), () {
-        if (_waitingSully) sullySays(sullySlowReply());
+        if (!_waitingSully) return;
+        sullySays(sullySlowReply());
+        // ponytail: whatever the tutor posts next is taken as the late
+        // answer; match on a reply id when the server sends one.
+        _lateSully = true;
       });
       askSully(q, text, attempt: _attemptFor(q))
-          .catchError((_) => sullySays(sullyUnavailable()));
+          .catchError((Object e) => sullySays(sullyFailure(e)));
     } else {
+      // The canned demo lines belong to the bundled questions only; a live
+      // question that cannot reach the tutor says so instead.
       setState(() => _chat.add((
         _controller.transcript.length,
         false,
-        offlineAnswer ?? sullyDemoReply()
+        _source is LocalQuestionSource
+            ? offlineAnswer ?? sullyDemoReply()
+            : sullyUnavailable()
       )));
       _scrollDown();
     }
@@ -310,32 +357,12 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
     final (_, user, text) = c;
     if (!user) {
       // Live reply: markdown rendered, citation block, source link.
-      return _Rise(child: SullyMessage.reply(text, bottomPadding: 16));
+      return _Rise(
+          child: SullyMessage.reply(text,
+              bottomPadding: 16, onFollowUp: (s) => _sendChat(s)));
     }
-    final t = TestuTokens.of(context);
-    return _Rise(
-      child: Align(
-        alignment: Alignment.centerRight,
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 16, left: 48),
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1A1A1E),
-            border: Border.all(color: t.line2),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Text(
-            text,
-            style: const TextStyle(
-              fontFamily: 'Geist',
-              fontSize: 13,
-              height: 1.5,
-              color: Color(0xFFE9E8E4),
-            ),
-          ),
-        ),
-      ),
-    );
+    // The shared sent-message bubble — same as the tutor tab and sheets.
+    return _Rise(child: TestuYouMsg(text: text));
   }
 
   /// Question copy resolves `L()` at load time, so a language flip reloads
@@ -456,10 +483,10 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
           TextSpan(
             // ponytail: decorative link — the explanation sheet doesn't exist.
             text: L(' Why this question?', ' ¿Por qué esta pregunta?'),
-            style: const TextStyle(
-              color: Color(0xFF8B8F98),
+            style: TextStyle(
+              color: _t.mut,
               decoration: TextDecoration.underline,
-              decorationColor: Color(0xFF3A3A40),
+              decorationColor: _t.idle,
             ),
           ),
       ];
@@ -514,7 +541,7 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
                   'Puedo darte una pista. Esto marcará el intento como asistido, así que contará menos para tu dominio.\n\n')),
           // Live questions carry no authored hint: Sully's reply follows as a
           // chat bubble instead.
-          if (q.hint != null) TextSpan(text: q.hint, style: _ital),
+          if (q.hint != null) TextSpan(text: q.hint, style: kItalic),
         ],
       );
 
@@ -526,11 +553,11 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
       spans = [
         TextSpan(
             text: '${L('Correct', 'Correcto')} · ${_conf[conf]}\n',
-            style: const TextStyle(
+            style: TextStyle(
                 fontWeight: FontWeight.w700,
                 fontSize: 12.5,
                 letterSpacing: 0.25,
-                color: Color(0xFF7DBB9C))),
+                color: _t.greenText)),
         TextSpan(
             text: conf >= 2
                 ? q.good ??
@@ -545,11 +572,11 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
             text: conf == 3
                 ? '${L('Not quite · you were certain', 'No exactamente · estabas ${G('seguro', 'segura')}')}\n'
                 : '${L('Not quite', 'No exactamente')} · ${_conf[conf]}\n',
-            style: const TextStyle(
+            style: TextStyle(
                 fontWeight: FontWeight.w700,
                 fontSize: 12.5,
                 letterSpacing: 0.25,
-                color: Color(0xFFD08B8B))),
+                color: _t.redText)),
         // Backend questions carry no tailored miss copy — fall back to the
         // rationale-free generic line.
         ...(q.bad ??
@@ -572,6 +599,10 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
       onGrew: _scrollDown,
       extra: _VerdictExtras(
         q: q,
+        highlightMessageId:
+            q.questionId != null && q.questionId == widget.questionId
+                ? widget.highlightMessageId
+                : null,
         onAsk: (text, offline) =>
             _sendChat(text, q: q, offlineAnswer: offline),
         onFlag: (reason, note) =>
@@ -590,16 +621,24 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
       spans: [
         TextSpan(
             text: L(
-                'Are you sure you want to stop here? You have only $qword to go in this block — finishing it is what moves ',
-                '¿${G('Seguro', 'Segura')} que quieres parar aquí? Te quedan solo $qword en este bloque — terminarlo es lo que saca ')),
+                'Are you sure you want to stop here? You have only $qword to go in this block — finishing it is what moves ${testuLive ? 'your mastery of ' : ''}',
+                '¿${G('Seguro', 'Segura')} que quieres parar aquí? Te quedan solo $qword en este bloque — terminarlo es lo que ${testuLive ? 'hace avanzar tu dominio en ' : 'saca '}')),
+        // ponytail: live names the topic in play; the "Review soon" band is
+        // the demo's script until the backend keeps a per-topic status.
         TextSpan(
-            text: CL('Due diligence', 'Debida diligencia',
-                'Aircraft arrival & chocking', 'Llegada y calzado'),
-            style: _ital),
+            text: testuLive
+                ? _source.topic
+                : CL('Due diligence', 'Debida diligencia',
+                    'Aircraft arrival & chocking', 'Llegada y calzado'),
+            style: kItalic),
         TextSpan(
-            text: L(
-                ' out of "Review soon". Stopping now records a partial session and slows your mastery.',
-                ' de «Repasar pronto». Parar ahora registra una sesión parcial y frena tu dominio.')),
+            text: testuLive
+                ? L(
+                    ' forward. Stopping now records a partial session and slows your mastery.',
+                    '. Parar ahora registra una sesión parcial y frena tu dominio.')
+                : L(
+                    ' out of "Review soon". Stopping now records a partial session and slows your mastery.',
+                    ' de «Repasar pronto». Parar ahora registra una sesión parcial y frena tu dominio.')),
       ],
       extra: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -637,25 +676,23 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
           SafeArea(
             bottom: false,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(18, 8, 10, 10),
+              padding: const EdgeInsets.fromLTRB(18, 4, 4, 10),
               child: Column(
                 children: [
                   Row(
                     children: [
                       Expanded(
-                        child: Text(
-                          '${L('LEARN MODE', 'MODO APRENDER')} · '
-                          '${_source.topic.toUpperCase()}',
-                          style: TextStyle(
-                            fontFamily: 'GeistMono',
-                            fontWeight: FontWeight.w500,
-                            fontSize: 10.5,
-                            letterSpacing: 1.47, // +0.14em
-                            color: t.mut,
-                          ),
+                        child: TestuEyebrow(
+                          // No topic name on the error screen: the source's
+                          // fallback title is the prototype's.
+                          '${L('LEARN MODE', 'MODO APRENDER')}'
+                          '${_error ? '' : ' · ${_source.topic.toUpperCase()}'}',
+                          fontSize: 10.5,
+                          letterSpacing: 1.47, // +0.14em
                         ),
                       ),
-                      TestuPressable(
+                      TestuIconButton(
+                        TestuGlyph.close,
                         onTap: () {
                           // Both exits end a session, so they share one
                           // flow. Nothing answered yet means there is
@@ -665,24 +702,17 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
                             Navigator.of(context).pop();
                           }
                         },
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              vertical: 4, horizontal: 8),
-                          child: Text('✕',
-                              style: TextStyle(fontSize: 16, color: t.faint)),
-                        ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 4),
                   Padding(
-                    padding: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.only(right: 14),
                     child: TweenAnimationBuilder<double>(
                       tween: Tween(end: _controller.progress),
                       duration: const Duration(milliseconds: 600),
                       curve: TestuTokens.curve,
-                      builder: (_, v, child) => TestuHairline(v,
-                          trackColor: const Color(0xFF1E1E23)),
+                      builder: (_, v, child) => TestuHairline(v),
                     ),
                   ),
                 ],
@@ -722,6 +752,23 @@ class _TestuSessionScreenState extends State<TestuSessionScreen> {
                             key: ValueKey('sully-loading'),
                             spans: [],
                             delay: 600000),
+                      // ponytail: the error state is Sully saying so, with a
+                      // retry chip — no dedicated error widget exists yet.
+                      if (_error)
+                        _SullyBubble(
+                          key: const ValueKey('sully-error'),
+                          spans: [
+                            TextSpan(
+                                text: L(
+                                    'I couldn’t load your questions right now. Check your connection and try again.',
+                                    'No pude cargar tus preguntas ahora mismo. Revisa tu conexión e inténtalo de nuevo.')),
+                          ],
+                          extra: Padding(
+                            padding: const EdgeInsets.only(top: 12),
+                            child: TestuChip(L('Try again', 'Reintentar'),
+                                primary: true, onTap: _retry),
+                          ),
+                        ),
                       for (final (i, e) in _controller.transcript.indexed) ...[
                         _entryWidget(e),
                         for (final c in _chat)
@@ -777,7 +824,7 @@ class _Rise extends StatelessWidget {
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
       duration: const Duration(milliseconds: 400),
-      curve: Curves.easeOut,
+      curve: TestuTokens.curve,
       builder: (_, v, child) => Opacity(
         opacity: v,
         child: Transform.translate(offset: Offset(0, 10 * (1 - v)), child: child),
@@ -831,37 +878,18 @@ class _ChoiceChipsState extends State<_ChoiceChips> {
   @override
   Widget build(BuildContext context) {
     if (_gone) return const SizedBox.shrink();
-    final t = TestuTokens.of(context);
     return Wrap(
       spacing: 8,
       runSpacing: 8,
       children: [
         for (final (label, primary, onTap) in widget.chips)
-          TestuPressable(
+          TestuChip(
+            label,
+            primary: primary,
             onTap: () {
               setState(() => _gone = true);
               onTap();
             },
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(vertical: 8, horizontal: 14),
-              decoration: BoxDecoration(
-                color: primary ? t.primaryAction : null,
-                border:
-                    Border.all(color: primary ? t.primaryAction : t.line2),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontFamily: 'Geist',
-                  fontSize: 11.5,
-                  fontWeight: primary ? FontWeight.w700 : FontWeight.w400,
-                  color:
-                      primary ? t.onPrimaryAction : const Color(0xFFC2C1BD),
-                ),
-              ),
-            ),
           ),
       ],
     );
@@ -898,27 +926,30 @@ class _FakePlayer extends StatelessWidget {
                       width: 44,
                       height: 44,
                       alignment: Alignment.center,
-                      decoration: const BoxDecoration(
-                        color: Color(0x960A0A0B),
+                      decoration: BoxDecoration(
+                        color: t.scrim,
                         shape: BoxShape.circle,
+                        border: Border.all(color: t.onImgLine),
                       ),
-                      child: const Text('▶',
-                          style: TextStyle(
-                              fontSize: 15, color: Color(0xFFECEBE7))),
+                      child:
+                          TestuIcon(TestuGlyph.play, size: 16, color: t.ink),
                     ),
                   ),
                 ],
               ),
             ),
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 11),
-              color: t.card2,
-              child: Text(
-                L('Turnaround groundhandling, Frankfurt — demo footage · CC BY-SA Lufthansa Cargo',
-                    'Handling de turnaround, Fráncfort — metraje de demo · CC BY-SA Lufthansa Cargo'),
-                style: kCaption,
+            // The demo clip's credit line; a live build has no demo footage.
+            if (!testuLive)
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(vertical: 7, horizontal: 11),
+                color: t.card2,
+                child: Text(
+                  L('Turnaround groundhandling, Frankfurt — demo footage · CC BY-SA Lufthansa Cargo',
+                      'Handling de turnaround, Fráncfort — metraje de demo · CC BY-SA Lufthansa Cargo'),
+                  style: kCaption,
+                ),
               ),
-            ),
           ],
         ),
       ),
@@ -999,21 +1030,22 @@ class _QuestionCardState extends State<_QuestionCard> {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontFamily: 'GeistMono',
+                    fontWeight: FontWeight.w500,
                     fontSize: 9,
-                    letterSpacing: 1.26, // +0.14em
+                    letterSpacing: 1.44, // +0.16em, the kicker eyebrow
                     color: t.faint,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   q.text,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontFamily: 'Sora',
                     fontWeight: FontWeight.w700,
                     fontSize: 15.5,
                     letterSpacing: -0.16,
                     height: 1.42,
-                    color: Color(0xFFEFEDEA),
+                    color: t.ink,
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -1027,7 +1059,7 @@ class _QuestionCardState extends State<_QuestionCard> {
                             width: double.infinity,
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF2F1EC),
+                              color: t.paper,
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: Image(
@@ -1099,7 +1131,7 @@ class _QuestionCardState extends State<_QuestionCard> {
                           fontSize: 11.5,
                           color: t.mut,
                           decoration: TextDecoration.underline,
-                          decorationColor: const Color(0xFF3A3A40),
+                          decorationColor: t.idle,
                         ),
                       ),
                     ),
@@ -1113,16 +1145,8 @@ class _QuestionCardState extends State<_QuestionCard> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    L('HOW CONFIDENT ARE YOU?',
-                        '¿CUÁN ${G('SEGURO', 'SEGURA')} ESTÁS?'),
-                    style: TextStyle(
-                      fontFamily: 'GeistMono',
-                      fontSize: 9.5,
-                      letterSpacing: 1.33, // +0.14em
-                      color: t.faint,
-                    ),
-                  ),
+                  TestuEyebrow.h4(L('HOW CONFIDENT ARE YOU?',
+                      '¿CUÁN ${G('SEGURO', 'SEGURA')} ESTÁS?')),
                   const SizedBox(height: 8),
                   ClipRRect(
                     borderRadius: BorderRadius.circular(9),
@@ -1212,14 +1236,14 @@ class _Option extends StatelessWidget {
     final Color border;
     final Color? bg;
     if (correct) {
-      border = const Color(0xFF2F6A4C);
-      bg = const Color(0xFF10201A);
+      border = t.greenBorder;
+      bg = t.greenTint;
     } else if (wrong) {
-      border = const Color(0xFF6E3535);
-      bg = const Color(0xFF201113);
+      border = t.redBorder;
+      bg = t.redTint;
     } else if (selected) {
-      border = const Color(0xFFB9B7B2);
-      bg = const Color(0xFF1A1A1E);
+      border = t.selectedBorder;
+      bg = t.raised;
     } else {
       border = t.line2;
       bg = null;
@@ -1227,8 +1251,8 @@ class _Option extends StatelessWidget {
     final radioBorder = correct
         ? t.green
         : selected
-            ? const Color(0xFFE9E8E4)
-            : const Color(0xFF47474E);
+            ? t.ink
+            : t.faint;
     return TestuPressable(
       onTap: onTap,
       child: AnimatedContainer(
@@ -1255,9 +1279,9 @@ class _Option extends StatelessWidget {
                       child: Container(
                         width: 8,
                         height: 8,
-                        decoration: const BoxDecoration(
+                        decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Color(0xFFE9E8E4),
+                          color: t.ink,
                         ),
                       ),
                     )
@@ -1267,11 +1291,11 @@ class _Option extends StatelessWidget {
             Expanded(
               child: Text(
                 text,
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: 'Geist',
                   fontSize: 13,
                   height: 1.5,
-                  color: Color(0xFFD6D4D0),
+                  color: t.inkSoft,
                 ),
               ),
             ),
@@ -1286,16 +1310,23 @@ class _Option extends StatelessWidget {
 /// verdict — everything that makes the answer explainable.
 class _VerdictExtras extends StatefulWidget {
   const _VerdictExtras(
-      {required this.q, required this.onAsk, required this.onFlag});
+      {required this.q,
+      required this.onAsk,
+      required this.onFlag,
+      this.highlightMessageId});
 
   final TestuQ q;
+
+  /// Comment the thread opens on (notification tap); null otherwise.
+  final String? highlightMessageId;
 
   /// Chip tapped: send [question] into the chat as the user; the second
   /// argument is the canned answer used when the session is offline.
   final void Function(String question, String offlineAnswer) onAsk;
 
-  /// Report dialog confirmed: hand (reason, optional note) to the source.
-  final void Function(String reason, String? note) onFlag;
+  /// Report sheet confirmed: hand (reason id, optional note) to the source.
+  /// Resolves when the server has it (live) or at once (demo).
+  final Future<void> Function(String reason, String? note) onFlag;
 
   @override
   State<_VerdictExtras> createState() => _VerdictExtrasState();
@@ -1303,8 +1334,11 @@ class _VerdictExtras extends StatefulWidget {
 
 class _VerdictExtrasState extends State<_VerdictExtras> {
   // "Was this helpful" — same reaction module as threads (app-wide rule).
-  // ponytail: base count is demo data until the backend returns real ones.
-  final _qReacts = <TestuReaction, int>{TestuReaction.like: 12};
+  // ponytail: base count is demo data; live starts at zero until the
+  // backend returns real ones.
+  final _qReacts = <TestuReaction, int>{
+    if (!testuLive) TestuReaction.like: 12
+  };
   TestuReaction? _qMine;
   bool _flagged = false;
   bool _wrongs = false; // "why are the others wrong?" chip consumed
@@ -1315,36 +1349,38 @@ class _VerdictExtrasState extends State<_VerdictExtras> {
     setState(fn);
   }
 
-  /// Report-question dialog. UI is final; the send lands in
-  /// [TestuQuestionSource.reportFlag] (no-op until the backend exists) and
-  /// leaves a "review pending" notice on Today.
-  /// One report surface app-wide: the shared sheet (see
-  /// testu_report_sheet.dart). Send lands in [TestuQuestionSource.reportFlag]
-  /// (no-op until the backend exists) and leaves an informative notice
-  /// behind the Today bell.
+  /// One report surface app-wide: the shared sheet (testu_report_sheet.dart).
+  /// Live, the send lands in services/testu/social/flag.json through
+  /// [TestuQuestionSource.reportFlag]; the demo records nothing and says so.
   void _openFlagDialog() {
     HapticFeedback.selectionClick();
+    final labels = [for (final r in testuFlagReasons) flagReasonLabel(r)];
     showTestuReportSheet(
       context,
       eyebrow: L('QUESTION · REPORT', 'PREGUNTA · REPORTAR'),
       title: L('Report this question', 'Reportar esta pregunta'),
-      subtitle: L(
-          'It goes to the content team for review. You\u2019ll hear back in Notifications.',
-          'Llega al equipo de contenido para su revisi\u00f3n. Te avisaremos en Notificaciones.'),
-      reasons: [
-        L('Incorrect or outdated', 'Incorrecta o desactualizada'),
-        L('Confusing or badly worded', 'Confusa o mal redactada'),
-        L('Typo or formatting issue', 'Errata o problema de formato'),
-        L('Other', 'Otro'),
-      ],
-      onSend: (reason, note) {
-        widget.onFlag(reason, note);
-        addTestuNotice(
-          L('Question report sent', 'Reporte de pregunta enviado'),
-          L('\u201c$reason\u201d \u2014 under review by the content team.',
-              '\u00ab$reason\u00bb \u2014 en revisi\u00f3n por el equipo de contenido.'),
-        );
-        _tap(() => _flagged = true);
+      subtitle: testuLive
+          ? L('Goes to the content team with your name and this question.',
+              'Llega al equipo de contenido con tu nombre y esta pregunta.')
+          : L('Your report is recorded on this device.',
+              'Tu reporte queda registrado en este dispositivo.'),
+      reasons: labels,
+      sentText: testuLive
+          ? L('Sent to the content team. Thanks for flagging it.',
+              'Enviado al equipo de contenido. Gracias por avisar.')
+          : null,
+      onSend: (reasonIndex, note) async {
+        await widget.onFlag(testuFlagReasons[reasonIndex], note);
+        // Demo only: the local bell. Live notices are Part D's.
+        if (!testuLive) {
+          final reason = labels[reasonIndex];
+          addTestuNotice(
+            L('Question report recorded', 'Reporte de pregunta registrado'),
+            L('\u201c$reason\u201d \u2014 recorded on this device.',
+                '\u00ab$reason\u00bb \u2014 registrado en este dispositivo.'),
+          );
+        }
+        if (mounted) _tap(() => _flagged = true);
       },
     );
   }
@@ -1389,7 +1425,19 @@ class _VerdictExtrasState extends State<_VerdictExtras> {
             TestuReactions(
               reacts: _qReacts,
               mine: _qMine,
-              onChanged: (r) => setState(() => _qMine = r),
+              onChanged: (r) {
+                // Removing a reaction is not a rating, so only a set one
+                // is reported to the console.
+                if (r != null) {
+                  testuUsage.rate(
+                    channel: liveTutorChannelId ?? '',
+                    sectionId: q.sectionId ?? '',
+                    questionId: q.questionId,
+                    helpful: r == TestuReaction.like,
+                  );
+                }
+                setState(() => _qMine = r);
+              },
             ),
             const SizedBox(width: 18),
             TestuPressable(
@@ -1414,8 +1462,12 @@ class _VerdictExtrasState extends State<_VerdictExtras> {
             ),
           ],
         ),
-        // Social thread: inline (decided 2026-08-31).
-        const SocialThreadEntry(),
+        // Social thread: inline (decided 2026-08-31). Live on the question's
+        // channel; the demo keeps its mock thread.
+        if (!testuLive || q.questionId != null)
+          SocialThreadEntry(
+              channel: testuLive && q.questionId != null ? 'q-${q.questionId}' : null,
+              highlightMessageId: widget.highlightMessageId),
         const SizedBox(height: 6),
         // Suggested follow-ups: tapping one sends it into the chat as the
         // user's own message; Sully answers in the chat flow.
@@ -1424,11 +1476,10 @@ class _VerdictExtrasState extends State<_VerdictExtras> {
           runSpacing: 8,
           children: [
             if (!_wrongs)
-              _chip(
-                  t,
+              TestuChip(
                   L('Why are the others wrong?',
                       '¿Por qué las otras están mal?'),
-                  () => _tap(() {
+                  onTap: () => _tap(() {
                         _wrongs = true;
                         widget.onAsk(
                             L('Why are the other options wrong?',
@@ -1436,11 +1487,10 @@ class _VerdictExtrasState extends State<_VerdictExtras> {
                             _whyWrong(q));
                       })),
             if (!_proc)
-              _chip(
-                  t,
+              TestuChip(
                   L('Show me the full procedure',
                       'Muéstrame el procedimiento completo'),
-                  () => _tap(() {
+                  onTap: () => _tap(() {
                         _proc = true;
                         widget.onAsk(
                             L('Show me the full procedure.',
@@ -1487,31 +1537,11 @@ class _VerdictExtrasState extends State<_VerdictExtras> {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 10),
         decoration: BoxDecoration(
-          color: const Color(0xFF101013),
+          color: t.field,
           border: Border.all(color: t.line),
           borderRadius: BorderRadius.circular(8),
         ),
         child: child,
-      );
-
-  Widget _chip(TestuTokens t, String label, VoidCallback onTap) =>
-      TestuPressable(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 14),
-          decoration: BoxDecoration(
-            border: Border.all(color: t.line2),
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Text(
-            label,
-            style: const TextStyle(
-              fontFamily: 'Geist',
-              fontSize: 11.5,
-              color: Color(0xFFC2C1BD),
-            ),
-          ),
-        ),
       );
 
   TextStyle _evBold(TestuTokens t) =>
@@ -1522,87 +1552,47 @@ class _VerdictExtrasState extends State<_VerdictExtras> {
 /// Barrier-dismiss does NOT acknowledge — only the button calls [onAck].
 Future<void> _showConfAck(BuildContext context,
     {required VoidCallback onAck}) {
-  final t = TestuTokens.of(context);
-  return showDialog(
-    context: context,
-    barrierColor: const Color(0xA8000000),
-    builder: (context) => Dialog(
-      backgroundColor: t.card,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 22),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: BorderSide(color: t.line2),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ClipOval(
-                  child: Image.asset(client.tutorAvatar,
-                      width: 26, height: 26, fit: BoxFit.cover),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        client.tutor.toUpperCase(),
-                        style: TextStyle(
-                          fontFamily: 'GeistMono',
-                          fontSize: 9,
-                          letterSpacing: 1.44,
-                          color: t.faint,
-                        ),
-                      ),
-                      const SizedBox(height: 5),
-                      Text.rich(
-                        TextSpan(children: [
-                          TextSpan(
-                              text: L(
-                                  'Quick heads-up before your first confidence call: ',
-                                  'Un aviso antes de tu primera llamada de confianza: ')),
-                          TextSpan(
-                              text: L(
-                                  'the moment you tap a level, your answer is submitted',
-                                  'en cuanto toques un nivel, tu respuesta queda enviada'),
-                              style: _bold),
-                          TextSpan(
-                              text: CL(
-                                  ' — there’s no changing it afterwards. Your confidence is part of the answer, so decide it like you would on site.',
-                                  ' — no se puede cambiar después. Tu confianza es parte de la respuesta, así que decídela como lo harías en la mina.',
-                                  ' — there’s no changing it afterwards. Your confidence is part of the answer, so decide it like you would on the ramp.',
-                                  ' — no se puede cambiar después. Tu confianza es parte de la respuesta, así que decídela como lo harías en la rampa.')),
-                        ]),
-                        style: const TextStyle(
-                          fontFamily: 'Geist',
-                          fontSize: 13.5,
-                          height: 1.62,
-                          color: Color(0xFFD6D4D0),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            TestuButton(
-              L('Understood — don’t show this again',
-                  'Entendido — no volver a mostrar'),
-              variant: TestuButtonVariant.primary,
-              onTap: () {
-                onAck();
-                Navigator.of(context).pop();
-              },
-            ),
-          ],
-        ),
+  return showTestuDialog<void>(
+    context,
+    // Spec: the one dialog a backdrop tap must not close.
+    dismissible: false,
+    child: Builder(
+      builder: (context) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // The same bubble the tutor speaks in everywhere else.
+          SullyMessage(
+            delay: 0,
+            spans: [
+              TextSpan(
+                  text: L(
+                      'Quick heads-up before your first confidence call: ',
+                      'Un aviso antes de tu primera llamada de confianza: ')),
+              TextSpan(
+                  text: L(
+                      'the moment you tap a level, your answer is submitted',
+                      'en cuanto toques un nivel, tu respuesta queda enviada'),
+                  style: _bold),
+              TextSpan(
+                  text: CL(
+                      ' — there’s no changing it afterwards. Your confidence is part of the answer, so decide it like you would on site.',
+                      ' — no se puede cambiar después. Tu confianza es parte de la respuesta, así que decídela como lo harías en la mina.',
+                      ' — there’s no changing it afterwards. Your confidence is part of the answer, so decide it like you would on the ramp.',
+                      ' — no se puede cambiar después. Tu confianza es parte de la respuesta, así que decídela como lo harías en la rampa.')),
+            ],
+          ),
+          const SizedBox(height: 14),
+          TestuButton(
+            L('Understood — don’t show this again',
+                'Entendido — no volver a mostrar'),
+            variant: TestuButtonVariant.primary,
+            onTap: () {
+              onAck();
+              Navigator.of(context).pop();
+            },
+          ),
+        ],
       ),
     ),
   );
@@ -1646,6 +1636,7 @@ class TestuDebriefScreen extends StatelessWidget {
     final calibrated =
         attempts.where((a) => (a.confidence >= 2) == a.correct).length;
     final calPct = total == 0 ? '—' : '${(100 * calibrated / total).round()}%';
+    final mastery = masteryOf(correct, total);
     return Scaffold(
       backgroundColor: t.bg,
       body: SafeArea(
@@ -1663,8 +1654,8 @@ class TestuDebriefScreen extends StatelessWidget {
                 color: t.orange),
             const SizedBox(height: 10),
             Text(
-              L('Here’s what today’s session means, ${client.persona}.',
-                  'Esto es lo que significa la sesión de hoy, ${client.persona}.'),
+              L('Here’s what today’s session means, $testuFirstName.',
+                  'Esto es lo que significa la sesión de hoy, $testuFirstName.'),
               style: kH1,
             ),
             const SizedBox(height: 20),
@@ -1678,7 +1669,7 @@ class TestuDebriefScreen extends StatelessWidget {
                         : L(
                             'We stopped partway — every attempt still counts. You were right ',
                             'Paramos a mitad — cada intento cuenta igualmente. Acertaste ')),
-                TextSpan(text: L('and', 'y'), style: _ital),
+                TextSpan(text: L('and', 'y'), style: kItalic),
                 TextSpan(
                     text: L(' certain on $certainRight of $total. ',
                         ' con seguridad en $certainRight de $total. ')),
@@ -1701,16 +1692,21 @@ class TestuDebriefScreen extends StatelessWidget {
                     child: _statMono('$correct / $total', t.ink)),
                 _Stat(L('CALIBRATION', 'CALIBRACIÓN'),
                     child: _statMono(calPct, t.ink)),
-                // ponytail: mastery band is illustrative — a real band needs
-                // the backend's mastery model, not 3 questions of evidence.
+                // Live: this session's right/total through the Topics
+                // list's thresholds, so 0/5 never reads "Competent". The
+                // demo keeps its scripted band.
                 _Stat(L('MASTERY', 'DOMINIO'),
                     child: Text(
-                      L('Competent · Strong ↑', 'Competente · Sólido ↑'),
-                      style: const TextStyle(
+                      !testuLive
+                          ? L('Competent · Strong ↑', 'Competente · Sólido ↑')
+                          : mastery.status.isEmpty
+                              ? mastery.label
+                              : '${mastery.label} · ${mastery.status}',
+                      style: TextStyle(
                         fontFamily: 'Geist',
                         fontWeight: FontWeight.w600,
                         fontSize: 12,
-                        color: Color(0xFF7DBB9C),
+                        color: testuLive ? mastery.color : t.greenText,
                       ),
                     )),
             ]),
@@ -1724,6 +1720,9 @@ class TestuDebriefScreen extends StatelessWidget {
                 ],
               ),
             ),
+            // ponytail: curve is demo-only until the backend has a
+            // trajectory; the illustrative painter never shows in live.
+            if (!testuLive) ...[
             const SizedBox(height: 18),
             // ponytail: mastery curve is illustrative — real trajectory data
             // arrives with the backend's mastery model.
@@ -1732,16 +1731,8 @@ class TestuDebriefScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    '${L('MASTERY', 'DOMINIO')} · ${topic.toUpperCase()}',
-                    style: TextStyle(
-                      fontFamily: 'GeistMono',
-                      fontWeight: FontWeight.w500,
-                      fontSize: 9,
-                      letterSpacing: 1.26,
-                      color: t.faint,
-                    ),
-                  ),
+                  TestuEyebrow.h4(
+                      '${L('MASTERY', 'DOMINIO')} · ${topic.toUpperCase()}'),
                   const SizedBox(height: 10),
                   LayoutBuilder(
                     builder: (_, box) => CustomPaint(
@@ -1752,6 +1743,7 @@ class TestuDebriefScreen extends StatelessWidget {
                 ],
               ),
             ),
+            ],
             const SizedBox(height: 18),
             TestuButton(L('SEE WHAT CHANGED', 'VER QUÉ HA CAMBIADO'),
                 variant: TestuButtonVariant.primary,
@@ -1776,25 +1768,25 @@ class TestuDebriefScreen extends StatelessWidget {
         : '';
     final (color, title, body) = switch ((a.correct, a.confidence)) {
       (true, >= 2) => (
-          const Color(0xFF4CA97A),
+          _t.green,
           L('Reinforced', 'Reforzado'),
           L('Certain and correct — consolidating.',
               'Segura y correcta — consolidándose.'),
         ),
       (true, _) => (
-          const Color(0xFFE8703A),
+          _t.orange,
           L('Fragile', 'Frágil'),
           L('Correct, but you marked it "${_conf[a.confidence]}". This knowledge may not be fully consolidated yet.',
               'Correcta, pero la marcaste como «${_conf[a.confidence]}». Puede que este conocimiento aún no esté consolidado.'),
         ),
       (false, 3) => (
-          const Color(0xFFC25555),
+          _t.red,
           L('Misconception', 'Concepto erróneo'),
           L('Incorrect while certain — marked priority to revisit.',
               'Incorrecta estando ${G('seguro', 'segura')} — marcada como prioridad para repasar.'),
         ),
       (false, _) => (
-          const Color(0xFFC25555),
+          _t.red,
           L('To review', 'Para repasar'),
           L('Incorrect. You marked it "${_conf[a.confidence]}".',
               'Incorrecta. La marcaste como «${_conf[a.confidence]}».'),
@@ -1864,21 +1856,12 @@ class _Stat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = TestuTokens.of(context);
     return TestuCard(
       padding: const EdgeInsets.fromLTRB(12, 13, 12, 13),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontFamily: 'GeistMono',
-              fontSize: 8.5,
-              letterSpacing: 1.02, // +0.12em
-              color: t.faint,
-            ),
-          ),
+          TestuEyebrow.tag(label),
           const SizedBox(height: 6),
           child,
         ],
@@ -1902,12 +1885,12 @@ class _DebriefRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = TestuTokens.of(context);
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: last
           ? null
-          : const BoxDecoration(
-              border: Border(bottom: BorderSide(color: Color(0xFF17171A)))),
+          : BoxDecoration(border: Border(bottom: BorderSide(color: t.card2))),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1922,15 +1905,7 @@ class _DebriefRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontFamily: 'Geist',
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12.5,
-                    color: Color(0xFFE9E8E4),
-                  ),
-                ),
+                Text(title, style: kRowTitle),
                 const SizedBox(height: 2),
                 Text(
                   body,
@@ -1962,7 +1937,7 @@ class _CurvePainter extends CustomPainter {
           style: TextStyle(
             fontFamily: 'Geist',
             fontSize: fs * s,
-            color: const Color(0xFF5C6068),
+            color: _t.faint,
           ),
         ),
         textDirection: TextDirection.ltr,
@@ -1980,7 +1955,7 @@ class _CurvePainter extends CustomPainter {
         right: true);
 
     final dash = Paint()
-      ..color = const Color(0xFF26262C)
+      ..color = _t.track
       ..strokeWidth = 1;
     var x = 58.0 * s;
     while (x < 320 * s) {
@@ -1999,10 +1974,10 @@ class _CurvePainter extends CustomPainter {
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2 * s
-        ..color = const Color(0xFF4CA97A),
+        ..color = _t.green,
     );
-    canvas.drawCircle(Offset(288 * s, 34 * s), 4.5 * s,
-        Paint()..color = const Color(0xFFE8703A));
+    canvas.drawCircle(
+        Offset(288 * s, 34 * s), 4.5 * s, Paint()..color = _t.orange);
   }
 
   @override

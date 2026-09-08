@@ -1,17 +1,20 @@
-import 'dart:ui';
-
 import 'package:eme_app_package/models/topic.dart';
 import 'package:flutter/material.dart';
 
 import 'testu_i18n.dart';
+import 'testu_icons.dart';
 import 'testu_live.dart';
 import 'testu_pdf.dart';
 import 'testu_resources.dart';
+import 'testu_route.dart';
 import 'testu_session.dart';
+import 'testu_shell.dart';
 import 'testu_social.dart';
 import 'testu_theme.dart';
 import 'testu_widgets.dart';
 import 'testu_client.dart';
+
+const _t = TestuTokens.instance;
 
 // ---------------------------------------------------------------------------
 // Topics tab — role topic list (spec: prototype v6 scr-topics).
@@ -40,15 +43,15 @@ class TestuTopicsScreen extends StatelessWidget {
      sub: L('Learn Mode · 21 of 36 questions',
          'Modo Aprender · 21 de 36 preguntas'),
      pill: L('Competent · Review soon', 'Competente · Repasar pronto'),
-     pillColor: const Color(0xFFCDB96A),
-     pillBorder: const Color(0xFF8A7A3A), opens: true, id: null),
+     pillColor: _t.gold,
+     pillBorder: _t.goldBorder, opens: true, id: null),
     (img: 'chocks.jpg',
      title: CL('Hazard Prevention', 'Prevención de Riesgos',
          'FOD Prevention', 'Prevención de FOD'),
      sub: L('Improve Mode available', 'Modo Mejorar disponible'),
      pill: L('Expert · Stable', 'Experto · Estable'),
-     pillColor: const Color(0xFF7DBB9C),
-     pillBorder: const Color(0xFF2F6A4C), opens: false, id: null),
+     pillColor: _t.greenText,
+     pillBorder: _t.greenBorder, opens: false, id: null),
     (img: 'radio.jpg',
      title: CL('Cybersecurity', 'Ciberseguridad',
          'Radio Communication & Phraseology',
@@ -56,8 +59,8 @@ class TestuTopicsScreen extends StatelessWidget {
      sub: L('${client.tutor} recommends 10 min today',
          '${client.tutor} recomienda 10 min hoy'),
      pill: L('Competent · At risk', 'Competente · En riesgo'),
-     pillColor: const Color(0xFFD9A23F),
-     pillBorder: const Color(0xFF7A5C1E), opens: false, id: null),
+     pillColor: _t.amber,
+     pillBorder: _t.amberBorder, opens: false, id: null),
     (img: 'marshal.jpg',
      title: CL('Mine Road Safety & Signalling',
          'Seguridad Vial en Mina y Señalización',
@@ -66,8 +69,8 @@ class TestuTopicsScreen extends StatelessWidget {
      sub: L('${client.tutor} suggests Learn Mode this week',
          '${client.tutor} sugiere Modo Aprender esta semana'),
      pill: L('Beginner · Needs practice', 'Principiante · Necesita práctica'),
-     pillColor: const Color(0xFFD08B8B),
-     pillBorder: const Color(0xFF6E3535), opens: false, id: null),
+     pillColor: _t.redText,
+     pillBorder: _t.redBorder, opens: false, id: null),
     (img: 'cargo.jpg',
      title: CL('Hazardous Materials Handling',
          'Manejo de Materiales Peligrosos',
@@ -76,8 +79,8 @@ class TestuTopicsScreen extends StatelessWidget {
      sub: L('Recertification due Nov 2026',
          'Recertificación antes de nov 2026'),
      pill: L('Competent · Stable', 'Competente · Estable'),
-     pillColor: const Color(0xFF7DBB9C),
-     pillBorder: const Color(0xFF2F6A4C), opens: false, id: null),
+     pillColor: _t.greenText,
+     pillBorder: _t.greenBorder, opens: false, id: null),
     (img: 'winter.jpg',
      title: CL('Rainy Season Operations',
          'Operación en Temporada de Lluvias',
@@ -85,16 +88,16 @@ class TestuTopicsScreen extends StatelessWidget {
          'Procedimientos de Deshielo'),
      sub: L('Seasonal · opens Oct 1', 'Estacional · abre el 1 oct'),
      pill: L('Not started', 'Sin empezar'),
-     pillColor: const Color(0xFF8B8F98),
-     pillBorder: const Color(0xFF2C2C33), opens: false, id: null),
+     pillColor: _t.mut,
+     pillBorder: _t.line2, opens: false, id: null),
     (img: 'fire.jpg',
      title: L('Emergency Response & Fire Safety',
          'Respuesta a Emergencias y Contra Incendios'),
      sub: L('Annual refresher · due Jan 2027',
          'Repaso anual · antes de ene 2027'),
      pill: L('Competent · Strong', 'Competente · Sólido'),
-     pillColor: const Color(0xFF7DBB9C),
-     pillBorder: const Color(0xFF2F6A4C), opens: false, id: null),
+     pillColor: _t.greenText,
+     pillBorder: _t.greenBorder, opens: false, id: null),
   ];
 
   @override
@@ -102,7 +105,8 @@ class TestuTopicsScreen extends StatelessWidget {
       testuLive ? const _LiveTopics() : _topicsBody(context, _topics);
 }
 
-/// Live variant: one fetch, hardcoded rows as the error/empty state.
+/// Live variant: one fetch; an honest empty state when it fails or has
+/// nothing — never the prototype rows.
 class _LiveTopics extends StatefulWidget {
   const _LiveTopics();
 
@@ -119,12 +123,17 @@ class _LiveTopicsState extends State<_LiveTopics> {
         future: _future,
         builder: (context, snap) {
           if (snap.connectionState != ConnectionState.done) {
-            return _topicsBody(context, const []);
+            return _topicsBody(context, const [], loading: true);
           }
           final live = snap.data ?? const <TopicProgress>[];
           if (snap.hasError || live.isEmpty) {
             debugPrint('TestU: live topics unavailable (${snap.error})');
-            return _topicsBody(context, TestuTopicsScreen._topics);
+            return _topicsBody(context, const [],
+                empty: snap.hasError
+                    ? L('Could not load your topics. Try again later.',
+                        'No se pudieron cargar tus temas. Inténtalo más tarde.')
+                    : L('No topics assigned to you yet.',
+                        'Aún no tienes temas asignados.'));
           }
           return _topicsBody(context, [
             for (var i = 0; i < live.length; i++) _mapTopic(live[i], i),
@@ -133,15 +142,18 @@ class _LiveTopicsState extends State<_LiveTopics> {
       );
 }
 
-/// `Topic` → the row record `_TopicRow` already renders. The server's
-/// thumbnail when it has one, else a bundled picture.
-const _imgs = ['ramp.jpg', 'chocks.jpg', 'radio.jpg', 'marshal.jpg',
-    'cargo.jpg', 'winter.jpg', 'fire.jpg'];
+/// `img` is a bundled file name for prototype rows, an absolute URL for
+/// live ones, and '' for a live topic with no picture (no cover).
+ImageProvider? _topicImage(String img) => img.isEmpty
+    ? null
+    : testuImage(img.startsWith('http') ? img : 'assets/img/$img');
 
-/// `img` is a bundled file name for prototype rows and an absolute URL for
-/// live ones.
-ImageProvider _topicImage(String img) =>
-    testuImage(img.startsWith('http') ? img : 'assets/img/$img');
+/// A live [Topic]'s big cover URL: the server hands the row list the
+/// 200x200 rendition; the hero/big covers want the 3000x3000 the same
+/// generated path serves. Null when the topic has no picture.
+String? _liveCoverUrl(Topic? t) => t == null || t.thumbnail.isEmpty
+    ? null
+    : liveAssetUrl(t.thumbnail.replaceFirst('image200x200', 'image3000x3000'));
 
 /// The Today hero's slice of a live topic: cover URL plus the fields it
 /// needs to open the topic's Home. Public so [testu_shell] can render the
@@ -194,9 +206,9 @@ TestuMastery masteryOf(int right, int total) {
     return (
       label: L('Not started', 'Sin empezar'),
       status: '',
-      color: const Color(0xFF8B8F98),
-      border: const Color(0xFF2C2C33),
-      dot: const Color(0xFF3A3A40),
+      color: _t.mut,
+      border: _t.line2,
+      dot: _t.idle,
       expert: false,
     );
   }
@@ -213,25 +225,25 @@ TestuMastery _masteryStyle(Efficiency level) => switch (level) {
       Efficiency.beginner => (
           label: L('Beginner', 'Principiante'),
           status: L('Needs practice', 'Necesita práctica'),
-          color: const Color(0xFFD08B8B),
-          border: const Color(0xFF6E3535),
-          dot: const Color(0xFFC25555), // TestuTokens.red
+          color: _t.redText,
+          border: _t.redBorder,
+          dot: _t.red,
           expert: false,
         ),
       Efficiency.competent => (
           label: L('Competent', 'Competente'),
           status: L('Review soon', 'Repasar pronto'),
-          color: const Color(0xFFCDB96A),
-          border: const Color(0xFF8A7A3A),
-          dot: const Color(0xFFE8703A), // TestuTokens.orange
+          color: _t.gold,
+          border: _t.goldBorder,
+          dot: _t.orange,
           expert: false,
         ),
       Efficiency.expert => (
           label: L('Expert', 'Experto'),
           status: L('Stable', 'Estable'),
-          color: const Color(0xFF7DBB9C),
-          border: const Color(0xFF2F6A4C),
-          dot: const Color(0xFF4CA97A), // TestuTokens.green
+          color: _t.greenText,
+          border: _t.greenBorder,
+          dot: _t.green,
           expert: true,
         ),
     };
@@ -243,12 +255,7 @@ _Topic _mapTopic(TopicProgress p, int i) {
   final t = p.topic;
   final m = masteryOf(p.mastered, p.answered);
   return (
-    // The server hands out the 200x200 rendition; the hero wants the large
-    // one, which the same generated path serves.
-    img: t.thumbnail.isEmpty
-        ? _imgs[i % _imgs.length]
-        : liveAssetUrl(
-            t.thumbnail.replaceFirst('image200x200', 'image3000x3000')),
+    img: _liveCoverUrl(t) ?? '',
     title: t.title,
     sub: p.sections.isEmpty
         ? L('No content yet', 'Sin contenido todavía')
@@ -265,7 +272,8 @@ _Topic _mapTopic(TopicProgress p, int i) {
   );
 }
 
-Widget _topicsBody(BuildContext context, List<_Topic> topics) {
+Widget _topicsBody(BuildContext context, List<_Topic> topics,
+    {bool loading = false, String? empty}) {
     final t = TestuTokens.of(context);
     // Pinned header; only the topic list scrolls (user-requested cutoff at
     // the header's bottom edge).
@@ -275,34 +283,39 @@ Widget _topicsBody(BuildContext context, List<_Topic> topics) {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(18, 14, 18, 8),
+            padding: EdgeInsets.fromLTRB(18, testuTopPad(context), 18, 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(L('Your topics', 'Tus temas'),
-                    style: const TextStyle(
-                      fontFamily: 'Sora',
-                      fontWeight: FontWeight.w700,
-                      fontSize: 21,
-                      letterSpacing: -0.21,
-                      color: Color(0xFFECEBE7),
-                    )),
-                const SizedBox(height: 4),
-                Text(
-                  CL('Operations, Safety Lead · 6 required for your role · 1 seasonal',
-                      'Operaciones, Líder de Seguridad · 6 obligatorios para tu rol · 1 estacional',
-                      'Ramp Agent, Safety Lead · 6 required for your role · 1 seasonal',
-                      'Agente de Rampa, Líder de Seguridad · 6 obligatorios para tu rol · 1 estacional'),
-                  style: TextStyle(
-                      fontFamily: 'Geist', fontSize: 11.5, color: t.mut),
-                ),
+                Text(L('Your topics', 'Tus temas'), style: kH1),
+                // The role line is prototype copy; nothing live feeds it.
+                if (!testuLive) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    CL('Operations, Safety Lead · 6 required for your role · 1 seasonal',
+                        'Operaciones, Líder de Seguridad · 6 obligatorios para tu rol · 1 estacional',
+                        'Ramp Agent, Safety Lead · 6 required for your role · 1 seasonal',
+                        'Agente de Rampa, Líder de Seguridad · 6 obligatorios para tu rol · 1 estacional'),
+                    style: TextStyle(
+                        fontFamily: 'Geist', fontSize: 11.5, color: t.mut),
+                  ),
+                ],
               ],
             ),
           ),
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.only(top: 10, bottom: 110),
+              padding:
+                  EdgeInsets.only(top: 10, bottom: testuBottomPad(context)),
               children: [
+                // Live rows on their way: the list's shape, not a blank.
+                if (loading)
+                  for (var i = 0; i < 5; i++) const TestuSkeletonRow(),
+                if (empty != null)
+                  Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Text(empty, style: kMeta),
+                  ),
                 for (final topic in topics)
                   _TopicRow(
                     topic: topic,
@@ -311,15 +324,17 @@ Widget _topicsBody(BuildContext context, List<_Topic> topics) {
                     // prototype. A live row opens one when its topic has
                     // tutorials.
                     onTap: topic.opens
-                        ? () => Navigator.of(context).push(MaterialPageRoute(
-                            builder: (_) => TestuTopicHomeScreen(
-                                  topicId: topic.id,
-                                  title: topic.title,
-                                  img: topic.img,
-                                  pill: topic.pill,
-                                  pillColor: topic.pillColor,
-                                  pillBorder: topic.pillBorder,
-                                )))
+                        ? () => pushLearnerScreen<void>(
+                            context,
+                            LearnerRoute(1, topicId: topic.id),
+                            TestuTopicHomeScreen(
+                              topicId: topic.id,
+                              title: topic.title,
+                              img: topic.img,
+                              pill: topic.pill,
+                              pillColor: topic.pillColor,
+                              pillBorder: topic.pillBorder,
+                            ))
                         : _nothing,
                   ),
               ],
@@ -357,8 +372,8 @@ class _TopicRow extends StatelessWidget {
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(11),
-                child: Image(
-                    image: _topicImage(topic.img), fit: BoxFit.cover),
+                child: TestuCover(
+                    image: _topicImage(topic.img), title: topic.title),
               ),
             ),
             const SizedBox(width: 13),
@@ -366,13 +381,7 @@ class _TopicRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(topic.title,
-                      style: const TextStyle(
-                        fontFamily: 'Geist',
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13.5,
-                        color: Color(0xFFECEBE7),
-                      )),
+                  Text(topic.title, style: kRowTitle.copyWith(fontSize: 13.5)),
                   const SizedBox(height: 4),
                   Text(topic.sub,
                       style: kMeta),
@@ -383,7 +392,7 @@ class _TopicRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            Text('›', style: TextStyle(fontSize: 14, color: t.faint)),
+            TestuIcon(TestuGlyph.chevronRight, size: 13, color: t.faint),
           ],
         ),
       ),
@@ -403,26 +412,32 @@ class TestuTopicHomeScreen extends StatefulWidget {
     super.key,
     this.topicId,
     this.title,
-    this.img = 'ramp.jpg',
+    this.img,
     this.pill,
-    this.pillColor = const Color(0xFFCDB96A),
-    this.pillBorder = const Color(0xFF8A7A3A),
+    this.pillColor,
+    this.pillBorder,
+    this.initialTab = 0,
+    this.highlightMessageId,
   });
 
   /// Live topic the session CTAs draw questions from; null → first topic.
   final String? topicId;
-  final String? title; // null → the prototype's Ramp Safety title
-  final String img;
+  final String? title; // null → live topic's title, else the prototype's
+  final String? img; // null → live topic's cover, else the prototype's
   final String? pill; // null → the prototype's pill
-  final Color pillColor;
-  final Color pillBorder;
+  final Color? pillColor; // null → gold, the prototype's pill tone
+  final Color? pillBorder;
+
+  /// Notification tap: open on the review tab (3) at that comment.
+  final int initialTab;
+  final String? highlightMessageId;
 
   @override
   State<TestuTopicHomeScreen> createState() => _TestuTopicHomeScreenState();
 }
 
 class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
-  int _tab = 0;
+  late int _tab = widget.initialTab;
   final Set<int> _openCmp = {};
   final Set<int> _openSub = {};
   late final List<TestuComment> _reviews = _mockReviews();
@@ -430,6 +445,10 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
   /// The learner's record in this topic (live only); null until loaded, and
   /// in the offline demo, where the prototype's Ramp Safety content stands.
   TopicProgress? _live;
+
+  /// The first load has come back (with a record or without): skeletons
+  /// give way to content, or to an honest "nothing here yet".
+  bool _loaded = false;
 
   @override
   void initState() {
@@ -442,6 +461,8 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
       if (mounted && p != null) setState(() => _live = p);
     }).catchError((Object e) {
       debugPrint('TestU: topic progress ($e)');
+    }).whenComplete(() {
+      if (mounted) setState(() => _loaded = true);
     });
   }
 
@@ -481,7 +502,8 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
       // Hero + tabs stay pinned; only the active pane scrolls under the
       // tab bar's hairline (the "cutoff line").
       body: Column(children: [
-        _TopicHero(meta: _meta, mastery: _live == null ? null : _mastery),
+        _TopicHero(
+            meta: _meta, mastery: _live == null ? null : _mastery, live: _live),
         // Tabs — instant pane swap, like the prototype.
         Container(
             // Full width so the tab row hugs the left edge — shrink-wrapped
@@ -516,7 +538,7 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
                           fontWeight: FontWeight.w600,
                           fontSize: 12,
                           letterSpacing: 0.24,
-                          color: i == _tab ? const Color(0xFFE9E8E4) : t.faint,
+                          color: i == _tab ? t.ink : t.faint,
                         ),
                       ),
                     ),
@@ -543,7 +565,47 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
 
   // ---- Overview ----
 
-  List<Widget> _overview(TestuTokens t) => [
+  List<Widget> _overview(TestuTokens t) {
+    // Same shape as _subtopics: skeletons while the record is on its way,
+    // honest empty copy after — never the prototype's numbers.
+    if (testuLive && _live == null) {
+      if (!_loaded) {
+        return [
+          for (var i = 0; i < 3; i++)
+            const TestuSkeletonRow(thumb: 0, pill: false),
+        ];
+      }
+      return [
+        Padding(
+          padding: const EdgeInsets.all(18),
+          child: Text(L('Nothing here yet.', 'Nada por aquí todavía.'),
+              style: kMeta),
+        ),
+      ];
+    }
+    // ponytail: required level, retention, competencies and certificate are
+    // prototype-only until the server has them; live shows mastery +
+    // progress in one row.
+    final masteryFact = _live == null
+        ? _Fact(L('CURRENT MASTERY', 'DOMINIO ACTUAL'),
+            L('Competent · Strong', 'Competente · Sólido'),
+            sub: L('Review soon', 'Repasar pronto'), valueColor: t.gold)
+        : _Fact(L('CURRENT MASTERY', 'DOMINIO ACTUAL'), _mastery.label,
+            sub: _mastery.status.isEmpty
+                ? L('Answer to find out', 'Responde para saberlo')
+                : _mastery.status,
+            valueColor: _mastery.color);
+    final progressFact = _live == null
+        ? _Fact(L('PROGRESS', 'PROGRESO'), L('21 of 36', '21 de 36'),
+            sub: L('15 questions left in Learn Mode',
+                '15 preguntas restantes en Modo Aprender'))
+        : _Fact(L('PROGRESS', 'PROGRESO'),
+            L('${_live!.answered} of ${_live!.questions}',
+                '${_live!.answered} de ${_live!.questions}'),
+            sub: L(
+                '${_live!.questions - _live!.answered} questions left in Learn Mode',
+                '${_live!.questions - _live!.answered} preguntas restantes en Modo Aprender'));
+    return [
         Padding(
           padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
           // Readable measure in landscape — full-width 13px prose runs
@@ -572,11 +634,11 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
                     'Obligatorio para tu rol porque los incidentes en rampa '
                     'son la mayor exposición de seguridad en tierra de la '
                     'aerolínea.'),
-            style: const TextStyle(
+            style: TextStyle(
                 fontFamily: 'Geist',
                 fontSize: 13,
                 height: 1.65,
-                color: Color(0xFFB9B8B4)),
+                color: t.inkDim),
               ),
             ),
           ),
@@ -591,46 +653,26 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Expanded(
-                        child: _live == null
-                            ? _Fact(L('CURRENT MASTERY', 'DOMINIO ACTUAL'),
-                                L('Competent · Strong', 'Competente · Sólido'),
-                                sub: L('Review soon', 'Repasar pronto'),
-                                valueColor: t.gold)
-                            : _Fact(L('CURRENT MASTERY', 'DOMINIO ACTUAL'),
-                                _mastery.label,
-                                sub: _mastery.status.isEmpty
-                                    ? L('Answer to find out',
-                                        'Responde para saberlo')
-                                    : _mastery.status,
-                                valueColor: _mastery.color)),
+                    Expanded(child: masteryFact),
                     const SizedBox(width: 9),
                     Expanded(
-                        child: _Fact(L('REQUIRED LEVEL', 'NIVEL REQUERIDO'),
-                            L('Expert', 'Experto'),
-                            sub: L('Required for your Safety Lead assignment',
-                                'Requerido para tu puesto de Líder de Seguridad'),
-                            subUnderline: true)),
+                        child: testuLive
+                            ? progressFact
+                            : _Fact(L('REQUIRED LEVEL', 'NIVEL REQUERIDO'),
+                                L('Expert', 'Experto'),
+                                sub: L('Required for your Safety Lead assignment',
+                                    'Requerido para tu puesto de Líder de Seguridad'),
+                                subUnderline: true)),
                   ],
                 ),
               ),
+              if (!testuLive) ...[
               const SizedBox(height: 9),
               IntrinsicHeight(
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Expanded(
-                        child: _live == null
-                            ? _Fact(L('PROGRESS', 'PROGRESO'),
-                                L('21 of 36', '21 de 36'),
-                                sub: L('15 questions left in Learn Mode',
-                                    '15 preguntas restantes en Modo Aprender'))
-                            : _Fact(L('PROGRESS', 'PROGRESO'),
-                                L('${_live!.answered} of ${_live!.questions}',
-                                    '${_live!.answered} de ${_live!.questions}'),
-                                sub: L(
-                                    '${_live!.questions - _live!.answered} questions left in Learn Mode',
-                                    '${_live!.questions - _live!.answered} preguntas restantes en Modo Aprender'))),
+                    Expanded(child: progressFact),
                     const SizedBox(width: 9),
                     Expanded(
                         child: _Fact(
@@ -642,9 +684,11 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
                   ],
                 ),
               ),
+              ],
             ],
           ),
         ),
+        if (!testuLive) ...[
         Padding(
           padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
           child: _CompetenciesCard(
@@ -656,9 +700,7 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
         Padding(
           padding: const EdgeInsets.fromLTRB(18, 12, 18, 0),
           child: Row(children: [
-            TestuPill(L('Certificate · Valid', 'Certificado · Válido'),
-                color: const Color(0xFF7DBB9C),
-                borderColor: const Color(0xFF2F6A4C)),
+            TestuPill.green(L('Certificate · Valid', 'Certificado · Válido')),
             const SizedBox(width: 10),
             // Flexible: Spanish copy is wider than the row at 390pt.
             Flexible(
@@ -669,6 +711,7 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
                         fontFamily: 'Geist', fontSize: 12, color: t.mut))),
           ]),
         ),
+        ],
         Padding(
           padding: const EdgeInsets.fromLTRB(18, 18, 18, 0),
           child: TestuButton(
@@ -676,12 +719,14 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
               variant: TestuButtonVariant.primary,
               onTap: _open),
         ),
+        if (!testuLive)
         Padding(
           padding: const EdgeInsets.fromLTRB(18, 10, 18, 0),
           child: TestuButton(L('Review progress', 'Ver progreso'),
               onTap: _nothing),
         ),
       ];
+  }
 
   // ---- Subtopics ----
 
@@ -818,7 +863,23 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
   }
 
   List<Widget> _subtopics(TestuTokens t) {
-    if (testuLive && _live == null) return const [];
+    if (testuLive && _live == null) {
+      if (!_loaded) {
+        return [
+          for (var i = 0; i < 4; i++)
+            const TestuSkeletonRow(thumb: 8, pill: false),
+        ];
+      }
+      return [
+        Padding(
+          padding: const EdgeInsets.all(18),
+          child: Text(
+              L('No subtopics yet — ${client.tutor} will open them as the content arrives.',
+                  'Aún no hay subtemas — ${client.tutor} los abrirá cuando llegue el contenido.'),
+              style: kMeta),
+        ),
+      ];
+    }
     final groups = testuLive ? _liveGroups : _groups;
     return [
       for (var i = 0; i < groups.length; i++)
@@ -841,6 +902,9 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
           FutureBuilder<List<LiveDoc>>(
             future: _docs ??= loadDocuments(topicId: widget.topicId),
             builder: (context, snap) => Column(children: [
+              if (!snap.hasData && !snap.hasError)
+                for (var i = 0; i < 2; i++)
+                  const TestuSkeletonRow(thumb: 36, pill: false),
               for (final d in snap.data ?? const <LiveDoc>[])
                 _ResRow(
                     icon: d.isVideo ? 'VID' : 'PDF',
@@ -850,7 +914,6 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
                             '${d.chapters.length} capítulos · video de referencia')
                         : L('${d.pages} pages · reference document',
                             '${d.pages} páginas · documento de referencia'),
-                    required: true,
                     onTap: () => d.isVideo
                         ? showTestuVideo(context, d)
                         : showTestuPdf(context, doc: d)),
@@ -898,18 +961,38 @@ class _TestuTopicHomeScreenState extends State<TestuTopicHomeScreen> {
 
   /// The topic's review tab IS the house thread (full-alignment rule:
   /// vote, reply, report work here exactly like the question conversation).
-  List<Widget> _review(TestuTokens t) => [
+  /// Live it is the tutorial's `t-<id>` channel; the demo keeps its sample.
+  List<Widget> _review(TestuTokens t) {
+    final tutorialId = _live?.tutorialId;
+    if (testuLive && tutorialId == null) {
+      return [
         Padding(
           padding: const EdgeInsets.fromLTRB(18, 14, 18, 0),
-          child: TestuThread(
-            comments: _reviews,
-            composerHint: L('Add a review or comment…',
-                'Añade una reseña o comentario…'),
-            reportEyebrow: L('REVIEWS · REPORT', 'RESEÑAS · REPORTAR'),
-            reportTitle: L('Report this review', 'Reportar esta reseña'),
-          ),
+          child: Text(
+              _loaded
+                  ? L('This topic has no tutorial yet, so no reviews.',
+                      'Este tema aún no tiene tutorial, así que no hay reseñas.')
+                  : L('Loading…', 'Cargando…'),
+              style: TextStyle(fontFamily: 'Geist', fontSize: 12.5, color: t.mut)),
         ),
       ];
+    }
+    return [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(18, 14, 18, 0),
+        child: TestuThread(
+          key: ValueKey('review-${tutorialId ?? 'demo'}'),
+          comments: testuLive ? null : _reviews,
+          channel: testuLive ? 't-$tutorialId' : null,
+          composerHint: L('Add a review or comment…',
+              'Añade una reseña o comentario…'),
+          reportEyebrow: L('REVIEWS · REPORT', 'RESEÑAS · REPORTAR'),
+          reportTitle: L('Report this review', 'Reportar esta reseña'),
+          highlightMessageId: widget.highlightMessageId,
+        ),
+      ),
+    ];
+  }
 }
 
 /// Sample reviews; Minsur reads them in the DDHH context, Vueling in Ramp
@@ -948,7 +1031,7 @@ List<TestuComment> _mockReviews() {
 }
 
 class _TopicHero extends StatelessWidget {
-  const _TopicHero({required this.meta, this.mastery});
+  const _TopicHero({required this.meta, this.mastery, this.live});
 
   /// "With IRIS · n questions · m subtopics" line under the title.
   final String meta;
@@ -957,11 +1040,27 @@ class _TopicHero extends StatelessWidget {
   /// row that opened this screen is stale by then.
   final TestuMastery? mastery;
 
+  /// The screen's own load (e.g. a notification tap, which pushes the
+  /// screen with only a topicId — no title/img): fills in what the
+  /// constructor didn't get, once it comes back.
+  final TopicProgress? live;
+
   @override
   Widget build(BuildContext context) {
-    // Hero copy comes from the Topic Home that owns it.
+    // Hero copy comes from the Topic Home that owns it, or — when it wasn't
+    // given any (a notification tap knows only the topicId) — from the live
+    // load, falling back to the prototype's copy same as before.
     final home =
         context.findAncestorWidgetOfExactType<TestuTopicHomeScreen>()!;
+    final title = home.title ??
+        live?.topic.title ??
+        CL('Human Rights & Due Diligence', 'Derechos Humanos y Debida Diligencia',
+            'Ramp Safety & Aircraft Turnaround', 'Seguridad en Rampa y Turnaround');
+    // A live topic with no thumbnail shows the flat brand block, not the
+    // demo's ramp photo (no-stock-photo rule) — the fallback stays
+    // 'ramp.jpg' only when there is no live topic at all.
+    final img = home.img ??
+        (live != null ? (_liveCoverUrl(live!.topic) ?? '') : 'ramp.jpg');
     final t = TestuTokens.of(context);
     final topPad = MediaQuery.paddingOf(context).top;
     return SizedBox(
@@ -972,8 +1071,9 @@ class _TopicHero extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          Image(image: _topicImage(home.img),
-              fit: BoxFit.cover,
+          TestuCover(
+              image: _topicImage(img),
+              title: title,
               alignment: const Alignment(0, 0.24)), // center 62%
           // The hero height is pinned, so the pill/title/meta stack grows
           // upward with Dynamic Type. Past XXL it climbed clear of the
@@ -995,27 +1095,12 @@ class _TopicHero extends StatelessWidget {
             ),
           ),
           Positioned(
-            top: topPad + 8,
+            top: topPad + 3,
             // Right side: the pill/title/meta stack owns the hero's left,
             // and in landscape the arrow was crowding it.
-            right: 16 + MediaQuery.paddingOf(context).right,
-            child: TestuPressable(
-              onTap: () => Navigator.of(context).pop(),
-              child: ClipOval(
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                  child: Container(
-                    width: 34,
-                    height: 34,
-                    color: const Color(0x960A0A0B),
-                    alignment: Alignment.center,
-                    child: const Text('‹',
-                        style: TextStyle(
-                            fontSize: 14, color: Color(0xFFECEBE7))),
-                  ),
-                ),
-              ),
-            ),
+            right: 11 + MediaQuery.paddingOf(context).right,
+            child: TestuIconButton(TestuGlyph.chevronLeft,
+                onImage: true, onTap: () => Navigator.of(context).pop()),
           ),
           Positioned(
             left: 18,
@@ -1032,23 +1117,11 @@ class _TopicHero extends StatelessWidget {
                         : home.pill ??
                             L('Competent · Review soon',
                                 'Competente · Repasar pronto'),
-                    color: mastery?.color ?? home.pillColor,
-                    borderColor: mastery?.border ?? home.pillBorder),
+                    color: mastery?.color ?? home.pillColor ?? t.gold,
+                    borderColor:
+                        mastery?.border ?? home.pillBorder ?? t.goldBorder),
                 const SizedBox(height: 12),
-                Text(
-                    home.title ??
-                        CL('Human Rights & Due Diligence',
-                            'Derechos Humanos y Debida Diligencia',
-                            'Ramp Safety & Aircraft Turnaround',
-                            'Seguridad en Rampa y Turnaround'),
-                    style: TextStyle(
-                      fontFamily: 'Sora',
-                      fontWeight: FontWeight.w700,
-                      fontSize: 21,
-                      letterSpacing: -0.21,
-                      height: 1.2,
-                      color: t.ink,
-                    )),
+                Text(title, style: kH1.copyWith(height: 1.2)),
                 const SizedBox(height: 8),
                 Row(children: [
                   ClipOval(
@@ -1057,10 +1130,10 @@ class _TopicHero extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   Text(meta,
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontFamily: 'Geist',
                           fontSize: 12,
-                          color: Color(0xFFB5B4B0))),
+                          color: t.inkDim)),
                 ]),
               ],
             ),
@@ -1089,19 +1162,14 @@ class _Fact extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label,
-              style: TextStyle(
-                  fontFamily: 'GeistMono',
-                  fontSize: 9,
-                  letterSpacing: 1.08,
-                  color: t.faint)),
+          TestuEyebrow.kicker(label),
           const SizedBox(height: 5),
           Text(value,
               style: TextStyle(
                   fontFamily: 'Geist',
                   fontWeight: FontWeight.w600,
                   fontSize: 13,
-                  color: valueColor ?? const Color(0xFFE6E4E0))),
+                  color: valueColor ?? t.ink)),
           const SizedBox(height: 3),
           Text(sub,
               style: TextStyle(
@@ -1110,7 +1178,7 @@ class _Fact extends StatelessWidget {
                 color: t.mut,
                 decoration:
                     subUnderline ? TextDecoration.underline : null,
-                decorationColor: const Color(0xFF3A3A40),
+                decorationColor: t.idle,
               )),
         ],
       ),
@@ -1243,9 +1311,8 @@ class _CompetenciesCard extends StatelessWidget {
           ),
           for (var i = 0; i < _cmp.length; i++) ...[
             Container(
-              decoration: const BoxDecoration(
-                  border:
-                      Border(top: BorderSide(color: Color(0xFF17171A)))),
+              decoration:
+                  BoxDecoration(border: Border(top: BorderSide(color: t.card2))),
               child: TestuPressable(
                 onTap: () => onToggle(i),
                 child: Padding(
@@ -1256,12 +1323,7 @@ class _CompetenciesCard extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(_cmp[i].title,
-                              style: const TextStyle(
-                                  fontFamily: 'Geist',
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 12.5,
-                                  color: Color(0xFFECEBE7))),
+                          Text(_cmp[i].title, style: kRowTitle),
                           const SizedBox(height: 2),
                           Text(_cmp[i].sub,
                               style: kMeta),
@@ -1270,19 +1332,15 @@ class _CompetenciesCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 11),
                     _cmp[i].strong
-                        ? TestuPill(_cmp[i].pill,
-                            color: const Color(0xFF7DBB9C),
-                            borderColor: const Color(0xFF2F6A4C))
-                        : TestuPill(_cmp[i].pill,
-                            color: t.amber,
-                            borderColor: const Color(0xFF7A5C1E)),
+                        ? TestuPill.green(_cmp[i].pill)
+                        : TestuPill.amber(_cmp[i].pill),
                     const SizedBox(width: 11),
                     AnimatedRotation(
                       turns: open.contains(i) ? 0.25 : 0,
                       duration: const Duration(milliseconds: 250),
-                      child: Text('›',
-                          style:
-                              TextStyle(fontSize: 13, color: t.faint)),
+                      curve: TestuTokens.curve,
+                      child: TestuIcon(TestuGlyph.chevronRight,
+                          size: 13, color: t.faint),
                     ),
                   ]),
                 ),
@@ -1291,19 +1349,15 @@ class _CompetenciesCard extends StatelessWidget {
             if (open.contains(i))
               Container(
                 width: double.infinity,
-                color: const Color(0xFF0D0D0F),
+                color: t.well,
                 padding: const EdgeInsets.only(top: 2, bottom: 8),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Padding(
                       padding: const EdgeInsets.fromLTRB(43, 8, 16, 4),
-                      child: Text(L('OBSERVABLE BEHAVIORS', 'COMPORTAMIENTOS OBSERVABLES'),
-                          style: TextStyle(
-                              fontFamily: 'GeistMono',
-                              fontSize: 8.5,
-                              letterSpacing: 1.53,
-                              color: t.faint)),
+                      child: TestuEyebrow.tag(L('OBSERVABLE BEHAVIORS',
+                          'COMPORTAMIENTOS OBSERVABLES')),
                     ),
                     for (final b in _cmp[i].kids) _BehaviorRow(b),
                   ],
@@ -1324,12 +1378,26 @@ class _BehaviorRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TestuTokens.of(context);
-    final (String mark, Color fg, Color bg, Color border) = switch (b.st) {
-      _Evidence.ok => ('✓', const Color(0xFF7DBB9C), const Color(0xFF12231B),
-          const Color(0xFF2F6A4C)),
-      _Evidence.mid =>
-        ('·', t.amber, const Color(0xFF291F10), const Color(0xFF7A5C1E)),
-      _Evidence.no => ('–', t.faint, Colors.transparent, t.line2),
+    final (Widget mark, Color bg, Color border) = switch (b.st) {
+      _Evidence.ok => (
+          TestuIcon(TestuGlyph.check, size: 8, color: t.greenText),
+          t.greenTint,
+          t.greenBorder
+        ),
+      _Evidence.mid => (
+          Container(
+              width: 4,
+              height: 4,
+              decoration:
+                  BoxDecoration(color: t.amber, shape: BoxShape.circle)),
+          t.amberTint,
+          t.amberBorder
+        ),
+      _Evidence.no => (
+          TestuIcon(TestuGlyph.minus, size: 8, color: t.faint),
+          Colors.transparent,
+          t.line2
+        ),
     };
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 7, 16, 7),
@@ -1346,8 +1414,7 @@ class _BehaviorRow extends StatelessWidget {
               border: Border.all(color: border),
             ),
             alignment: Alignment.center,
-            child: Text(mark,
-                style: TextStyle(fontSize: 9, height: 1, color: fg)),
+            child: mark,
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -1355,11 +1422,11 @@ class _BehaviorRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(b.text,
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontFamily: 'Geist',
                         fontSize: 11.5,
                         height: 1.5,
-                        color: Color(0xFFC2C1BD))),
+                        color: t.inkDim)),
                 const SizedBox(height: 1),
                 Text(b.sub,
                     style: kCaption),
@@ -1387,7 +1454,7 @@ Color _dotColor(Object d, TestuTokens t) => switch (d) {
       _Dot.green => t.green,
       _Dot.orange => t.orange,
       _Dot.red => t.red,
-      _Dot.idle => const Color(0xFF3A3A40),
+      _Dot.idle => t.idle,
       final Color c => c,
       _ => t.faint,
     };
@@ -1414,8 +1481,8 @@ class _SubGroupWidget extends StatelessWidget {
     return Column(
       children: [
         Container(
-          decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: Color(0xFF17171A)))),
+          decoration:
+              BoxDecoration(border: Border(bottom: BorderSide(color: t.card2))),
           child: TestuPressable(
             onTap: expandable ? onToggle : () => onOpen(group.sectionId),
             child: Padding(
@@ -1435,8 +1502,9 @@ class _SubGroupWidget extends StatelessWidget {
                 AnimatedRotation(
                   turns: open && expandable ? 0.25 : 0,
                   duration: const Duration(milliseconds: 250),
-                  child: Text('›',
-                      style: TextStyle(fontSize: 13, color: t.faint)),
+                  curve: TestuTokens.curve,
+                  child: TestuIcon(TestuGlyph.chevronRight,
+                      size: 13, color: t.faint),
                 ),
               ]),
             ),
@@ -1445,30 +1513,23 @@ class _SubGroupWidget extends StatelessWidget {
         if (open && expandable)
           Container(
             width: double.infinity,
-            decoration: const BoxDecoration(
-              color: Color(0xFF0D0D0F),
-              border: Border(bottom: BorderSide(color: Color(0xFF17171A))),
+            decoration: BoxDecoration(
+              color: t.well,
+              border: Border(bottom: BorderSide(color: t.card2)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(41, 9, 18, 2),
-                  child: Text(L('SKILLS', 'HABILIDADES'),
-                      style: TextStyle(
-                          fontFamily: 'GeistMono',
-                          fontSize: 8.5,
-                          letterSpacing: 1.53,
-                          color: t.faint)),
+                  child: TestuEyebrow.tag(L('SKILLS', 'HABILIDADES')),
                 ),
                 for (final k in group.kids)
                   Container(
                     decoration: BoxDecoration(
                       border: k == group.kids.last
                           ? null
-                          : const Border(
-                              bottom:
-                                  BorderSide(color: Color(0xFF131316))),
+                          : Border(bottom: BorderSide(color: t.card2)),
                     ),
                     padding:
                         const EdgeInsets.fromLTRB(41, 11, 18, 11),
@@ -1506,12 +1567,7 @@ class _SubGroupWidget extends StatelessWidget {
           Text.rich(
             TextSpan(children: [
               TextSpan(
-                  text: title,
-                  style: TextStyle(
-                      fontFamily: 'Geist',
-                      fontWeight: FontWeight.w600,
-                      fontSize: size,
-                      color: const Color(0xFFECEBE7))),
+                  text: title, style: kRowTitle.copyWith(fontSize: size)),
               if (critical)
                 WidgetSpan(
                   alignment: PlaceholderAlignment.middle,
@@ -1520,8 +1576,7 @@ class _SubGroupWidget extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(
                         vertical: 2, horizontal: 6),
                     decoration: BoxDecoration(
-                      border:
-                          Border.all(color: const Color(0xFF7A5C1E)),
+                      border: Border.all(color: t.amberBorder),
                       borderRadius: BorderRadius.circular(99),
                     ),
                     child: Text(L('CRITICAL SKILL', 'HABILIDAD CRÍTICA'),
@@ -1573,8 +1628,7 @@ class _ModeButton extends StatelessWidget {
               fontWeight: FontWeight.w700,
               fontSize: small ? 9.5 : 10.5,
               letterSpacing: 0.42,
-              color:
-                  primary ? t.onPrimaryAction : const Color(0xFFD8D7D3),
+              color: primary ? t.onPrimaryAction : t.ink,
             )),
       ),
     );
@@ -1588,79 +1642,64 @@ class _ResRow extends StatelessWidget {
       {required this.icon,
       required this.title,
       required this.sub,
-      required this.required,
+      this.required,
       required this.onTap});
 
   final String icon;
   final String title;
   final String sub;
-  final bool required;
+
+  /// true = REQUIRED, false = OPTIONAL, null = the source has no such
+  /// flag, so no badge (the server does not send one yet).
+  final bool? required;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final t = TestuTokens.of(context);
     return Container(
-      decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: Color(0xFF17171A)))),
+      decoration:
+          BoxDecoration(border: Border(bottom: BorderSide(color: t.card2))),
       child: TestuPressable(
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 18),
           child: Row(children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: t.card2,
-                border: Border.all(color: t.line),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              alignment: Alignment.center,
-              child: Text(icon,
-                  style: TextStyle(
-                      fontFamily: 'GeistMono',
-                      fontWeight: FontWeight.w500,
-                      fontSize: 9.5,
-                      letterSpacing: 0.38,
-                      color: t.mut)),
-            ),
+            TestuDocBadge(icon),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title,
-                      style: const TextStyle(
-                          fontFamily: 'Geist',
-                          fontWeight: FontWeight.w600,
-                          fontSize: 12.5,
-                          color: Color(0xFFECEBE7))),
+                  Text(title, style: kRowTitle),
                   const SizedBox(height: 2),
                   Text(sub,
                       style: kMeta),
                 ],
               ),
             ),
-            const SizedBox(width: 10),
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(vertical: 2, horizontal: 7),
-              decoration: BoxDecoration(
-                border: Border.all(
-                    color: required
-                        ? const Color(0xFF7A5C1E)
-                        : t.line2),
-                borderRadius: BorderRadius.circular(99),
+            if (required != null) ...[
+              const SizedBox(width: 10),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(vertical: 2, horizontal: 7),
+                decoration: BoxDecoration(
+                  border: Border.all(
+                      color: required! ? t.amberBorder : t.line2),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+                child: Text(
+                    required!
+                        ? L('REQUIRED', 'OBLIGATORIO')
+                        : L('OPTIONAL', 'OPCIONAL'),
+                    style: TextStyle(
+                        fontFamily: 'GeistMono',
+                        fontWeight: FontWeight.w500,
+                        fontSize: 8.5,
+                        letterSpacing: 0.85,
+                        color: required! ? t.amber : t.mut)),
               ),
-              child: Text(required ? L('REQUIRED', 'OBLIGATORIO') : L('OPTIONAL', 'OPCIONAL'),
-                  style: TextStyle(
-                      fontFamily: 'GeistMono',
-                      fontWeight: FontWeight.w500,
-                      fontSize: 8.5,
-                      letterSpacing: 0.85,
-                      color: required ? t.amber : t.mut)),
-            ),
+            ],
           ]),
         ),
       ),

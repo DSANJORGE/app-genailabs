@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'testu_client.dart';
 import 'testu_i18n.dart';
 import 'testu_live.dart';
+import 'testu_notifications.dart';
 import 'testu_session.dart';
 import 'testu_sully.dart';
 import 'testu_theme.dart';
@@ -38,15 +39,25 @@ class _TestuTutorScreenState extends State<TestuTutorScreen> {
   bool _in = false;
   final _scroll = ScrollController();
 
-  // Live: the learner's tally per section, fetched once per visit. Null until
-  // it arrives (or when it fails): the greeting then reads as "no answers yet".
+  // Live: the learner's tally per section, fetched once per visit. While it
+  // is on its way the tutor is "typing" — the greeting must not claim "no
+  // answers yet" about a record that simply hasn't loaded. Null after a
+  // failure reads as no record.
   TutorProgress? _progress;
+  bool _loadingProgress = false;
+  /// The last fetch threw and there is no earlier record to show.
+  bool _progressFailed = false;
+
+  // C1: the same conversation on phone and web. Loaded once per screen
+  // life, only while nothing was typed here yet.
+  bool _loadingHistory = false;
 
   // (fromUser, text), in order.
   final _chat = <(bool, String)>[];
   bool _waiting = false;
   StreamSubscription<String>? _sub;
   Timer? _timeout;
+  bool _late = false;
 
   @override
   void initState() {
@@ -74,9 +85,36 @@ class _TestuTutorScreenState extends State<TestuTutorScreen> {
       if (mounted) setState(() => _in = true);
     });
     if (testuLive) {
+      _loadingProgress = true;
+      _progressFailed = false;
       loadTutorProgress().then((p) {
-        if (mounted && p != null) setState(() => _progress = p);
-      }).catchError((_) {});
+        if (!mounted) return;
+        setState(() {
+          _loadingProgress = false;
+          if (p != null) _progress = p;
+        });
+      }).catchError((Object e) {
+        debugPrint('TestU: tutor progress ($e)');
+        if (mounted) {
+          setState(() {
+            _loadingProgress = false;
+            _progressFailed = _progress == null;
+          });
+        }
+      });
+      // ponytail: a failed history load is silent — the greeting stands and
+      // re-entering the tab retries; an error card when someone misses it.
+      if (_chat.isEmpty && !_loadingHistory) {
+        _loadingHistory = true;
+        loadTutorHistory().then((turns) {
+          if (mounted && _chat.isEmpty && turns.isNotEmpty) {
+            setState(() => _chat.addAll(turns));
+            _scrollDown();
+          }
+        }).catchError((Object e) {
+          debugPrint('TestU: tutor history ($e)');
+        }).whenComplete(() => _loadingHistory = false);
+      }
     }
   }
 
@@ -90,22 +128,35 @@ class _TestuTutorScreenState extends State<TestuTutorScreen> {
       return;
     }
     void says(String s) {
-      if (!mounted || !_waiting) return;
+      if (!mounted || !(_waiting || _late)) return;
+      _late = false;
       _timeout?.cancel();
       setState(() {
         _waiting = false;
         _chat.add((false, s));
       });
       _scrollDown();
+      // Reply landed while the learner was on another tab: the bell says so.
+      // Local only — the reply already reached only this learner's channel.
+      if (testuLive && !widget.active) {
+        addTestuNotice(testuNoticeTitle('tutorreply', ''), noticePreview(s),
+            type: 'tutorreply');
+      }
     }
 
     _sub ??= sullyReplies().listen(says);
-    setState(() => _waiting = true);
+    setState(() {
+      _waiting = true;
+      _late = false;
+    });
     _timeout?.cancel();
     _timeout = Timer(const Duration(seconds: 90), () {
-      if (_waiting) says(sullySlowReply());
+      if (!_waiting) return;
+      says(sullySlowReply());
+      // ponytail: the next tutor message is taken as the late answer.
+      _late = true;
     });
-    askSullyFree(text).catchError((_) => says(sullyUnavailable()));
+    askSullyFree(text).catchError((Object e) => says(sullyFailure(e)));
   }
 
   void _scrollDown() => WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -114,47 +165,88 @@ class _TestuTutorScreenState extends State<TestuTutorScreen> {
             duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
       });
 
+  /// Same words and retry as the dashboard's failed load — one honest
+  /// line, never a greeting invented about a record that did not arrive.
+  Widget _progressError() => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+              L('Could not load your progress. Check your connection and try again.',
+                  'No se pudo cargar tu progreso. Revisa tu conexión e inténtalo de nuevo.'),
+              style: kMeta),
+          const SizedBox(height: 12),
+          TestuAct(L('Try again', 'Reintentar'), onTap: _enter),
+        ],
+      );
+
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.paddingOf(context).bottom;
+    final wide = testuWide(context);
+    final thread = [
+      AnimatedSlide(
+        offset: _in ? Offset.zero : const Offset(0, 0.04),
+        duration: const Duration(milliseconds: 400),
+        curve: TestuTokens.curve,
+        child: AnimatedOpacity(
+          opacity: _in ? 1 : 0,
+          duration: const Duration(milliseconds: 400),
+          child: !testuLive
+              ? _demoGreeting(context, widget.onCalibration, _send)
+              : _loadingProgress && _progress == null
+                  ? const SullyMessage.typing(
+                      key: ValueKey('tutor-loading'),
+                      avatar: false,
+                      bottomPadding: 16)
+                  : _progressFailed
+                      ? _progressError()
+                      : _liveGreeting(
+                          context, _progress, widget.onCalibration, _send),
+        ),
+      ),
+      const SizedBox(height: 14),
+      for (final (user, text) in _chat)
+        user
+            ? TestuYouMsg(text: text)
+            : SullyMessage.reply(text,
+                avatar: false, bottomPadding: 16, onFollowUp: _send),
+      // Keyed so the reply that takes its slot gets a fresh State
+      // (otherwise it inherits these never-ending dots).
+      if (_waiting)
+        const SullyMessage.typing(
+            key: ValueKey('tutor-typing'), avatar: false, bottomPadding: 16),
+      const _PrivacyNote(),
+    ];
     return SafeArea(
       bottom: false,
       child: Stack(
         children: [
-          ListView(
+          // The column fills the viewport so the desktop frame can sink the
+          // thread to the composer, chat-style, instead of leaving a tall
+          // window's void between the last message and the bar. On the
+          // phone it starts at the top, as the list did.
+          CustomScrollView(
             controller: _scroll,
-            padding: EdgeInsets.fromLTRB(18, 14, 18, bottomInset + 130),
-            children: [
-              const _Header(),
-              const SizedBox(height: 18),
-              AnimatedSlide(
-                offset: _in ? Offset.zero : const Offset(0, 0.04),
-                duration: const Duration(milliseconds: 400),
-                curve: Curves.easeOut,
-                child: AnimatedOpacity(
-                  opacity: _in ? 1 : 0,
-                  duration: const Duration(milliseconds: 400),
-                  child: testuLive
-                      ? _liveGreeting(
-                          context, _progress, widget.onCalibration, _send)
-                      : _demoGreeting(context, widget.onCalibration, _send),
+            slivers: [
+              SliverPadding(
+                padding: EdgeInsets.fromLTRB(18, testuTopPad(context), 18, 0),
+                sliver: SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const _Header(),
+                      const SizedBox(height: 18),
+                      if (wide) const Spacer(),
+                      ...thread,
+                      // Room for the ask bar (~88) and, on the phone, the
+                      // nav. In the column, not the sliver padding: the fill
+                      // extent ignores padding after it.
+                      SizedBox(height: bottomInset + (wide ? 100 : 130)),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(height: 14),
-              for (final (user, text) in _chat)
-                user
-                    ? TestuYouMsg(text: text)
-                    : SullyMessage.reply(text, avatar: false, bottomPadding: 16),
-              // Keyed so the reply that takes its slot gets a fresh State
-              // (otherwise it inherits these never-ending dots).
-              if (_waiting)
-                const SullyMessage(
-                    key: ValueKey('tutor-typing'),
-                    spans: [],
-                    delay: 600000,
-                    avatar: false,
-                    bottomPadding: 16),
-              const _PrivacyNote(),
             ],
           ),
           Positioned(
@@ -192,13 +284,15 @@ class _Header extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(client.tutor, style: kH1),
-                  const SizedBox(height: 2),
-                  Text(
-                      CL('Tutor ${client.name} Operations',
-                          'Tutor ${client.name} Operaciones',
-                          'Tutor ${client.name} Ground Operations',
-                          'Tutor ${client.name} Operaciones en Tierra'),
-                      style: kLabel),
+                  if (!testuLive) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                        CL('Tutor ${client.name} Operations',
+                            'Tutor ${client.name} Operaciones',
+                            'Tutor ${client.name} Ground Operations',
+                            'Tutor ${client.name} Operaciones en Tierra'),
+                        style: kLabel),
+                  ],
                 ],
               ),
             ),
@@ -220,10 +314,15 @@ class _PrivacyNote extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
       child: Text(
-        L('Private to you. ${client.tutor}’s answers always cite their sources. '
-                'Your managers see readiness signals — never this conversation.',
-            'Privado para ti. Las respuestas de ${client.tutor} siempre citan sus fuentes. '
-                'Tus responsables ven señales de preparación — nunca esta conversación.'),
+        testuLive
+            ? L('Private to you. ${client.tutor} answers with the source when it finds one; '
+                    'when it does not, it says so. Your managers see readiness signals — never this conversation.',
+                'Privado para ti. ${client.tutor} responde con la fuente cuando la encuentra; '
+                    'si no la encuentra, te lo dice. Tus responsables ven señales de preparación — nunca esta conversación.')
+            : L('Private to you. ${client.tutor}’s answers always cite their sources. '
+                    'Your managers see readiness signals — never this conversation.',
+                'Privado para ti. Las respuestas de ${client.tutor} siempre citan sus fuentes. '
+                    'Tus responsables ven señales de preparación — nunca esta conversación.'),
         style: TextStyle(
           fontFamily: 'Geist',
           fontSize: 10.5,
@@ -235,8 +334,6 @@ class _PrivacyNote extends StatelessWidget {
   }
 }
 
-const _ital = TextStyle(fontStyle: FontStyle.italic, color: Color(0xFFA9A8A4));
-
 /// Live greeting, written from the learner's own record in the live
 /// tutorial: the section they last answered and the one they are weakest in
 /// (Diego, 2026-09-03). No record yet -> an invitation to start.
@@ -244,7 +341,7 @@ Widget _liveGreeting(BuildContext context, TutorProgress? p,
     VoidCallback onCalibration, ValueChanged<String> onAsk) {
   final last = p?.last;
   final weakest = p?.weakest;
-  final hi = L('Hello ${client.persona}. ', 'Hola, ${client.persona}. ');
+  final hi = L('Hello $testuFirstName. ', 'Hola, $testuFirstName. ');
   final spans = <TextSpan>[];
   String score(SectionProgress s) => L('${s.correct} of ${s.total} right',
       '${s.correct} de ${s.total} bien');
@@ -257,7 +354,7 @@ Widget _liveGreeting(BuildContext context, TutorProgress? p,
       TextSpan(text: hi + L("I don't have any answers of yours yet in ",
           'Todavía no tengo respuestas tuyas en ')),
       TextSpan(text: p?.tutorialTitle ?? L('your tutorial', 'tu tutorial'),
-          style: _ital),
+          style: kItalic),
       TextSpan(text: L('. Shall we start, or is there anything else on your mind?',
           '. ¿Empezamos, o hay algo en lo que estés pensando?')),
     ]);
@@ -266,7 +363,7 @@ Widget _liveGreeting(BuildContext context, TutorProgress? p,
     spans.addAll([
       TextSpan(text: hi + L('The last thing you worked on was ',
           'Lo último que trabajaste fue ')),
-      TextSpan(text: name(last), style: _ital),
+      TextSpan(text: name(last), style: kItalic),
       TextSpan(
           text: clean
               ? L(' (${score(last)} — nothing to fix there). Want to keep going, or is there anything else on your mind?',
@@ -278,20 +375,21 @@ Widget _liveGreeting(BuildContext context, TutorProgress? p,
     spans.addAll([
       TextSpan(text: hi + L('The last thing you worked on was ',
           'Lo último que trabajaste fue ')),
-      TextSpan(text: name(last), style: _ital),
+      TextSpan(text: name(last), style: kItalic),
       TextSpan(text: L(' (${score(last)}). Where you are weakest is ',
           ' (${score(last)}). Donde más flojeas es ')),
-      TextSpan(text: name(weakest), style: _ital),
+      TextSpan(text: name(weakest), style: kItalic),
       TextSpan(
           text: L(' (${score(weakest)}) — I have marked it to revisit. Want to go over it now, or is there anything else on your mind?',
               ' (${score(weakest)}) — lo he marcado para repasar. ¿Quieres repasarlo ahora, o hay algo más en lo que estés pensando?')),
     ]);
   }
 
-  // Third chip: re-explain the weakest section; the client's canned question
-  // until there is one.
+  // Third chip: re-explain the weakest section. No progress yet means no
+  // real weak spot to ask about — drop the chip rather than fall back to
+  // the client's canned question about a subject the learner may not have.
   final ask = weakest == null
-      ? L(client.askEn, client.askEs)
+      ? null
       : L('Explain ${name(weakest)} again', 'Explícame otra vez ${name(weakest)}');
   return SullyMessage(
     delay: 0,
@@ -309,20 +407,21 @@ Widget _liveGreeting(BuildContext context, TutorProgress? p,
 
 Widget _chips(BuildContext context, VoidCallback onCalibration,
     ValueChanged<String> onAsk,
-    {required String primary, required String ask, String? sectionId}) {
+    {required String primary, String? ask, String? sectionId}) {
   return Padding(
     padding: const EdgeInsets.only(top: 12),
     child: Wrap(
       spacing: 8,
       runSpacing: 8,
       children: [
-        _Chip(primary,
+        TestuChip(primary,
             primary: true,
             onTap: () => showTestuSession(context, sectionId: sectionId)),
-        _Chip(L('How is my calibration?', '¿Cómo va mi calibración?'),
+        TestuChip(L('How is my calibration?', '¿Cómo va mi calibración?'),
             onTap: onCalibration),
-        // A canned question: sent as if typed.
-        _Chip(ask, onTap: () => onAsk(ask)),
+        // A canned question, sent as if typed — omitted when there is none
+        // backed by real progress (live, no answers yet).
+        if (ask != null) TestuChip(ask, onTap: () => onAsk(ask)),
       ],
     ),
   );
@@ -336,14 +435,14 @@ Widget _demoGreeting(BuildContext context, VoidCallback onCalibration,
     avatar: false,
     spans: [
       TextSpan(
-          text: L('Hello ${client.persona}. Yesterday a misconception surfaced '
+          text: L('Hello $testuFirstName. Yesterday a misconception surfaced '
                   'on ',
-              'Hola, ${client.persona}. Ayer apareció un concepto erróneo '
+              'Hola, $testuFirstName. Ayer apareció un concepto erróneo '
                   'sobre ')),
       TextSpan(
           text: CL('due diligence', 'la debida diligencia',
               'chock timing', 'el momento de calzar'),
-          style: _ital),
+          style: kItalic),
       TextSpan(
           text: L(' — I’ve scheduled it into today’s Daily '
                   'Challenge. Want to talk it through first, or '
@@ -356,40 +455,6 @@ Widget _demoGreeting(BuildContext context, VoidCallback onCalibration,
         primary: L('Review it now', 'Repasarlo ahora'),
         ask: L(client.askEn, client.askEs)),
   );
-}
-
-/// Suggestion chip — outlined, or white when it's the adaptive recommendation.
-class _Chip extends StatelessWidget {
-  const _Chip(this.label, {this.primary = false, required this.onTap});
-
-  final String label;
-  final bool primary;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = TestuTokens.of(context);
-    return TestuPressable(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 14),
-        decoration: BoxDecoration(
-          color: primary ? t.primaryAction : null,
-          border: Border.all(color: primary ? t.primaryAction : t.line2),
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontFamily: 'Geist',
-            fontSize: 11.5,
-            fontWeight: primary ? FontWeight.w700 : FontWeight.w400,
-            color: primary ? t.onPrimaryAction : const Color(0xFFC2C1BD),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 /// Pinned ask bar above the nav, fading up from the page background.

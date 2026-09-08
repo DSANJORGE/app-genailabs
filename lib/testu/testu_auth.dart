@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'testu_live.dart';
 import 'testu_lock.dart';
+import 'testu_usage.dart';
 
 /// The app's one auth seam. Two bodies behind the same four calls: the
 /// offline demo (any email works, code 666666, emails starting with "new"
@@ -42,6 +43,10 @@ class TestuAuth {
   }
 
   static Future<void> signOut() async {
+    // Before the credentials go: the usage queue is device-global and the
+    // server bills events to whoever's session posts them, so this
+    // learner's leftovers must not survive into the next account.
+    await testuUsage.signOut();
     if (testuLive) {
       await liveSignOut();
     } else {

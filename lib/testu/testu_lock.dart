@@ -1,5 +1,5 @@
-import 'dart:io';
-
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'testu_auth.dart';
 import 'testu_i18n.dart';
 import 'testu_icons.dart';
+import 'testu_live.dart';
 import 'testu_theme.dart';
 import 'testu_widgets.dart';
 
@@ -41,15 +42,15 @@ class TestuLock {
   /// What to call it on screen — Apple and Android name their own sensors,
   /// so the UI must too ("Unlock with biometrics" reads like a spec sheet).
   /// Each label is the platform's own name for the sensor, so it reads
-  /// correctly wherever it is dropped into a sentence.
+  /// correctly wherever it is dropped into a sentence. Foundation's target
+  /// platform, not dart:io — the browser build compiles this file too.
   static String get name {
+    final apple = defaultTargetPlatform == TargetPlatform.iOS;
     if (_kinds.contains(BiometricType.face)) {
-      return Platform.isIOS
-          ? 'Face ID'
-          : L('Face Unlock', 'Desbloqueo facial');
+      return apple ? 'Face ID' : L('Face Unlock', 'Desbloqueo facial');
     }
     if (_kinds.contains(BiometricType.fingerprint)) {
-      return Platform.isIOS ? 'Touch ID' : L('Fingerprint', 'Huella');
+      return apple ? 'Touch ID' : L('Fingerprint', 'Huella');
     }
     return L('Biometrics', 'Biometría');
   }
@@ -120,25 +121,11 @@ class TestuLock {
 
 /// Offered once, straight after the first successful code sign-in. Declining
 /// is a real answer — the same switch waits in Settings.
-Future<void> showTestuLockOffer(BuildContext context) {
-  final t = TestuTokens.of(context);
-  return showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    isDismissible: false,
-    backgroundColor: t.card,
-    barrierColor: const Color(0xA8000000),
-    shape: RoundedRectangleBorder(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
-      side: BorderSide(color: t.line2),
-    ),
-    constraints: BoxConstraints(
-      maxHeight: MediaQuery.sizeOf(context).height * 0.88,
-      maxWidth: 640,
-    ),
-    builder: (_) => const _LockOfferSheet(),
-  );
-}
+Future<void> showTestuLockOffer(BuildContext context) => showTestuSheet<void>(
+      context,
+      dismissible: false,
+      builder: (_) => const _LockOfferSheet(),
+    );
 
 class _LockOfferSheet extends StatefulWidget {
   const _LockOfferSheet();
@@ -185,21 +172,11 @@ class _LockOfferSheetState extends State<_LockOfferSheet> {
     return SafeArea(
       top: false,
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(18, 12, 18, 26),
+        padding: const EdgeInsets.fromLTRB(18, 0, 18, 26),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 18),
-                decoration: BoxDecoration(
-                  color: t.line2,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
+            const TestuGrabber(),
             if (_done) ..._successChildren(t) else ..._offerChildren(t),
           ],
         ),
@@ -360,7 +337,11 @@ class _TestuLockScreenState extends State<TestuLockScreen> {
                         const SizedBox(width: double.infinity),
                         TestuIcon(TestuGlyph.faceId, size: 38, color: t.ink),
                         const SizedBox(height: 18),
-                        Text(L('Welcome back', 'Bienvenida de nuevo'),
+                        Text(
+                            testuLive
+                                ? L('Welcome back, $testuFirstName',
+                                    'Hola, $testuFirstName')
+                                : L('Welcome back', 'Bienvenida de nuevo'),
                             style: kH1),
                         const SizedBox(height: 10),
                         ConstrainedBox(
@@ -426,22 +407,12 @@ class _TestuLockScreenState extends State<TestuLockScreen> {
   }
 }
 
-/// Sheet/screen title — Sora 700, matching the other sheets.
+/// Sheet/screen title — the shared sheet title style.
 class _Title extends StatelessWidget {
   const _Title(this.text);
 
   final String text;
 
   @override
-  Widget build(BuildContext context) => Text(
-        text,
-        style: TextStyle(
-          fontFamily: 'Sora',
-          fontWeight: FontWeight.w700,
-          fontSize: 17,
-          letterSpacing: -0.17,
-          height: 1.3,
-          color: TestuTokens.of(context).ink,
-        ),
-      );
+  Widget build(BuildContext context) => Text(text, style: kSheetTitle);
 }

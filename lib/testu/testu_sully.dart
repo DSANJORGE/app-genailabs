@@ -1,9 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:eme_app_package/eme_http.dart' show EmeHttpException;
 
 import 'testu_i18n.dart';
 import 'testu_live.dart';
+import 'testu_md.dart';
 import 'testu_pdf.dart';
 import 'testu_resources.dart';
 import 'testu_theme.dart';
@@ -15,6 +17,17 @@ import 'testu_widgets.dart';
 /// [SullyMessage.onOpenSource] and move instead of stacking a second sheet.
 void openTestuSource(BuildContext context, Cite c) {
   final doc = liveDocs[c.title];
+  // Live: a citation that matches no loaded document (docs still loading,
+  // fetch failed, title mismatch) says so instead of opening the offline
+  // demo's aviation manual or some other document's page N.
+  // ponytail: no retry/refetch; add one when citations regularly beat
+  // loadDocuments.
+  if (testuLive && doc == null) {
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
+        content: Text(L('Source not available yet.',
+            'La fuente aún no está disponible.'))));
+    return;
+  }
   if (doc != null && doc.isVideo) {
     showTestuVideo(context, doc, at: c.at ?? Duration.zero);
   } else {
@@ -35,58 +48,21 @@ String whereOf(Ref r) => r.at != null
 /// the others, each "PDF/VIDEO  Title · p. N | m:ss".
 void showTestuSources(
     BuildContext context, Cite c, void Function(Cite) open) {
-  final t = TestuTokens.of(context);
-  showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: t.card,
-    shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
-    builder: (ctx) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
-            child: Text(L('Sources', 'Fuentes'), style: kLabel),
-          ),
-          for (final r in [c.ref, ...c.others])
-            TestuPressable(
-              onTap: () {
-                Navigator.of(ctx).pop();
-                open(c.to(r));
-              },
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                child: Row(children: [
-                  SizedBox(
-                    width: 44,
-                    child: Text(
-                      liveDocs[r.title]?.isVideo == true ? 'VIDEO' : 'PDF',
-                      style: TextStyle(
-                          fontFamily: 'GeistMono',
-                          fontSize: 9,
-                          letterSpacing: 1.44,
-                          color: t.orange),
-                    ),
-                  ),
-                  Expanded(
-                    child: Text(
-                      '${r.title}${whereOf(r)}',
-                      style: const TextStyle(
-                          fontFamily: 'Geist',
-                          fontSize: 13,
-                          color: Color(0xFFD6D4D0)),
-                    ),
-                  ),
-                ]),
-              ),
-            ),
-          const SizedBox(height: 8),
-        ],
-      ),
-    ),
+  showTestuListSheet(
+    context,
+    title: L('SOURCES', 'FUENTES'),
+    maxHeight: 0.6,
+    rows: [
+      for (final r in [c.ref, ...c.others])
+        (
+          tag: liveDocs[r.title]?.isVideo == true ? 'VIDEO' : 'PDF',
+          label: '${r.title}${whereOf(r)}',
+          trailing: null,
+          selected: false,
+          indent: false,
+          onTap: () => open(c.to(r)),
+        ),
+    ],
   );
 }
 
@@ -119,11 +95,11 @@ class TestuSourceBlock extends StatelessWidget {
           if (quote != null) ...[
             Text(
               '“$quote”',
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'Sora',
                 fontSize: 12.5,
                 height: 1.62,
-                color: Color(0xFFDCDAD6),
+                color: t.inkSoft,
               ),
             ),
             const SizedBox(height: 7),
@@ -143,7 +119,7 @@ class TestuSourceBlock extends StatelessWidget {
                       fontSize: 10.5,
                       color: t.blue,
                       decoration: TextDecoration.underline,
-                      decorationColor: const Color(0xFF3D5C7D),
+                      decorationColor: t.blue.withValues(alpha: 0.45),
                     ),
                   ),
                 ),
@@ -156,39 +132,6 @@ class TestuSourceBlock extends StatelessWidget {
     );
   }
 }
-
-/// Tutor markdown as spans: `**bold**`, `*italic*`, `` `code` ``, `#`
-/// headings (bold lines), `*`/`-` bullets ("•"). ponytail: no tables,
-/// links or nesting — a markdown package when a reply needs them.
-List<InlineSpan> mdSpans(String md) {
-  final out = <InlineSpan>[];
-  final lines = md.split('\n');
-  for (final (i, raw) in lines.indexed) {
-    var line = raw;
-    final h = RegExp(r'^\s*#{1,6}\s+(.*)$').firstMatch(line);
-    if (h != null) line = '**${h[1]}**';
-    line = line.replaceFirst(RegExp(r'^\s*[*\-•]\s+'), '• ');
-    var last = 0;
-    for (final m in _mdInline.allMatches(line)) {
-      if (m.start > last) out.add(TextSpan(text: line.substring(last, m.start)));
-      out.add(TextSpan(
-        text: m[1] ?? m[2] ?? m[3] ?? m[4] ?? m[5],
-        style: m[1] != null || m[2] != null
-            ? const TextStyle(fontWeight: FontWeight.w700)
-            : m[5] != null
-                ? const TextStyle(fontFamily: 'GeistMono')
-                : const TextStyle(fontStyle: FontStyle.italic),
-      ));
-      last = m.end;
-    }
-    if (last < line.length) out.add(TextSpan(text: line.substring(last)));
-    if (i < lines.length - 1) out.add(const TextSpan(text: '\n'));
-  }
-  return out;
-}
-
-final _mdInline = RegExp(
-    r'\*\*(.+?)\*\*|__(.+?)__|(?<![\w*])\*(?!\s)(.+?)(?<!\s)\*(?![\w*])|(?<!\w)_(.+?)_(?!\w)|`(.+?)`');
 
 /// Sully chat bubble, shared by every screen: 26px avatar, mono client.tutor.toUpperCase()
 /// label, 13.5px body. Shows typing dots for [delay] ms before revealing the
@@ -209,6 +152,10 @@ class SullyMessage extends StatefulWidget {
     this.sourceRects = const [],
     this.inDoc,
     this.onOpenSource,
+    this.followups = const [],
+    this.onFollowUp,
+    this.muted = false,
+    this.unsourced = false,
     this.bottomPadding = 0,
     this.avatar = true,
   });
@@ -229,6 +176,10 @@ class SullyMessage extends StatefulWidget {
         sourceRects = const [],
         inDoc = null,
         onOpenSource = null,
+        followups = const [],
+        onFollowUp = null,
+        muted = false,
+        unsourced = false,
         extra = null,
         onGrew = null;
 
@@ -246,6 +197,10 @@ class SullyMessage extends StatefulWidget {
         sourceRects = const [],
         inDoc = null,
         onOpenSource = null,
+        followups = const [],
+        onFollowUp = null,
+        muted = false,
+        unsourced = false,
         extra = null,
         onGrew = null;
 
@@ -253,7 +208,8 @@ class SullyMessage extends StatefulWidget {
   /// server's reference-excerpt format) becomes the source line, opening
   /// that document at that page. Inside a document, an uncited reply still
   /// names that document ([fallbackTitle], at [fallbackPage]): the tutor
-  /// always shows its source, as in the session.
+  /// always shows its source, as in the session. `>> ` offers become chips
+  /// when [onFollowUp] is given; tapping one sends that text.
   SullyMessage.reply(String reply,
       {Key? key,
       double bottomPadding = 0,
@@ -261,25 +217,34 @@ class SullyMessage extends StatefulWidget {
       String? fallbackTitle,
       int fallbackPage = 1,
       String? inDoc,
-      void Function(Cite)? onOpenSource})
+      void Function(Cite)? onOpenSource,
+      void Function(String)? onFollowUp})
       : this._cite(_withFallback(splitCite(reply), fallbackTitle, fallbackPage),
             key: key,
             bottomPadding: bottomPadding,
             avatar: avatar,
             inDoc: inDoc,
-            onOpenSource: onOpenSource);
+            onOpenSource: onOpenSource,
+            onFollowUp: onFollowUp);
 
   static Cite _withFallback(Cite c, String? title, int page) =>
-      c.title != null || title == null
+      c.title != null || title == null || c.notFound
           ? c
-          : Cite(text: c.text, quote: c.quote, title: title, page: page);
+          : Cite(
+              text: c.text,
+              quote: c.quote,
+              title: title,
+              page: page,
+              followups: c.followups,
+              fromFallback: true);
 
   SullyMessage._cite(Cite c,
       {super.key,
       this.bottomPadding = 0,
       this.avatar = true,
       this.inDoc,
-      this.onOpenSource})
+      this.onOpenSource,
+      this.onFollowUp})
       : spans = mdSpans(c.text),
         sourceLine = c.title,
         sourcePage = c.page,
@@ -287,6 +252,17 @@ class SullyMessage extends StatefulWidget {
         sourceQuote = c.quote,
         sourceOthers = c.others,
         sourceRects = c.rects,
+        followups = c.followups,
+        muted = c.notFound,
+        // Shown, never hidden: a live answer with no source says so, even
+        // when a viewer's fallback fills in the open page as sourceLine so
+        // the block still renders (c.fromFallback) — the block alone would
+        // otherwise look like a real citation. The demo's canned lines and
+        // the fixed failure lines have none by design.
+        unsourced = testuLive &&
+            (c.title == null || c.fromFallback) &&
+            !c.notFound &&
+            !isSullyFallback(c.text),
         delay = 0,
         extra = null,
         onGrew = null;
@@ -312,6 +288,20 @@ class SullyMessage extends StatefulWidget {
 
   /// Source link handler; null = open the cited document in a new sheet.
   final void Function(Cite)? onOpenSource;
+
+  /// `>> ` offers from the reply, rendered as chips under the source block.
+  final List<String> followups;
+
+  /// Tapping a follow-up chip sends its text as the next question; null
+  /// hides the chips (a surface without a composer).
+  final void Function(String)? onFollowUp;
+
+  /// The not-found sentence: dimmed prose, no source block, no label.
+  final bool muted;
+
+  /// A live reply with no citation and no admission: a small "No source"
+  /// label under the text.
+  final bool unsourced;
 
   /// False = name kicker only, no face — for screens whose header already
   /// carries the tutor's avatar (the tutor tab).
@@ -414,28 +404,19 @@ class _SullyMessageState extends State<SullyMessage> {
                 child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  client.tutor.toUpperCase(),
-                  style: TextStyle(
-                    fontFamily: 'GeistMono',
-                    fontSize: 9,
-                    letterSpacing: 1.44, // +0.16em
-                    color: t.faint,
-                  ),
-                ),
+                TestuEyebrow.kicker(client.tutor.toUpperCase()),
                 const SizedBox(height: 5),
                 if (!_revealed)
                   const _TypingDots()
                 else ...[
                   Text.rich(
                     TextSpan(children: widget.spans),
-                    style: const TextStyle(
-                      fontFamily: 'Geist',
-                      fontSize: 13.5,
-                      height: 1.62,
-                      color: Color(0xFFD6D4D0),
-                    ),
+                    style: widget.muted ? kChat.copyWith(color: t.mut) : kChat,
                   ),
+                  if (widget.unsourced) ...[
+                    const SizedBox(height: 6),
+                    Text(L('No source', 'Sin fuente'), style: kMeta),
+                  ],
                   if (widget.sourceLine != null) ...[
                     const SizedBox(height: 10),
                     TestuSourceBlock(
@@ -445,6 +426,22 @@ class _SullyMessageState extends State<SullyMessage> {
                       onTap: () => _open(context),
                     ),
                   ],
+                  // ponytail: chips stay after a tap (sending twice is
+                  // harmless); a vanishing row when a learner reports it.
+                  if (widget.onFollowUp != null && widget.followups.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          // The template asks for at most 2 offers; a rogue
+                          // reply naming more still renders only 2 chips.
+                          for (final f in widget.followups.take(2))
+                            TestuChip(f, onTap: () => widget.onFollowUp!(f)),
+                        ],
+                      ),
+                    ),
                   if (widget.extra != null) widget.extra!,
                 ],
               ],
@@ -458,8 +455,11 @@ class _SullyMessageState extends State<SullyMessage> {
   }
 }
 
-/// Fallback lines every live chat surface (session, tutor tab) says in the
-/// tutor's voice when the backend is off, slow, or unreachable.
+/// Fallback lines every live chat surface (session, tutor tab, viewers)
+/// says in the tutor's voice. Three distinct failures, never one blur:
+/// the request could not leave the phone ([sullyOffline]), the server or
+/// the agent failed ([sullyUnavailable]), nothing came back within 90 s
+/// ([sullySlowReply]).
 String sullyDemoReply() => L(
     'In this demo I can only answer the suggested questions — in the live app, ask me anything about the material.',
     'En esta demo solo puedo responder las preguntas sugeridas — en la app real, pregúntame lo que quieras sobre el material.');
@@ -469,6 +469,25 @@ String sullySlowReply() => L(
 String sullyUnavailable() => L(
     '${client.tutor} is not available right now.',
     '${client.tutor} no está disponible ahora mismo.');
+String sullyOffline() => L(
+    'No connection. Check your network and try again.',
+    'Sin conexión. Revisa tu red e inténtalo de nuevo.');
+
+/// The line for a failed send: a transport failure (no status code) is the
+/// phone's network; an HTTP error, a missing tutor channel or anything
+/// else is the server.
+String sullyFailure(Object e) =>
+    e is EmeHttpException && e.statusCode == null
+        ? sullyOffline()
+        : sullyUnavailable();
+
+/// True for the app's own fixed lines above, which carry no source and
+/// must not be labelled as if they were answers.
+bool isSullyFallback(String s) =>
+    s == sullyDemoReply() ||
+    s == sullySlowReply() ||
+    s == sullyUnavailable() ||
+    s == sullyOffline();
 
 /// True for what the server posts on the channel when the agent fails
 /// instead of answering: the exception text (`org.openedit.OpenEditException:
