@@ -182,50 +182,71 @@ class _TestuTutorScreenState extends State<TestuTutorScreen> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.paddingOf(context).bottom;
+    final wide = testuWide(context);
+    final thread = [
+      AnimatedSlide(
+        offset: _in ? Offset.zero : const Offset(0, 0.04),
+        duration: const Duration(milliseconds: 400),
+        curve: TestuTokens.curve,
+        child: AnimatedOpacity(
+          opacity: _in ? 1 : 0,
+          duration: const Duration(milliseconds: 400),
+          child: !testuLive
+              ? _demoGreeting(context, widget.onCalibration, _send)
+              : _loadingProgress && _progress == null
+                  ? const SullyMessage.typing(
+                      key: ValueKey('tutor-loading'),
+                      avatar: false,
+                      bottomPadding: 16)
+                  : _progressFailed
+                      ? _progressError()
+                      : _liveGreeting(
+                          context, _progress, widget.onCalibration, _send),
+        ),
+      ),
+      const SizedBox(height: 14),
+      for (final (user, text) in _chat)
+        user
+            ? TestuYouMsg(text: text)
+            : SullyMessage.reply(text,
+                avatar: false, bottomPadding: 16, onFollowUp: _send),
+      // Keyed so the reply that takes its slot gets a fresh State
+      // (otherwise it inherits these never-ending dots).
+      if (_waiting)
+        const SullyMessage.typing(
+            key: ValueKey('tutor-typing'), avatar: false, bottomPadding: 16),
+      const _PrivacyNote(),
+    ];
     return SafeArea(
       bottom: false,
       child: Stack(
         children: [
-          ListView(
+          // The column fills the viewport so the desktop frame can sink the
+          // thread to the composer, chat-style, instead of leaving a tall
+          // window's void between the last message and the bar. On the
+          // phone it starts at the top, as the list did.
+          CustomScrollView(
             controller: _scroll,
-            padding: EdgeInsets.fromLTRB(18, 14, 18, bottomInset + 130),
-            children: [
-              const _Header(),
-              const SizedBox(height: 18),
-              AnimatedSlide(
-                offset: _in ? Offset.zero : const Offset(0, 0.04),
-                duration: const Duration(milliseconds: 400),
-                curve: TestuTokens.curve,
-                child: AnimatedOpacity(
-                  opacity: _in ? 1 : 0,
-                  duration: const Duration(milliseconds: 400),
-                  child: !testuLive
-                      ? _demoGreeting(context, widget.onCalibration, _send)
-                      : _loadingProgress && _progress == null
-                          ? const SullyMessage.typing(
-                              key: ValueKey('tutor-loading'),
-                              avatar: false,
-                              bottomPadding: 16)
-                          : _progressFailed
-                              ? _progressError()
-                              : _liveGreeting(context, _progress,
-                                  widget.onCalibration, _send),
+            slivers: [
+              SliverPadding(
+                padding: EdgeInsets.fromLTRB(18, testuTopPad(context), 18, 0),
+                sliver: SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const _Header(),
+                      const SizedBox(height: 18),
+                      if (wide) const Spacer(),
+                      ...thread,
+                      // Room for the ask bar (~88) and, on the phone, the
+                      // nav. In the column, not the sliver padding: the fill
+                      // extent ignores padding after it.
+                      SizedBox(height: bottomInset + (wide ? 100 : 130)),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(height: 14),
-              for (final (user, text) in _chat)
-                user
-                    ? TestuYouMsg(text: text)
-                    : SullyMessage.reply(text,
-                        avatar: false, bottomPadding: 16, onFollowUp: _send),
-              // Keyed so the reply that takes its slot gets a fresh State
-              // (otherwise it inherits these never-ending dots).
-              if (_waiting)
-                const SullyMessage.typing(
-                    key: ValueKey('tutor-typing'),
-                    avatar: false,
-                    bottomPadding: 16),
-              const _PrivacyNote(),
             ],
           ),
           Positioned(

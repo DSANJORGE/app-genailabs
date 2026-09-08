@@ -1,6 +1,7 @@
 import 'package:eme_app_package/utils/error_handler.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 
 import 'firebase_options.dart';
@@ -8,11 +9,13 @@ import 'testu/testu_auth.dart';
 import 'testu/testu_lock.dart';
 import 'testu/testu_notifications.dart';
 import 'testu/testu_profile.dart';
+import 'testu/testu_route.dart';
 import 'testu/testu_shell.dart';
 import 'testu/testu_signin.dart';
 import 'testu/testu_splash.dart';
 import 'testu/testu_theme.dart';
 import 'testu/testu_usage.dart';
+import 'testu/testu_web.dart';
 import 'testu/testu_widgets.dart';
 
 /// TestU Learn entrypoint — run with `flutter run -t lib/main_testu.dart`.
@@ -25,8 +28,12 @@ bool _firebaseReady = false;
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
-    await AppErrorHandler.initialize(DefaultFirebaseOptions.currentPlatform);
-    _firebaseReady = true;
+    // Web: no Firebase project for the browser yet. initialize(null) still
+    // installs the Flutter and platform error hooks; Crashlytics and
+    // Analytics stay off (spec: testu-learn-web).
+    await AppErrorHandler.initialize(
+        kIsWeb ? null : DefaultFirebaseOptions.currentPlatform);
+    _firebaseReady = !kIsWeb;
   } catch (e) {
     debugPrint('Firebase off: $e');
   }
@@ -64,6 +71,7 @@ class _TestuAppState extends State<TestuApp> with WidgetsBindingObserver {
   /// When the app was last put away. Null while it's in the foreground.
   DateTime? _leftAt;
   final _nav = GlobalKey<NavigatorState>();
+  final _modals = TestuModalWatch();
 
   /// Long enough that answering a message or picking a photo doesn't make you
   /// re-authenticate; short enough that the phone left on a crew-room table
@@ -74,6 +82,14 @@ class _TestuAppState extends State<TestuApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    if (kIsWeb) {
+      // ponytail: :focus-visible by hand. On desktop web the engine focuses
+      // the first pressable whenever the canvas is clicked and would ring
+      // it; rings only after the keyboard is used (first Tab).
+      FocusManager.instance.highlightStrategy =
+          FocusHighlightStrategy.alwaysTouch;
+      HardwareKeyboard.instance.addHandler(_keyboardUsed);
+    }
     TestuAuth.onSessionEnded = () {
       clearTestuNotices();
       if (mounted) {
@@ -96,7 +112,14 @@ class _TestuAppState extends State<TestuApp> with WidgetsBindingObserver {
   /// app `inactive`, and re-locking behind those would be a trap.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused) {
+    // A browser tab never reports `paused`: `hidden` is what it sends when
+    // the tab is hidden or closing, so that is where web pauses; if the POST
+    // is cut off by unload the event is still queued and ships on the next
+    // open(). Mobile keeps `paused` only (see the note above about
+    // `inactive`). Resume is asymmetric on web: a visible but unfocused tab
+    // sits in `inactive`, so the clock restarts on focus.
+    if (state == AppLifecycleState.paused ||
+        (kIsWeb && state == AppLifecycleState.hidden)) {
       testuUsage.pause();
       stopTestuNoticePolling();
       _leftAt = DateTime.now();
@@ -117,8 +140,32 @@ class _TestuAppState extends State<TestuApp> with WidgetsBindingObserver {
     }
   }
 
+  /// Browser Back/Forward: the engine pushes the restored entry here (spec
+  /// E2). This state is the first observer registered, ahead of
+  /// WidgetsApp's, whose own handler would `pushNamed` the address as a
+  /// route and, with no route table, fail. So on web the answer is always
+  /// true, handled or not; mobile keeps the default (spec: "Mobile ignores
+  /// the observer").
+  bool _keyboardUsed(KeyEvent e) {
+    if (e.logicalKey == LogicalKeyboardKey.tab) {
+      FocusManager.instance.highlightStrategy =
+          FocusHighlightStrategy.automatic;
+      HardwareKeyboard.instance.removeHandler(_keyboardUsed);
+    }
+    return false;
+  }
+
+  @override
+  Future<bool> didPushRouteInformation(RouteInformation info) async {
+    if (!kIsWeb) return false;
+    final r = LearnerRoute.fromUri(info.uri);
+    if (r != null && _signedIn && !_locked) openLearnerRoute(r, address: false);
+    return true;
+  }
+
   @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_keyboardUsed);
     WidgetsBinding.instance.removeObserver(this);
     stopTestuNoticePolling();
     super.dispose();
@@ -140,6 +187,11 @@ class _TestuAppState extends State<TestuApp> with WidgetsBindingObserver {
       _locked = restored && TestuLock.enabled;
       _welcomeBack = true;
       _reveal = restored;
+    });
+    // First frame on a phone-sized browser: point at the app, once.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final c = _nav.currentContext;
+      if (c != null) maybeShowTestuWebNudge(c);
     });
   }
 
@@ -180,11 +232,25 @@ class _TestuAppState extends State<TestuApp> with WidgetsBindingObserver {
     }
     return MaterialApp(
       navigatorKey: _nav,
+      // Desktop frame (spec: testu-learn-web): rail + 720px column around
+      // every route. No rail during sign-in, the lock, or the launch intro.
+      builder: (context, child) => TestuFrame(
+        rail: _signedIn && !_locked && !_reveal,
+        onTab: (i) {
+          // A rail tap from a pushed screen (Topic Home, a session) lands
+          // on the tab, not under it.
+          _nav.currentState?.popUntil((r) => r.isFirst);
+          TestuShell.tabRequest.value = i;
+        },
+        modal: _modals.modal,
+        child: child!,
+      ),
       // Screen views for named routes; the automatic events (first_open,
       // session_start, app_update) need nothing from here.
       navigatorObservers: [
         if (_firebaseReady)
           FirebaseAnalyticsObserver(analytics: FirebaseAnalytics.instance),
+        _modals,
       ],
       title: 'TestU Learn',
       debugShowCheckedModeBanner: false,

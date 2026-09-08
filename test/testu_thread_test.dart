@@ -226,12 +226,16 @@ void main() {
     final composerFocus = FocusManager.instance.primaryFocus;
     expect(composerFocus, isNotNull);
     expect(composerFocus, isNot(sibling), reason: 'the composer field should hold focus first');
-    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
-    await tester.pumpAndSettle();
     // A bare FocusScope around the composer would keep primaryFocus inside
-    // it (the field is its only focusable descendant); it must instead
-    // land on the next stop in the page's traversal order.
-    expect(FocusManager.instance.primaryFocus, sibling);
+    // it; it must instead walk the page's traversal order (the send button
+    // is a real focus stop since TestuPressable became a keyboard button)
+    // and reach the sibling within a few Tabs.
+    for (var i = 0; i < 4 && FocusManager.instance.primaryFocus != sibling; i++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pumpAndSettle();
+    }
+    expect(FocusManager.instance.primaryFocus, sibling,
+        reason: 'four Tabs cover the composer, send button and any stop between');
   });
 
   testWidgets('the demo entry still shows the mock thread', (tester) async {

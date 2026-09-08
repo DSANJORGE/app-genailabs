@@ -1,4 +1,5 @@
 import 'package:eme_app_package/eme_http.dart' show EmeHttpException;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'admin/admin_api.dart';
 import 'admin/admin_models.dart';
@@ -19,12 +20,15 @@ class AdminApp extends StatefulWidget {
   State<AdminApp> createState() => _AdminAppState();
 }
 
-class _AdminAppState extends State<AdminApp> {
+class _AdminAppState extends State<AdminApp> with WidgetsBindingObserver {
   bool? _signedIn;
 
   @override
   void initState() {
     super.initState();
+    // Registered before MaterialApp's own observer (a parent's initState
+    // runs first), which otherwise swallows every browser Back/Forward.
+    WidgetsBinding.instance.addObserver(this);
     AdminSession.onSignedOut = () {
       if (mounted) setState(() => _signedIn = false);
     };
@@ -33,6 +37,20 @@ class _AdminAppState extends State<AdminApp> {
     }, onError: (_) {
       if (mounted) setState(() => _signedIn = false);
     });
+  }
+
+  @override
+  Future<bool> didPushRouteInformation(RouteInformation info) async {
+    if (!kIsWeb) return false;
+    // Always handled: falling through lets MaterialApp pushNamed() the URL.
+    if (_signedIn == true) AdminShell.browserRoute.value = info.uri;
+    return true;
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   @override

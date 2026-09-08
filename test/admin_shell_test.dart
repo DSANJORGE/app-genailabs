@@ -2,6 +2,7 @@ import 'package:eme_app_package/testing/fake_eme_http.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:genai_labs/admin/admin_activity.dart';
 import 'package:genai_labs/admin/admin_api.dart';
 import 'package:genai_labs/admin/admin_iris.dart';
 import 'package:genai_labs/admin/admin_models.dart';
@@ -72,6 +73,38 @@ void main() {
       expect(find.text(label), findsWidgets, reason: '$label is missing from the nav');
     }
     expect(find.text('Teams'), findsNothing);
+  });
+
+  testWidgets('a browser Back/Forward entry moves the nav', (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final http = FakeEmeHttp()
+      ..canned['services/testu/analytics/report.json'] = {'rows': [], 'summary': {}, 'topics': []}
+      ..canned['services/testu/personas/teams.json'] = {'teams': []}
+      ..canned['services/testu/analytics/overview.json'] = {'ok': true}
+      ..canned['services/testu/analytics/activity.json'] = {'ok': true};
+    await tester.pumpWidget(MaterialApp(
+      theme: testuTheme(),
+      home: AdminShell(
+        me: _me({'analytics_view'}),
+        api: AdminApi(http: http),
+        onSignOut: () {},
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.byType(AdminActivity), findsNothing);
+
+    // What the app relays when the engine restores a history entry.
+    AdminShell.browserRoute.value = Uri.parse('http://x/admin/#/activity');
+    await tester.pumpAndSettle();
+    expect(find.byType(AdminActivity), findsOneWidget);
+    expect(AdminShell.browserRoute.value, isNull, reason: 'consumed, so the same URL can arrive again');
+
+    // A URL this user may not open is ignored.
+    AdminShell.browserRoute.value = Uri.parse('http://x/admin/#/teams');
+    await tester.pumpAndSettle();
+    expect(find.byType(AdminActivity), findsOneWidget);
   });
 
   group('the Iris panel', () {

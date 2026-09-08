@@ -8,7 +8,8 @@ import 'package:eme_app_package/models/workspace.dart';
 import 'package:eme_app_package/services/auth_service.dart';
 import 'package:eme_app_package/services/topic_service.dart';
 import 'package:eme_app_package/services/workspace_service.dart';
-import 'package:flutter/foundation.dart' show ValueNotifier, debugPrint;
+import 'package:flutter/foundation.dart'
+    show ValueNotifier, debugPrint, kIsWeb;
 import 'package:flutter/painting.dart';
 import 'package:openinsitute_core/openinsitute_core.dart';
 
@@ -32,11 +33,17 @@ const bool testuLive = bool.fromEnvironment('TESTU_LIVE',
 /// empty (the default) hides the privacy links in the profile and sign-in.
 const testuPrivacyUrl = String.fromEnvironment('TESTU_PRIVACY_URL');
 
-/// The eMe server live mode talks to: the local eme-server-minsur checkout
-/// (`eme-server-minsur/`, Tomcat on :8080). Point a build elsewhere with
-/// `--dart-define=TESTU_MEDIADB=https://minsur.genailabs.tech/site/mediadb`.
-const _mediaDBRoot = String.fromEnvironment('TESTU_MEDIADB',
-    defaultValue: 'http://localhost:8080/site/mediadb');
+/// The eMe server live mode talks to. `--dart-define=TESTU_MEDIADB=...`
+/// wins; else the browser build talks to its own origin (the plugin serves
+/// it at /site/mediadb/learn/, same rule as the console); else the local
+/// eme-server-minsur checkout (Tomcat on :8080). Asset URLs and the tutor
+/// WebSocket (siteroot + scheme come from this in Workspace.toJson) follow.
+final String _mediaDBRoot =
+    const String.fromEnvironment('TESTU_MEDIADB').isNotEmpty
+        ? const String.fromEnvironment('TESTU_MEDIADB')
+        : kIsWeb
+            ? '${Uri.base.origin}/site/mediadb'
+            : 'http://localhost:8080/site/mediadb';
 
 /// Absolute URL for a site-relative asset path from the server
 /// (`/site/mediadb/services/module/asset/generated/...`).

@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -68,12 +69,49 @@ class TestuCover extends StatelessWidget {
 bool testuBigText(BuildContext context) =>
     MediaQuery.textScalerOf(context).scale(100) > 120;
 
+/// Window width from which the browser build wears the desktop frame
+/// (left rail, centred column, sheets as dialogs — spec: testu-learn-web).
+/// Below it every surface is the phone app unchanged.
+const double kTestuWide = 700;
+
+/// The frame is a browser thing: an iPhone on its side is 874pt wide and
+/// must stay the phone app. Tests flip this to exercise the frame on the VM.
+@visibleForTesting
+bool testuDesktop = kIsWeb;
+
+bool testuWide(BuildContext context) =>
+    testuDesktop && MediaQuery.sizeOf(context).width >= kTestuWide;
+
+/// Screen padding. The phone trusts the status bar for top air (14 below
+/// it) and reserves the translucent bottom nav under the scrolling content
+/// (110); the desktop frame has neither, so the title lines up with the
+/// rail's logo (26) and the list ends a normal margin above the window edge.
+double testuTopPad(BuildContext context) => testuWide(context) ? 26 : 14;
+double testuBottomPad(BuildContext context) => testuWide(context) ? 32 : 110;
+
 /// Press feedback per spec: opacity .75 + scale .985 + selectionClick haptic.
+/// In the browser (spec: minsur-pilot-readiness E1) it is also a button to
+/// the keyboard and the screen reader: hover dims it like a half-press,
+/// focus draws a 2px orange ring, Enter/Space press it. One widget, every
+/// button in the app inherits it. Same shape as the console's Pressable
+/// (admin_ui.dart).
 class TestuPressable extends StatefulWidget {
-  const TestuPressable({super.key, required this.child, this.onTap});
+  const TestuPressable({
+    super.key,
+    required this.child,
+    this.onTap,
+    this.semanticLabel,
+    this.radius = 12,
+  });
 
   final Widget child;
   final VoidCallback? onTap;
+
+  /// What a screen reader calls this. Null keeps the child's own text.
+  final String? semanticLabel;
+
+  /// Corner radius of the focus ring, matched to the child's own corners.
+  final double radius;
 
   @override
   State<TestuPressable> createState() => _TestuPressableState();
@@ -81,28 +119,71 @@ class TestuPressable extends StatefulWidget {
 
 class _TestuPressableState extends State<TestuPressable> {
   bool _down = false;
+  bool _hover = false;
+  bool _focus = false;
+
+  void _press() {
+    HapticFeedback.selectionClick();
+    widget.onTap!();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown: (_) => setState(() => _down = true),
-      onTapCancel: () => setState(() => _down = false),
-      onTapUp: (_) => setState(() => _down = false),
-      onTap: widget.onTap == null
-          ? null
-          : () {
-              HapticFeedback.selectionClick();
-              widget.onTap!();
-            },
-      child: AnimatedScale(
-        scale: _down ? 0.985 : 1,
-        duration: const Duration(milliseconds: 90),
-        curve: TestuTokens.curve,
-        child: AnimatedOpacity(
-          opacity: _down ? 0.75 : 1,
-          duration: const Duration(milliseconds: 90),
-          child: widget.child,
+    final enabled = widget.onTap != null;
+    final t = TestuTokens.of(context);
+    return FocusableActionDetector(
+      enabled: enabled,
+      // Desktop: a hand cursor says "this presses"; haptics are silent there.
+      mouseCursor: enabled ? SystemMouseCursors.click : MouseCursor.defer,
+      onShowHoverHighlight: (v) => setState(() => _hover = v),
+      onShowFocusHighlight: (v) => setState(() => _focus = v),
+      actions: {
+        // Space everywhere; Enter is ActivateIntent on the platforms and
+        // ButtonActivateIntent in WidgetsApp's web shortcuts.
+        ActivateIntent:
+            CallbackAction<ActivateIntent>(onInvoke: (_) => _press()),
+        ButtonActivateIntent:
+            CallbackAction<ButtonActivateIntent>(onInvoke: (_) => _press()),
+      },
+      // One semantics node: the Semantics carries the name, the button flag
+      // and the tap; the GestureDetector is excluded so it cannot add a
+      // second tappable node underneath.
+      child: Semantics(
+        button: enabled,
+        label: widget.semanticLabel,
+        onTap: enabled ? _press : null,
+        // ponytail: only drop the child's own semantics (e.g. its Text)
+        // when we're substituting a label for it — otherwise the ~43
+        // existing callers that never pass semanticLabel lose their
+        // accessible name (it comes from the child text merging up).
+        excludeSemantics: widget.semanticLabel != null,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          excludeFromSemantics: true,
+          onTapDown: (_) => setState(() => _down = true),
+          onTapCancel: () => setState(() => _down = false),
+          onTapUp: (_) => setState(() => _down = false),
+          onTap: enabled ? _press : null,
+          child: AnimatedScale(
+            scale: _down ? 0.985 : 1,
+            duration: const Duration(milliseconds: 90),
+            curve: TestuTokens.curve,
+            child: AnimatedOpacity(
+              // ponytail: hover rides the press channel (a light dim), not a
+              // fill overlay — the children own their corners and images.
+              opacity: _down ? 0.75 : (_hover ? 0.88 : 1),
+              duration: const Duration(milliseconds: 90),
+              child: Container(
+                foregroundDecoration: _focus
+                    ? BoxDecoration(
+                        border: Border.all(color: t.orange, width: 2),
+                        borderRadius: BorderRadius.circular(widget.radius),
+                      )
+                    : null,
+                child: widget.child,
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -801,6 +882,8 @@ class TestuGrabber extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // A dialog has nothing to drag; keep only the sheet's top breathing room.
+    if (testuWide(context)) return const SizedBox(height: 16);
     final t = TestuTokens.of(context);
     return Center(
       child: Container(
@@ -819,7 +902,10 @@ class TestuGrabber extends StatelessWidget {
 /// THE bottom-sheet chrome (spec: 22px top radius, card fill, hairline
 /// edge, 66% backdrop, 88% height cap, Material's 640px landscape cap,
 /// backdrop-tap closes unless [dismissible] is false). Bodies start with a
-/// [TestuGrabber] and own their scrolling.
+/// [TestuGrabber] and own their scrolling. On a desktop window
+/// (spec: testu-learn-web) the same body opens as a centred dialog — a
+/// 640px strip glued to the bottom of a 1920px window is a sheet in name
+/// only.
 Future<T?> showTestuSheet<T>(
   BuildContext context, {
   required WidgetBuilder builder,
@@ -827,6 +913,29 @@ Future<T?> showTestuSheet<T>(
   bool dismissible = true,
 }) {
   final t = TestuTokens.of(context);
+  if (testuWide(context)) {
+    return showDialog<T>(
+      context: context,
+      barrierDismissible: dismissible,
+      barrierColor: t.barrier,
+      builder: (ctx) => Dialog(
+        backgroundColor: t.card,
+        insetPadding: const EdgeInsets.all(24),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(22),
+          side: BorderSide(color: t.line2),
+        ),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minWidth: 640,
+            maxWidth: 640,
+            maxHeight: MediaQuery.sizeOf(ctx).height * maxHeight,
+          ),
+          child: builder(ctx),
+        ),
+      ),
+    );
+  }
   return showModalBottomSheet<T>(
     context: context,
     isScrollControlled: true,

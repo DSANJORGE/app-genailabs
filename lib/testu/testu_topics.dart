@@ -6,7 +6,9 @@ import 'testu_icons.dart';
 import 'testu_live.dart';
 import 'testu_pdf.dart';
 import 'testu_resources.dart';
+import 'testu_route.dart';
 import 'testu_session.dart';
+import 'testu_shell.dart';
 import 'testu_social.dart';
 import 'testu_theme.dart';
 import 'testu_widgets.dart';
@@ -281,7 +283,7 @@ Widget _topicsBody(BuildContext context, List<_Topic> topics,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(18, 14, 18, 8),
+            padding: EdgeInsets.fromLTRB(18, testuTopPad(context), 18, 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -303,7 +305,8 @@ Widget _topicsBody(BuildContext context, List<_Topic> topics,
           ),
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.only(top: 10, bottom: 110),
+              padding:
+                  EdgeInsets.only(top: 10, bottom: testuBottomPad(context)),
               children: [
                 // Live rows on their way: the list's shape, not a blank.
                 if (loading)
@@ -321,15 +324,17 @@ Widget _topicsBody(BuildContext context, List<_Topic> topics,
                     // prototype. A live row opens one when its topic has
                     // tutorials.
                     onTap: topic.opens
-                        ? () => Navigator.of(context).push(MaterialPageRoute(
-                            builder: (_) => TestuTopicHomeScreen(
-                                  topicId: topic.id,
-                                  title: topic.title,
-                                  img: topic.img,
-                                  pill: topic.pill,
-                                  pillColor: topic.pillColor,
-                                  pillBorder: topic.pillBorder,
-                                )))
+                        ? () => pushLearnerScreen<void>(
+                            context,
+                            LearnerRoute(1, topicId: topic.id),
+                            TestuTopicHomeScreen(
+                              topicId: topic.id,
+                              title: topic.title,
+                              img: topic.img,
+                              pill: topic.pill,
+                              pillColor: topic.pillColor,
+                              pillBorder: topic.pillBorder,
+                            ))
                         : _nothing,
                   ),
               ],

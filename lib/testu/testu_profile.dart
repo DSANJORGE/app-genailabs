@@ -1,10 +1,7 @@
-import 'dart:io';
-
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:path_provider/path_provider.dart';
-
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -17,6 +14,8 @@ import 'testu_theme.dart';
 import 'testu_usage.dart' show kTestuAppVersion;
 import 'testu_widgets.dart';
 import 'testu_client.dart';
+import 'testu_avatar_io.dart'
+    if (dart.library.js_interop) 'testu_avatar_web.dart';
 
 /// Ana's chosen avatar — the Today header listens so the photo swap
 /// propagates, like the prototype's setAvatar() updating every .ana-ava.
@@ -44,34 +43,15 @@ final _presetAvatars = [
 
 const _kAvatarPref = 'testu_avatar';
 
-Future<Directory> _avatarDir() async {
-  final d =
-      Directory('${(await getApplicationDocumentsDirectory()).path}/avatars');
-  if (!d.existsSync()) d.createSync(recursive: true);
-  return d;
-}
-
 /// Restores the library and the selection; call once at startup.
 Future<void> restoreTestuAvatar() async {
-  final dir = await _avatarDir();
-  // Carried over from the single-photo cut, which saved one fixed avatar.jpg.
-  final legacy = File('${dir.parent.path}/avatar.jpg');
-  if (legacy.existsSync()) {
-    legacy.renameSync(
-        '${dir.path}/${DateTime.now().millisecondsSinceEpoch}.jpg');
-  }
-  testuAvatarLibrary.value = dir
-      .listSync()
-      .whereType<File>()
-      .map((f) => f.path)
-      .toList()
-    ..sort();
+  testuAvatarLibrary.value = await avatarRestoreLibrary();
   final prefs = await SharedPreferences.getInstance();
   final saved = prefs.getString(_kAvatarPref);
   if (saved != null &&
       (saved == kInitialsAvatar ||
           (!testuLive && saved.startsWith('assets/')) ||
-          File(saved).existsSync())) {
+          avatarExists(saved))) {
     testuAvatar.value = saved;
   }
 }
@@ -82,34 +62,31 @@ Future<void> _selectAvatar(String src) async {
   await prefs.setString(_kAvatarPref, src);
 }
 
-/// Copies the pick into the library under a unique name — FileImage caches by
-/// path, so reusing one filename would keep serving the previous photo.
 Future<void> _addAvatar() async {
   final picked = await ImagePicker()
       .pickImage(source: ImageSource.gallery, maxWidth: 512);
   if (picked == null) return;
-  final dir = await _avatarDir();
-  final dest = '${dir.path}/${DateTime.now().millisecondsSinceEpoch}.jpg';
-  await File(picked.path).copy(dest);
-  testuAvatarLibrary.value = [...testuAvatarLibrary.value, dest];
-  await _selectAvatar(dest);
+  final src = await avatarAdd(picked);
+  if (!testuAvatarLibrary.value.contains(src)) {
+    testuAvatarLibrary.value = [...testuAvatarLibrary.value, src];
+  }
+  await _selectAvatar(src);
 }
 
 /// Removes a photo from TestU (not from the phone's own library). If it was
 /// the one in use, the profile falls back to the first preset rather than
 /// leaving the header with a missing file.
-Future<void> _removeAvatar(String path) async {
-  final f = File(path);
-  if (f.existsSync()) f.deleteSync();
-  await FileImage(f).evict();
+Future<void> _removeAvatar(String src) async {
+  await avatarRemove(src);
   testuAvatarLibrary.value =
-      testuAvatarLibrary.value.where((p) => p != path).toList();
-  if (testuAvatar.value == path) await _selectAvatar(_presetAvatars.first);
+      testuAvatarLibrary.value.where((p) => p != src).toList();
+  if (testuAvatar.value == src) await _selectAvatar(_presetAvatars.first);
 }
 
-/// [testuAvatar] holds either a bundled asset key or a picked file path.
+/// [testuAvatar] holds a bundled asset key or a store key (a file path on
+/// device, a data URL in the browser).
 ImageProvider testuAvatarImage(String src) =>
-    src.startsWith('assets/') ? AssetImage(src) : FileImage(File(src));
+    src.startsWith('assets/') ? AssetImage(src) : avatarImage(src);
 
 /// The learner's picture wherever it appears: their chosen photo, or — live,
 /// before they add one — their initials on the brand colour.
@@ -221,40 +198,43 @@ class _TestuProfileScreenState extends State<TestuProfileScreen> {
                           'carrete.'),
                   t: t),
             ]),
-            _ProfCard(children: [
-              _H4(L('SECURITY', 'SEGURIDAD')),
-              _SetRow(
-                title: TestuLock.available
-                    ? L('Unlock with ${TestuLock.name}',
-                        'Desbloquear con ${TestuLock.name}')
-                    : L('Unlock with Face ID or fingerprint',
-                        'Desbloquear con Face ID o huella'),
-                sub: TestuLock.available
-                    ? L('Open the app without waiting for an emailed code',
-                        'Abre la app sin esperar un código por correo')
-                    : L('Set up Face ID or a fingerprint on this device first',
-                        'Configura Face ID o una huella en este dispositivo '
-                            'primero'),
-                last: true,
-                trailing: TestuLock.available
-                    ? _Toggle(on: TestuLock.enabled, onTap: _toggleLock)
-                    : Opacity(
-                        opacity: 0.55, child: _Toggle(on: false)),
-              ),
-              if (_lockError != null) ...[
+            // No sensor in a browser tab; the card would only ever say
+            // "set up Face ID first".
+            if (!kIsWeb)
+              _ProfCard(children: [
+                _H4(L('SECURITY', 'SEGURIDAD')),
+                _SetRow(
+                  title: TestuLock.available
+                      ? L('Unlock with ${TestuLock.name}',
+                          'Desbloquear con ${TestuLock.name}')
+                      : L('Unlock with Face ID or fingerprint',
+                          'Desbloquear con Face ID o huella'),
+                  sub: TestuLock.available
+                      ? L('Open the app without waiting for an emailed code',
+                          'Abre la app sin esperar un código por correo')
+                      : L('Set up Face ID or a fingerprint on this device first',
+                          'Configura Face ID o una huella en este dispositivo '
+                              'primero'),
+                  last: true,
+                  trailing: TestuLock.available
+                      ? _Toggle(on: TestuLock.enabled, onTap: _toggleLock)
+                      : Opacity(
+                          opacity: 0.55, child: _Toggle(on: false)),
+                ),
+                if (_lockError != null) ...[
+                  const SizedBox(height: 8),
+                  Text(_lockError!,
+                      style: TextStyle(
+                          fontFamily: 'Geist', fontSize: 11.5, color: t.red)),
+                ],
                 const SizedBox(height: 8),
-                Text(_lockError!,
-                    style: TextStyle(
-                        fontFamily: 'Geist', fontSize: 11.5, color: t.red)),
-              ],
-              const SizedBox(height: 8),
-              _Note(
-                  L('Your face or fingerprint stays on this phone — TestU '
-                          'never receives it. Signing out turns this off.',
-                      'Tu cara o tu huella se quedan en este teléfono: TestU '
-                          'nunca las recibe. Al cerrar sesión se desactiva.'),
-                  t: t),
-            ]),
+                _Note(
+                    L('Your face or fingerprint stays on this phone — TestU '
+                            'never receives it. Signing out turns this off.',
+                        'Tu cara o tu huella se quedan en este teléfono: TestU '
+                            'nunca las recibe. Al cerrar sesión se desactiva.'),
+                    t: t),
+              ]),
             _ProfCard(children: [
               _H4(L('LANGUAGE', 'IDIOMA')),
               _SetRow(

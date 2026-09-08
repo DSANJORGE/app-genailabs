@@ -9,10 +9,9 @@ import 'testu_client.dart';
 import 'testu_i18n.dart';
 import 'testu_icons.dart';
 import 'testu_live.dart';
-import 'testu_session.dart';
+import 'testu_route.dart';
 import 'testu_shell.dart';
 import 'testu_theme.dart';
-import 'testu_topics.dart';
 import 'testu_widgets.dart';
 
 /// Rule of the split: Today carries everything ACTIONABLE (do this now);
@@ -338,20 +337,12 @@ class _TestuNotificationsScreenState extends State<TestuNotificationsScreen> {
     // The wrapping TestuPressable already fires the tap haptic.
     final nav = Navigator.of(context);
     nav.pop();
-    if (target.tab != null) {
-      TestuShell.tabRequest.value = target.tab;
-      return;
-    }
-    nav.push(MaterialPageRoute(
-        builder: (_) => target.questionId != null
-            ? TestuSessionScreen(
-                topicId: target.topicId,
-                questionId: target.questionId,
-                highlightMessageId: target.messageId)
-            : TestuTopicHomeScreen(
-                topicId: target.topicId,
-                initialTab: 3,
-                highlightMessageId: target.messageId)));
+    // One door for "go to X": the shell selects the tab, pushes the origin
+    // and (on web) writes the address.
+    openLearnerRoute(LearnerRoute(target.tab ?? 1,
+        topicId: target.topicId,
+        questionId: target.questionId,
+        messageId: target.messageId));
   }
 
   @override

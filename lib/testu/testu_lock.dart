@@ -1,5 +1,5 @@
-import 'dart:io';
-
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
@@ -42,15 +42,15 @@ class TestuLock {
   /// What to call it on screen — Apple and Android name their own sensors,
   /// so the UI must too ("Unlock with biometrics" reads like a spec sheet).
   /// Each label is the platform's own name for the sensor, so it reads
-  /// correctly wherever it is dropped into a sentence.
+  /// correctly wherever it is dropped into a sentence. Foundation's target
+  /// platform, not dart:io — the browser build compiles this file too.
   static String get name {
+    final apple = defaultTargetPlatform == TargetPlatform.iOS;
     if (_kinds.contains(BiometricType.face)) {
-      return Platform.isIOS
-          ? 'Face ID'
-          : L('Face Unlock', 'Desbloqueo facial');
+      return apple ? 'Face ID' : L('Face Unlock', 'Desbloqueo facial');
     }
     if (_kinds.contains(BiometricType.fingerprint)) {
-      return Platform.isIOS ? 'Touch ID' : L('Fingerprint', 'Huella');
+      return apple ? 'Touch ID' : L('Fingerprint', 'Huella');
     }
     return L('Biometrics', 'Biometría');
   }

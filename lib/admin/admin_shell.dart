@@ -76,11 +76,18 @@ class AdminShell extends StatefulWidget {
   final AdminMe me;
   final AdminApi api;
   final VoidCallback onSignOut;
+
+  /// The URL a browser Back/Forward restored. Set by the app above
+  /// [MaterialApp]: WidgetsApp's own observer swallows every
+  /// pushRouteInformation (it pushNamed()s the URL and returns true), so an
+  /// observer registered below it -- this shell's -- never hears one.
+  static final browserRoute = ValueNotifier<Uri?>(null);
+
   @override
   State<AdminShell> createState() => _AdminShellState();
 }
 
-class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
+class _AdminShellState extends State<AdminShell> {
   final _nav = ConsoleNav();
   final _filters = AnalyticsFilters();
   late final List<AdminSection> _sections;
@@ -132,17 +139,22 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
     // Give the first entry a real address, so browser back from the first
     // drill lands on a URL this shell can read again.
     if (kIsWeb) {
+      // The Navigator above us selected the engine's SINGLE-entry history in
+      // its initState (every address write becomes a replace and Back leaves
+      // the app). Switch to multi-entry here, after it, so each address is a
+      // real entry and Back arrives as pushRouteInformation.
+      SystemNavigator.selectMultiEntryHistory();
       _here = _uriOf(_nav.value);
       SystemNavigator.routeInformationUpdated(uri: _here!, replace: true);
     }
     _nav.addListener(_pushHistory);
-    WidgetsBinding.instance.addObserver(this);
+    AdminShell.browserRoute.addListener(_onBrowserRoute);
     _loadLabels();
   }
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
+    AdminShell.browserRoute.removeListener(_onBrowserRoute);
     _nav.removeListener(_pushHistory);
     _nav.dispose();
     _filters.dispose();
@@ -169,16 +181,18 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
   );
 
   /// The browser's back and forward buttons arrive here (the engine pushes
-  /// the restored entry at the framework); everything else is ours already.
-  @override
-  Future<bool> didPushRouteInformation(RouteInformation info) async {
-    final route = _fromUri(info.uri);
-    if (route == null) return false;
+  /// the restored entry at the framework, the app relays it through
+  /// [AdminShell.browserRoute]); everything else is ours already.
+  void _onBrowserRoute() {
+    final uri = AdminShell.browserRoute.value;
+    if (uri == null) return;
+    AdminShell.browserRoute.value = null;
+    final route = _fromUri(uri);
+    if (route == null) return;
     _syncing = true;
     _nav.value = route;
     _syncing = false;
     _here = _uriOf(route);
-    return true;
   }
 
   ConsoleRoute? _fromUri(Uri uri) {
