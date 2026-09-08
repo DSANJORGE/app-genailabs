@@ -19,6 +19,7 @@ import 'admin_reading.dart';
 import 'admin_team.dart';
 import 'admin_theme.dart';
 import 'admin_teams.dart';
+import 'admin_threads.dart';
 import 'admin_ui.dart';
 
 /// One entry of the console nav: the id [ConsoleNav.go] takes, and what the
@@ -45,6 +46,9 @@ List<AdminSection> sectionsFor(AdminMe me) {
     ],
     if (personas && me.can('personas_view')) AdminSection('people', L('People', 'Colaboradores')),
     if (personas && me.can('personas_operate')) AdminSection('teams', L('Teams', 'Equipos')),
+    // Conversaciones rides the personas module: it is the roster's scope
+    // (scope.groovy) that decides which comments a manager sees.
+    if (personas && me.can('personas_view')) AdminSection('threads', L('Conversations', 'Conversaciones')),
   ];
 }
 
@@ -241,6 +245,7 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
       AdminMastery(api: widget.api, me: widget.me, filters: _filters, nav: _nav),
     'people' => AdminPeople(api: widget.api, me: widget.me, nav: _nav),
     'teams' => AdminTeams(api: widget.api, me: widget.me, nav: _nav),
+    'threads' => AdminThreads(api: widget.api, me: widget.me),
     _ => _notYet(route.section),
   };
 

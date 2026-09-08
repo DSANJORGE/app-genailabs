@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:eme_app_package/eme_http.dart' show EmeHttpException;
 
 import 'testu_i18n.dart';
 import 'testu_live.dart';
@@ -16,6 +17,17 @@ import 'testu_widgets.dart';
 /// [SullyMessage.onOpenSource] and move instead of stacking a second sheet.
 void openTestuSource(BuildContext context, Cite c) {
   final doc = liveDocs[c.title];
+  // Live: a citation that matches no loaded document (docs still loading,
+  // fetch failed, title mismatch) says so instead of opening the offline
+  // demo's aviation manual or some other document's page N.
+  // ponytail: no retry/refetch; add one when citations regularly beat
+  // loadDocuments.
+  if (testuLive && doc == null) {
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
+        content: Text(L('Source not available yet.',
+            'La fuente aún no está disponible.'))));
+    return;
+  }
   if (doc != null && doc.isVideo) {
     showTestuVideo(context, doc, at: c.at ?? Duration.zero);
   } else {
@@ -140,6 +152,10 @@ class SullyMessage extends StatefulWidget {
     this.sourceRects = const [],
     this.inDoc,
     this.onOpenSource,
+    this.followups = const [],
+    this.onFollowUp,
+    this.muted = false,
+    this.unsourced = false,
     this.bottomPadding = 0,
     this.avatar = true,
   });
@@ -160,6 +176,10 @@ class SullyMessage extends StatefulWidget {
         sourceRects = const [],
         inDoc = null,
         onOpenSource = null,
+        followups = const [],
+        onFollowUp = null,
+        muted = false,
+        unsourced = false,
         extra = null,
         onGrew = null;
 
@@ -177,6 +197,10 @@ class SullyMessage extends StatefulWidget {
         sourceRects = const [],
         inDoc = null,
         onOpenSource = null,
+        followups = const [],
+        onFollowUp = null,
+        muted = false,
+        unsourced = false,
         extra = null,
         onGrew = null;
 
@@ -184,7 +208,8 @@ class SullyMessage extends StatefulWidget {
   /// server's reference-excerpt format) becomes the source line, opening
   /// that document at that page. Inside a document, an uncited reply still
   /// names that document ([fallbackTitle], at [fallbackPage]): the tutor
-  /// always shows its source, as in the session.
+  /// always shows its source, as in the session. `>> ` offers become chips
+  /// when [onFollowUp] is given; tapping one sends that text.
   SullyMessage.reply(String reply,
       {Key? key,
       double bottomPadding = 0,
@@ -192,25 +217,34 @@ class SullyMessage extends StatefulWidget {
       String? fallbackTitle,
       int fallbackPage = 1,
       String? inDoc,
-      void Function(Cite)? onOpenSource})
+      void Function(Cite)? onOpenSource,
+      void Function(String)? onFollowUp})
       : this._cite(_withFallback(splitCite(reply), fallbackTitle, fallbackPage),
             key: key,
             bottomPadding: bottomPadding,
             avatar: avatar,
             inDoc: inDoc,
-            onOpenSource: onOpenSource);
+            onOpenSource: onOpenSource,
+            onFollowUp: onFollowUp);
 
   static Cite _withFallback(Cite c, String? title, int page) =>
-      c.title != null || title == null
+      c.title != null || title == null || c.notFound
           ? c
-          : Cite(text: c.text, quote: c.quote, title: title, page: page);
+          : Cite(
+              text: c.text,
+              quote: c.quote,
+              title: title,
+              page: page,
+              followups: c.followups,
+              fromFallback: true);
 
   SullyMessage._cite(Cite c,
       {super.key,
       this.bottomPadding = 0,
       this.avatar = true,
       this.inDoc,
-      this.onOpenSource})
+      this.onOpenSource,
+      this.onFollowUp})
       : spans = mdSpans(c.text),
         sourceLine = c.title,
         sourcePage = c.page,
@@ -218,6 +252,17 @@ class SullyMessage extends StatefulWidget {
         sourceQuote = c.quote,
         sourceOthers = c.others,
         sourceRects = c.rects,
+        followups = c.followups,
+        muted = c.notFound,
+        // Shown, never hidden: a live answer with no source says so, even
+        // when a viewer's fallback fills in the open page as sourceLine so
+        // the block still renders (c.fromFallback) — the block alone would
+        // otherwise look like a real citation. The demo's canned lines and
+        // the fixed failure lines have none by design.
+        unsourced = testuLive &&
+            (c.title == null || c.fromFallback) &&
+            !c.notFound &&
+            !isSullyFallback(c.text),
         delay = 0,
         extra = null,
         onGrew = null;
@@ -243,6 +288,20 @@ class SullyMessage extends StatefulWidget {
 
   /// Source link handler; null = open the cited document in a new sheet.
   final void Function(Cite)? onOpenSource;
+
+  /// `>> ` offers from the reply, rendered as chips under the source block.
+  final List<String> followups;
+
+  /// Tapping a follow-up chip sends its text as the next question; null
+  /// hides the chips (a surface without a composer).
+  final void Function(String)? onFollowUp;
+
+  /// The not-found sentence: dimmed prose, no source block, no label.
+  final bool muted;
+
+  /// A live reply with no citation and no admission: a small "No source"
+  /// label under the text.
+  final bool unsourced;
 
   /// False = name kicker only, no face — for screens whose header already
   /// carries the tutor's avatar (the tutor tab).
@@ -322,6 +381,7 @@ class _SullyMessageState extends State<SullyMessage> {
 
   @override
   Widget build(BuildContext context) {
+    final t = TestuTokens.of(context);
     return Padding(
       padding: EdgeInsets.only(bottom: widget.bottomPadding),
       child: Row(
@@ -351,8 +411,12 @@ class _SullyMessageState extends State<SullyMessage> {
                 else ...[
                   Text.rich(
                     TextSpan(children: widget.spans),
-                    style: kChat,
+                    style: widget.muted ? kChat.copyWith(color: t.mut) : kChat,
                   ),
+                  if (widget.unsourced) ...[
+                    const SizedBox(height: 6),
+                    Text(L('No source', 'Sin fuente'), style: kMeta),
+                  ],
                   if (widget.sourceLine != null) ...[
                     const SizedBox(height: 10),
                     TestuSourceBlock(
@@ -362,6 +426,22 @@ class _SullyMessageState extends State<SullyMessage> {
                       onTap: () => _open(context),
                     ),
                   ],
+                  // ponytail: chips stay after a tap (sending twice is
+                  // harmless); a vanishing row when a learner reports it.
+                  if (widget.onFollowUp != null && widget.followups.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          // The template asks for at most 2 offers; a rogue
+                          // reply naming more still renders only 2 chips.
+                          for (final f in widget.followups.take(2))
+                            TestuChip(f, onTap: () => widget.onFollowUp!(f)),
+                        ],
+                      ),
+                    ),
                   if (widget.extra != null) widget.extra!,
                 ],
               ],
@@ -375,8 +455,11 @@ class _SullyMessageState extends State<SullyMessage> {
   }
 }
 
-/// Fallback lines every live chat surface (session, tutor tab) says in the
-/// tutor's voice when the backend is off, slow, or unreachable.
+/// Fallback lines every live chat surface (session, tutor tab, viewers)
+/// says in the tutor's voice. Three distinct failures, never one blur:
+/// the request could not leave the phone ([sullyOffline]), the server or
+/// the agent failed ([sullyUnavailable]), nothing came back within 90 s
+/// ([sullySlowReply]).
 String sullyDemoReply() => L(
     'In this demo I can only answer the suggested questions — in the live app, ask me anything about the material.',
     'En esta demo solo puedo responder las preguntas sugeridas — en la app real, pregúntame lo que quieras sobre el material.');
@@ -386,6 +469,25 @@ String sullySlowReply() => L(
 String sullyUnavailable() => L(
     '${client.tutor} is not available right now.',
     '${client.tutor} no está disponible ahora mismo.');
+String sullyOffline() => L(
+    'No connection. Check your network and try again.',
+    'Sin conexión. Revisa tu red e inténtalo de nuevo.');
+
+/// The line for a failed send: a transport failure (no status code) is the
+/// phone's network; an HTTP error, a missing tutor channel or anything
+/// else is the server.
+String sullyFailure(Object e) =>
+    e is EmeHttpException && e.statusCode == null
+        ? sullyOffline()
+        : sullyUnavailable();
+
+/// True for the app's own fixed lines above, which carry no source and
+/// must not be labelled as if they were answers.
+bool isSullyFallback(String s) =>
+    s == sullyDemoReply() ||
+    s == sullySlowReply() ||
+    s == sullyUnavailable() ||
+    s == sullyOffline();
 
 /// True for what the server posts on the channel when the agent fails
 /// instead of answering: the exception text (`org.openedit.OpenEditException:

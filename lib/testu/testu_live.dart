@@ -8,7 +8,7 @@ import 'package:eme_app_package/models/workspace.dart';
 import 'package:eme_app_package/services/auth_service.dart';
 import 'package:eme_app_package/services/topic_service.dart';
 import 'package:eme_app_package/services/workspace_service.dart';
-import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:flutter/foundation.dart' show ValueNotifier, debugPrint;
 import 'package:flutter/painting.dart';
 import 'package:openinsitute_core/openinsitute_core.dart';
 
@@ -17,6 +17,7 @@ import 'testu_client.dart';
 import 'testu_i18n.dart';
 import 'testu_question_source.dart';
 import 'testu_session_engine.dart' show Attempt;
+import 'testu_social_api.dart';
 import 'testu_sully.dart' show isSullyError, sullyUnavailable;
 
 /// Live mode: on for the minsur client (the default), off for vueling =
@@ -25,6 +26,11 @@ import 'testu_sully.dart' show isSullyError, sullyUnavailable;
 /// screens both read it from here.
 const bool testuLive = bool.fromEnvironment('TESTU_LIVE',
     defaultValue: testuClientId == 'minsur');
+
+/// GenAI Labs privacy policy, the same page for every client. build_store.sh
+/// sets `--dart-define=TESTU_PRIVACY_URL=https://...` once the page exists;
+/// empty (the default) hides the privacy links in the profile and sign-in.
+const testuPrivacyUrl = String.fromEnvironment('TESTU_PRIVACY_URL');
 
 /// The eMe server live mode talks to: the local eme-server-minsur checkout
 /// (`eme-server-minsur/`, Tomcat on :8080). Point a build elsewhere with
@@ -65,6 +71,7 @@ Future<void> _init() => _ready ??= () async {
 
 Future<bool> liveRestoreSession() async {
   await _init();
+  if (AuthService.isLoggedIn) unawaited(loadTestuOrganization());
   return AuthService.isLoggedIn;
 }
 
@@ -83,7 +90,9 @@ Future<String> liveSendUserCode(String email) async {
 Future<bool> liveLoginWithOtp(String email, String code) async {
   await _init();
   try {
-    return await AuthService.loginWithOtp(email, code);
+    final ok = await AuthService.loginWithOtp(email, code);
+    if (ok) unawaited(loadTestuOrganization());
+    return ok;
   } catch (_) {
     return false;
   }
@@ -92,6 +101,7 @@ Future<bool> liveLoginWithOtp(String email, String code) async {
 Future<void> liveSignOut() async {
   await _init();
   await AuthService.logout();
+  testuOrganization.value = '';
   // The socket is a singleton: left connected, the next user would hear
   // this user's tutor channel.
   ChatSocketService().disconnect();
@@ -104,6 +114,62 @@ Future<void> liveSignOut() async {
   _lastSectionId = null;
 }
 
+// ---- Who is signed in: the only source of a name in a live build.
+
+/// First name for greetings. Live: the eMe user's first name, else the
+/// part of their email before the @ (an account always has one); demo: the
+/// client's persona. A live build never greets anyone by an invented name.
+String get testuFirstName {
+  if (!testuLive) return client.persona;
+  final u = AuthService.currentUser;
+  final first = u?.firstName.trim() ?? '';
+  if (first.isNotEmpty) return first;
+  final email = u?.email ?? '';
+  final at = email.indexOf('@');
+  return at > 0 ? email.substring(0, at) : client.persona;
+}
+
+/// Full name for the profile header; falls back to [testuFirstName].
+String get testuFullName {
+  if (!testuLive) return client.personaFull;
+  final u = AuthService.currentUser;
+  final full = '${u?.firstName ?? ''} ${u?.lastName ?? ''}'.trim();
+  return full.isEmpty ? testuFirstName : full;
+}
+
+/// "MP" for "María del Carmen Pérez" (first + last word, not first two), "L"
+/// for a lone name, "" for none — the live avatar until the learner adds a
+/// photo.
+String get testuInitials {
+  final words = [for (final w in testuFullName.split(' ')) if (w.isNotEmpty) w];
+  if (words.isEmpty) return '';
+  if (words.length == 1) return words.first[0].toUpperCase();
+  return (words.first[0] + words.last[0]).toUpperCase();
+}
+
+/// The signed-in learner's email; empty in the demo, which has no account.
+String get testuEmail =>
+    testuLive ? (AuthService.currentUser?.email ?? '') : '';
+
+/// Organisation name from the tutor persona (`personas/me.json`), for the
+/// Today header and the profile. Empty until it loads or when the server
+/// has none; the screens then print nothing rather than a guess.
+final testuOrganization = ValueNotifier<String>('');
+
+/// Fetches [testuOrganization]. A failure leaves it as it was (the header
+/// simply shows the date). Called after every successful sign-in/restore.
+Future<void> loadTestuOrganization() async {
+  try {
+    final j =
+        await AuthService.http.getJson('services/testu/personas/me.json');
+    final p = j['persona'];
+    testuOrganization.value =
+        p is Map ? '${p['organization'] ?? ''}'.trim() : '';
+  } catch (e) {
+    debugPrint('TestU: me.json ($e)');
+  }
+}
+
 // ---- Data.
 
 /// Questions from the backend: [topicId] (or the first topic) -> first
@@ -112,19 +178,27 @@ Future<void> liveSignOut() async {
 /// Diego's own account only, attempts ([reportAttempt], approved
 /// 2026-09-03); the shared test user's progress stays unpolluted.
 class EmeQuestionSource extends TestuQuestionSource {
-  EmeQuestionSource({this.topicId, this.sectionId, EmeHttp? http})
-      : _service = TopicService(http: http);
+  EmeQuestionSource({this.topicId, this.sectionId, this.questionId, EmeHttp? http})
+      : _service = TopicService(http: http),
+        _social = TestuSocialApi(http: http);
 
   final String? topicId;
 
   /// Section to start on: its questions come first, the rest keep their
   /// order. Unknown or null = tutorial order.
   final String? sectionId;
+
+  /// One question to start on (a notification about its thread), ahead of
+  /// [sectionId]'s.
+  final String? questionId;
   final TopicService _service;
+  final TestuSocialApi _social;
   String? _topic;
 
+  /// The loaded topic's title; before a load, a neutral word — never the
+  /// prototype's "Ramp Safety".
   @override
-  String get topic => _topic ?? super.topic;
+  String get topic => _topic ?? L('Topic', 'Tema');
 
   @override
   Future<List<TestuQ>> load() async {
@@ -152,8 +226,9 @@ class EmeQuestionSource extends TestuQuestionSource {
     final all = detail?.mcqQuestions ?? const <SectionQuestion>[];
     if (all.isEmpty) throw StateError('No questions in ${tutorials.first.id}');
     final mcqs = [
-      ...all.where((m) => m.section.id == sectionId),
-      ...all.where((m) => m.section.id != sectionId),
+      ...all.where((m) => m.question.id == questionId),
+      ...all.where((m) => m.question.id != questionId && m.section.id == sectionId),
+      ...all.where((m) => m.question.id != questionId && m.section.id != sectionId),
     ];
 
     return _liveQs = [
@@ -191,6 +266,20 @@ class EmeQuestionSource extends TestuQuestionSource {
       debugPrint('TestU: reportAttempt failed ($e)');
     });
   }
+
+  /// Posts the report to services/testu/social/flag.json. [reason] is a
+  /// `questionflagreason` id (testuFlagReasons). Throws on failure so the
+  /// sheet keeps the form.
+  @override
+  Future<void> reportFlag({
+    required TestuQ q,
+    required String reason,
+    String? note,
+  }) async {
+    if (q.questionId == null) return;
+    await _social.flag(
+        questionId: q.questionId!, tutorialId: _liveTutorialId, reason: reason, note: note);
+  }
 }
 
 /// Server vocabulary: `correctoption` is a capital letter; confidence is
@@ -226,9 +315,15 @@ Stream<String> sullyReplies() => ChatSocketService()
         // Upstream renamed the enum to MessageRenderType (2026-09-03);
         // ChatMessage.messageType is now the raw string field.
         (m.messageRenderType.isAgentComment || m.messageRenderType.isText))
-    .map((m) => _plainText(m.text))
-    .where((s) => s.isNotEmpty)
-    .map((s) => isSullyError(s) ? sullyUnavailable() : s);
+    .map((m) => _tutorText(m.text))
+    .where((s) => s.isNotEmpty);
+
+/// A tutor message as the app shows it: tags stripped, an agent error
+/// worded as [sullyUnavailable]. Shared by the socket and the history page.
+String _tutorText(String html) {
+  final s = _plainText(html);
+  return isSullyError(s) ? sullyUnavailable() : s;
+}
 
 // ponytail: crude tag strip — the reply HTML is simple tutor prose. Its
 // markdown (the /chat answer) survives here; `mdSpans` renders it.
@@ -293,6 +388,40 @@ Future<TutorProgress?> loadTutorProgress() async {
   );
 }
 
+/// The learner's conversation with the tutor on the live tutorial's channel:
+/// their questions and the tutor's replies, oldest first, the last 50, from
+/// the plugin page `services/testu/tutor/history.json`. The stock
+/// `tutorhistory.json` hides the questions (the app posts them as system
+/// rows), so phone and web read this one instead. Empty when the channel
+/// does not exist yet (nothing was ever asked).
+Future<List<(bool, String)>> loadTutorHistory() async {
+  if (_liveQs.isEmpty) await EmeQuestionSource().load();
+  final chan = await _tutorChannelFor(_liveTutorialId!);
+  if (chan == null) return const [];
+  final data = await DioEmeHttp().getJson('services/testu/tutor/history.json',
+      query: {'channel': chan.id});
+  return tutorTurns(data);
+}
+
+/// `{turns: [{from: user|tutor, text}]}` as the tutor tab's (fromUser, text)
+/// rows; tutor rows get the socket's text cleanup. Rows with missing/blank
+/// text or a `from` other than user/tutor are dropped (a null `text` would
+/// otherwise stringify to the literal word "null").
+List<(bool, String)> tutorTurns(Map<String, dynamic> data) {
+  final out = <(bool, String)>[];
+  for (final t in (data['turns'] as List? ?? const [])) {
+    if (t is! Map) continue;
+    final txt = t['text'];
+    if (txt is! String || txt.trim().isEmpty) continue;
+    if (t['from'] == 'user') {
+      out.add((true, txt.trim()));
+    } else if (t['from'] == 'tutor') {
+      out.add((false, _tutorText(txt)));
+    }
+  }
+  return out;
+}
+
 /// Answers oldest first. The server says "oldest first" but does not
 /// actually sort (2026-09-03); dates share one format and zone, so string
 /// order is time order.
@@ -349,15 +478,19 @@ Future<TopicProgress> _topicProgress(TopicService service, Topic topic) async {
   final history = await service.fetchTutorHistory(tutorialId: tutorial.id);
   final answers = _byDate(history.answers);
   final (sections, last) = _tally(detail?.sections ?? const [], answers);
-  return TopicProgress(topic, tutorial.title, sections, answers, last);
+  return TopicProgress(topic, tutorial.title, sections, answers, last, tutorialId: tutorial.id);
 }
 
 /// One live topic's tally; see [loadTopicProgress].
 class TopicProgress {
-  TopicProgress(
-      this.topic, this.tutorialTitle, this.sections, this.answers, this.last);
+  TopicProgress(this.topic, this.tutorialTitle, this.sections, this.answers, this.last,
+      {this.tutorialId});
   final Topic topic;
   final String tutorialTitle;
+
+  /// The first tutorial's id (the review thread's channel is `t-<id>`);
+  /// null when the topic has no tutorial yet.
+  final String? tutorialId;
 
   /// Tutorial order, every section; empty when the topic has no tutorial.
   final List<SectionProgress> sections;
@@ -572,8 +705,9 @@ typedef Ref = ({String title, int page, Duration? at});
 /// A tutor reply split from its sources: the text, the verbatim passage the
 /// server quotes (`> …` line), the last `[Title, p. N]` (PDF page) or
 /// `[Title, m:ss]` (video time) citation — the primary source — the other
-/// citations in the reply, and the page-relative boxes of the passage on
-/// the primary page (`[[hl x,y,w,h;…]]`, PDFs only).
+/// citations in the reply, the page-relative boxes of the passage on the
+/// primary page (`[[hl x,y,w,h;…]]`, PDFs only), and the `>> …` follow-up
+/// offers the prompt makes the tutor end with.
 class Cite {
   const Cite(
       {this.text = '',
@@ -582,7 +716,9 @@ class Cite {
       this.page = 1,
       this.at,
       this.others = const [],
-      this.rects = const []});
+      this.rects = const [],
+      this.followups = const [],
+      this.fromFallback = false});
 
   final String text;
   final String? quote;
@@ -591,6 +727,18 @@ class Cite {
   final Duration? at;
   final List<Ref> others;
   final List<Rect> rects;
+
+  /// True when [title]/[page] were not cited by the tutor but filled in by
+  /// the viewer's own fallback (the open page) — the reply is still
+  /// unsourced and must say so, even though a source block now renders.
+  final bool fromFallback;
+
+  /// What the learner could ask next, in the tutor's words; rendered as chips.
+  final List<String> followups;
+
+  /// The tutor admits the sources do not cover the question — the exact
+  /// sentence the prompt prescribes. Rendered muted, without a source block.
+  bool get notFound => text.startsWith(sullyNotFound);
 
   Ref get ref => (title: title ?? '', page: page, at: at);
 
@@ -603,8 +751,15 @@ class Cite {
       rects: r == ref ? rects : const []);
 }
 
+/// The sentence the prompt (eme-plugin-testu `chat_tutor_usercomment.json`,
+/// rule 3) makes the tutor say when the sources do not cover the question.
+/// Matched verbatim here; change both together.
+const sullyNotFound = 'No lo encuentro en las fuentes de este tema.';
+
 final _quoteRe = RegExp(r'^\s*>\s*(.+?)\s*$', multiLine: true);
 final _hlRe = RegExp(r'^\s*\[\[hl ([\d.,;]+)\]\]\s*$', multiLine: true);
+// `>> ¿…?` lines; spaces only, so a match never swallows the line break.
+final _followRe = RegExp(r'^[ \t]*>>[ \t]*(.+?)[ \t]*$', multiLine: true);
 
 /// "m:ss" — citation times and the video player's clock.
 String fmtClock(Duration d) =>
@@ -621,8 +776,11 @@ Ref _ref(RegExpMatch m) => (
     );
 
 Cite splitCite(String reply) {
+  // Follow-ups come off first: to _quoteRe a `>> …` line is a quote.
+  final followups = [for (final m in _followRe.allMatches(reply)) m[1]!];
+  reply = reply.replaceAll(_followRe, '').trim();
   final ms = _citeRe.allMatches(reply).toList();
-  if (ms.isEmpty) return Cite(text: reply);
+  if (ms.isEmpty) return Cite(text: reply, followups: followups);
   final main = _ref(ms.last);
   return Cite(
     text: reply
@@ -639,6 +797,7 @@ Cite splitCite(String reply) {
       for (final r in (_hlRe.firstMatch(reply)?[1] ?? '').split(';'))
         if (r.split(',').length == 4) _rect(r.split(',')),
     ],
+    followups: followups,
   );
 }
 

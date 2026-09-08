@@ -24,9 +24,6 @@ void showTestuPdf(BuildContext context,
     LiveDoc? doc,
     List<Rect> rects = const []}) {
   HapticFeedback.selectionClick();
-  // Live: a citation whose title matches no loaded document still opens a
-  // server document, not the offline demo's aviation manual.
-  doc ??= testuLive ? liveDocs.values.firstOrNull : null;
   final sub = doc != null
       ? L('Reference document', 'Documento de referencia')
       : (cite ??
@@ -72,6 +69,7 @@ class _PdfSheetState extends State<_PdfSheet> {
   StreamSubscription<String>? _sub;
   bool _waiting = false;
   Timer? _timeout;
+  bool _late = false;
 
   // Real rendered width of the page column (set by _pageList's
   // LayoutBuilder during the first build) — the sheet is width-capped and
@@ -224,7 +222,8 @@ class _PdfSheetState extends State<_PdfSheet> {
       // server posts instead (already worded as "not available"), the
       // send failure, or the 90 s timeout — whichever comes first.
       void says(String s) {
-        if (!mounted || !_waiting) return;
+        if (!mounted || !(_waiting || _late)) return;
+        _late = false;
         _timeout?.cancel();
         final key = GlobalKey();
         setState(() {
@@ -236,7 +235,8 @@ class _PdfSheetState extends State<_PdfSheet> {
               fallbackTitle: widget.doc!.title,
               fallbackPage: _cur,
               inDoc: widget.doc!.title,
-              onOpenSource: _openSource));
+              onOpenSource: _openSource,
+              onFollowUp: _send));
         });
         // Read from the top of the answer, not its tail.
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -254,13 +254,17 @@ class _PdfSheetState extends State<_PdfSheet> {
       _sub ??= sullyReplies().listen(says);
       setState(() {
         _waiting = true;
+        _late = false;
         _chat.add(const SullyMessage.typing(key: _typing));
       });
       _timeout?.cancel();
       _timeout = Timer(const Duration(seconds: 90), () {
-        if (_waiting) says(sullySlowReply());
+        if (!_waiting) return;
+        says(sullySlowReply());
+        // ponytail: the next tutor message is taken as the late answer.
+        _late = true;
       });
-      askSullyFree(text).catchError((_) => says(sullyUnavailable()));
+      askSullyFree(text).catchError((Object e) => says(sullyFailure(e)));
     } else {
       setState(() => _chat.add(SullyMessage.text(
           L(

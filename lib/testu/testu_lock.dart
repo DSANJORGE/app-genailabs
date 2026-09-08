@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'testu_auth.dart';
 import 'testu_i18n.dart';
 import 'testu_icons.dart';
+import 'testu_live.dart';
 import 'testu_theme.dart';
 import 'testu_widgets.dart';
 
@@ -336,7 +337,11 @@ class _TestuLockScreenState extends State<TestuLockScreen> {
                         const SizedBox(width: double.infinity),
                         TestuIcon(TestuGlyph.faceId, size: 38, color: t.ink),
                         const SizedBox(height: 18),
-                        Text(L('Welcome back', 'Bienvenida de nuevo'),
+                        Text(
+                            testuLive
+                                ? L('Welcome back, $testuFirstName',
+                                    'Hola, $testuFirstName')
+                                : L('Welcome back', 'Bienvenida de nuevo'),
                             style: kH1),
                         const SizedBox(height: 10),
                         ConstrainedBox(

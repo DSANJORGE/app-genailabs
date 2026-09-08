@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'firebase_options.dart';
 import 'testu/testu_auth.dart';
 import 'testu/testu_lock.dart';
+import 'testu/testu_notifications.dart';
 import 'testu/testu_profile.dart';
 import 'testu/testu_shell.dart';
 import 'testu/testu_signin.dart';
@@ -74,6 +75,7 @@ class _TestuAppState extends State<TestuApp> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     TestuAuth.onSessionEnded = () {
+      clearTestuNotices();
       if (mounted) {
         // A session can end under a pushed screen (Topic Home, a session
         // sheet) when the server rejects the token; those must not stay
@@ -96,9 +98,11 @@ class _TestuAppState extends State<TestuApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
       testuUsage.pause();
+      stopTestuNoticePolling();
       _leftAt = DateTime.now();
     } else if (state == AppLifecycleState.resumed) {
       testuUsage.resume();
+      if (_signedIn) startTestuNoticePolling();
       final away = _leftAt;
       _leftAt = null;
       if (away != null &&
@@ -116,6 +120,7 @@ class _TestuAppState extends State<TestuApp> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    stopTestuNoticePolling();
     super.dispose();
   }
 
@@ -127,6 +132,7 @@ class _TestuAppState extends State<TestuApp> with WidgetsBindingObserver {
     // Only a signed-in session can post: events recorded while signed out
     // are rejected and would sit in the queue for nothing.
     if (restored) testuUsage.open();
+    if (restored) startTestuNoticePolling();
     if (!mounted) return;
     setState(() {
       _checked = true;
@@ -141,6 +147,7 @@ class _TestuAppState extends State<TestuApp> with WidgetsBindingObserver {
     // The restore path never ran for a fresh sign-in, so this is where the
     // session (and its foreground stopwatch) starts for a new learner.
     testuUsage.open();
+    startTestuNoticePolling();
     setState(() {
       _signedIn = true;
       _welcomeBack = false;

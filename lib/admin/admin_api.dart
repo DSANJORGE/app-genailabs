@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:dio/dio.dart' show MultipartFile;
 import 'package:eme_app_package/eme_http.dart';
 
+import '../testu/testu_social_api.dart';
 import 'admin_models.dart';
 
 /// AdminApi's mutators throw a bare Exception('msg'); strip the toString()
@@ -29,8 +30,12 @@ class AskUnavailable implements Exception {
 /// handled upstream by [AdminSession] (signs the console out), not here.
 /// Every read is scoped server-side to what the signed-in user may see.
 class AdminApi {
-  AdminApi({EmeHttp? http}) : _http = http ?? DioEmeHttp();
+  AdminApi({EmeHttp? http}) : this._(http ?? DioEmeHttp());
+  AdminApi._(this._http) : social = TestuSocialApi(http: _http);
   final EmeHttp _http;
+
+  /// Threads and question reports on the same transport (Conversaciones).
+  final TestuSocialApi social;
 
   Future<AdminMe> me() async =>
       AdminMe.fromJson(await _http.getJson('services/testu/personas/me.json'));

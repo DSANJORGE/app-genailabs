@@ -18,16 +18,16 @@ AdminMe _me(Set<String> perms,
     ], persona: persona);
 
 void main() {
-  test('a manager sees the three analytics screens and people, never teams', () {
+  test('a manager sees the three analytics screens, people and conversations, never teams', () {
     final ids = sectionsFor(_me({'personas_view', 'analytics_view'})).map((s) => s.id).toList();
-    expect(ids, ['overview', 'activity', 'mastery', 'people']);
+    expect(ids, ['overview', 'activity', 'mastery', 'people', 'threads']);
   });
   test('training also sees teams', () {
     expect(sectionsFor(_me({'personas_operate', 'personas_view', 'analytics_view'})).map((s) => s.id),
-        ['overview', 'activity', 'mastery', 'people', 'teams']);
+        ['overview', 'activity', 'mastery', 'people', 'teams', 'threads']);
   });
   test('a disabled module hides its sections even with permissions', () {
-    expect(sectionsFor(_me({'personas_view', 'analytics_view'}, analytics: false)).map((s) => s.id), ['people']);
+    expect(sectionsFor(_me({'personas_view', 'analytics_view'}, analytics: false)).map((s) => s.id), ['people', 'threads']);
   });
   test('no permissions means no sections', () {
     expect(sectionsFor(_me({})), isEmpty);

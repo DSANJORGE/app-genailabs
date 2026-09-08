@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -10,13 +12,23 @@ import 'testu_widgets.dart';
 /// the app's bottom-sheet language (same chrome as the schedule sheet),
 /// reason chips + optional note, and the shared green check-pulse success.
 /// No Material AlertDialog anywhere in this app.
+///
+/// [onSend] may return a Future: the sheet waits for it, and a failure
+/// keeps the form (reason and note intact) under a one-line error so the
+/// retry is one tap. [sentText] is the line under "Sent"; the default admits
+/// the report stayed on this device (the demo's truth).
+///
+/// [onSend] receives the picked reason's index into [reasons], not its
+/// display label -- callers that map reasons to server-side ids key off the
+/// id list directly instead of round-tripping through the shown string.
 Future<void> showTestuReportSheet(
   BuildContext context, {
   required String eyebrow,
   required String title,
   required String subtitle,
   required List<String> reasons,
-  required void Function(String reason, String? note) onSend,
+  required FutureOr<void> Function(int reasonIndex, String? note) onSend,
+  String? sentText,
 }) {
   return showTestuSheet<void>(
     context,
@@ -26,6 +38,7 @@ Future<void> showTestuReportSheet(
       subtitle: subtitle,
       reasons: reasons,
       onSend: onSend,
+      sentText: sentText,
     ),
   );
 }
@@ -37,13 +50,15 @@ class _ReportSheetBody extends StatefulWidget {
     required this.subtitle,
     required this.reasons,
     required this.onSend,
+    this.sentText,
   });
 
   final String eyebrow;
   final String title;
   final String subtitle;
   final List<String> reasons;
-  final void Function(String reason, String? note) onSend;
+  final FutureOr<void> Function(int reasonIndex, String? note) onSend;
+  final String? sentText;
 
   @override
   State<_ReportSheetBody> createState() => _ReportSheetBodyState();
@@ -52,6 +67,8 @@ class _ReportSheetBody extends StatefulWidget {
 class _ReportSheetBodyState extends State<_ReportSheetBody> {
   int? _picked;
   bool _sent = false;
+  bool _sending = false;
+  String? _error;
   final _note = TextEditingController();
 
   @override
@@ -60,11 +77,25 @@ class _ReportSheetBodyState extends State<_ReportSheetBody> {
     super.dispose();
   }
 
-  void _send() {
+  Future<void> _send() async {
+    final picked = _picked;
+    if (picked == null || picked < 0 || picked >= widget.reasons.length) return;
     HapticFeedback.mediumImpact();
-    widget.onSend(widget.reasons[_picked!],
-        _note.text.trim().isEmpty ? null : _note.text.trim());
-    setState(() => _sent = true);
+    setState(() {
+      _sending = true;
+      _error = null;
+    });
+    try {
+      await widget.onSend(picked, _note.text.trim().isEmpty ? null : _note.text.trim());
+      if (mounted) setState(() => _sent = true);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _sending = false;
+        _error = L('Could not send. Check your connection and try again.',
+            'No se pudo enviar. Revisa la conexión e inténtalo de nuevo.');
+      });
+    }
   }
 
   @override
@@ -132,10 +163,17 @@ class _ReportSheetBodyState extends State<_ReportSheetBody> {
         TestuButton(
           _picked == null
               ? L('PICK A REASON TO SEND', 'ELIGE UN MOTIVO PARA ENVIAR')
-              : L('SEND TO CONTENT TEAM', 'ENVIAR AL EQUIPO DE CONTENIDO'),
+              : _sending
+                  ? L('SENDING…', 'ENVIANDO…')
+                  : L('SEND REPORT', 'ENVIAR REPORTE'),
           variant: TestuButtonVariant.primary,
-          onTap: _picked == null ? null : _send,
+          onTap: _picked == null || _sending ? null : _send,
         ),
+        if (_error != null) ...[
+          const SizedBox(height: 10),
+          Text(_error!,
+              style: TextStyle(fontFamily: 'Geist', fontSize: 12, height: 1.5, color: t.redText)),
+        ],
       ];
 
   Widget _sentView(TestuTokens t) => SizedBox(
@@ -151,8 +189,9 @@ class _ReportSheetBodyState extends State<_ReportSheetBody> {
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 290),
               child: Text(
-                L('The content team will review it. You’ll hear back in Notifications.',
-                    'El equipo de contenido lo revisará. Te avisaremos en Notificaciones.'),
+                widget.sentText ??
+                    L('Recorded on this device. Thanks for flagging it.',
+                        'Registrado en este dispositivo. Gracias por avisar.'),
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontFamily: 'Geist',

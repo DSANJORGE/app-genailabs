@@ -15,8 +15,8 @@ import 'testu_client.dart';
 /// Live (Minsur): readiness, calibration, the last 7 days and mastery by
 /// topic come from the learner's own answers in every live topic, refreshed
 /// each time the tab is shown ([active]). Peer comparison, role
-/// competencies and the certificate keep the prototype's copy: the server
-/// has no data for them yet.
+/// competencies and the certificate are hidden live: the server has no
+/// data for them yet, and the prototype's copy would read as real.
 class TestuDashboardScreen extends StatefulWidget {
   const TestuDashboardScreen({super.key, this.active = true});
 
@@ -30,7 +30,7 @@ class _TestuDashboardScreenState extends State<TestuDashboardScreen> {
   List<TopicProgress>? _live;
 
   /// First load answered (data or failure). Skeletons only before that;
-  /// a failed load falls back to the prototype's cards, as it always did.
+  /// a failed load shows a retry, never the prototype's cards.
   bool _loaded = false;
 
   @override
@@ -62,6 +62,29 @@ class _TestuDashboardScreenState extends State<TestuDashboardScreen> {
     // flashing for a second and then being replaced by real ones.
     final loading = testuLive && !_loaded;
     final answers = [for (final p in live ?? const <TopicProgress>[]) ...p.answers];
+    if (testuLive && _loaded && live == null) {
+      // ponytail: one message + retry for the whole tab — the cards share
+      // one fetch; per-card errors when they get their own.
+      return SafeArea(
+        bottom: false,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 110),
+          children: [
+            Text(L('Your readiness', 'Tu preparación'), style: kH1),
+            const SizedBox(height: 12),
+            Text(
+                L('Could not load your progress. Check your connection and try again.',
+                    'No se pudo cargar tu progreso. Revisa tu conexión e inténtalo de nuevo.'),
+                style: kMeta),
+            const SizedBox(height: 12),
+            TestuAct(L('Try again', 'Reintentar'), onTap: () {
+              setState(() => _loaded = false);
+              _reload();
+            }),
+          ],
+        ),
+      );
+    }
     return SafeArea(
       bottom: false,
       child: ListView(
@@ -71,8 +94,12 @@ class _TestuDashboardScreenState extends State<TestuDashboardScreen> {
           const SizedBox(height: 12),
           if (loading) const _SkeletonCard() else _ReadinessCard(live: live),
           const SizedBox(height: 12),
-          const _PeerCard(),
-          const SizedBox(height: 12),
+          // Peer comparison, role competencies and the certificate card are
+          // prototype numbers; nothing live feeds them.
+          if (!testuLive) ...[
+            const _PeerCard(),
+            const SizedBox(height: 12),
+          ],
           if (loading)
             const _SkeletonCard()
           else
@@ -109,37 +136,39 @@ class _TestuDashboardScreenState extends State<TestuDashboardScreen> {
                   TestuPill.amber(L('Competent · At risk', 'Competente · En riesgo'))),
             ],
           ),
-          const SizedBox(height: 12),
-          _MastRowsCard(
-            title: L('ROLE COMPETENCIES · EVIDENCE FROM YOUR ANSWERS',
-                'COMPETENCIAS DEL ROL · EVIDENCIA DE TUS RESPUESTAS'),
-            rows: [
-              _MastRow(
-                  CL('Safe operations conduct', 'Conducta segura en operaciones',
-                      'Safe aircraft handling', 'Manejo seguro de la aeronave'),
-                  L('3 of 4 behaviors evidenced', '3 de 4 conductas evidenciadas'),
-                  TestuPill.green(L('Strong', 'Sólido'))),
-              _MastRow(
-                  CL('Situational awareness on site',
-                      'Conciencia situacional en la unidad',
-                      'Situational awareness on stand',
-                      'Conciencia situacional en el stand'),
-                  L('1 of 3 behaviors evidenced', '1 de 3 conductas evidenciadas'),
-                  TestuPill.amber(L('Building', 'En desarrollo'))),
-              _MastRow(
-                  L('Communication & coordination', 'Comunicación y coordinación'),
-                  CL('1 of 5 behaviors evidenced · tied to Cybersecurity',
-                      '1 de 5 conductas evidenciadas · ligado a Ciberseguridad',
-                      '1 of 5 behaviors evidenced · tied to Radio Communication',
-                      '1 de 5 conductas evidenciadas · ligado a Comunicación por Radio'),
-                  TestuPill.red(L('At risk', 'En riesgo'))),
-            ],
-            note: L(
-                'Behaviors are what ${client.name} expects from your role. Every benchmark answer records evidence toward them.',
-                'Las conductas son lo que ${client.name} espera de tu rol. Cada respuesta de referencia registra evidencia hacia ellas.'),
-          ),
-          const SizedBox(height: 12),
-          const _CertCard(),
+          if (!testuLive) ...[
+            const SizedBox(height: 12),
+            _MastRowsCard(
+              title: L('ROLE COMPETENCIES · EVIDENCE FROM YOUR ANSWERS',
+                  'COMPETENCIAS DEL ROL · EVIDENCIA DE TUS RESPUESTAS'),
+              rows: [
+                _MastRow(
+                    CL('Safe operations conduct', 'Conducta segura en operaciones',
+                        'Safe aircraft handling', 'Manejo seguro de la aeronave'),
+                    L('3 of 4 behaviors evidenced', '3 de 4 conductas evidenciadas'),
+                    TestuPill.green(L('Strong', 'Sólido'))),
+                _MastRow(
+                    CL('Situational awareness on site',
+                        'Conciencia situacional en la unidad',
+                        'Situational awareness on stand',
+                        'Conciencia situacional en el stand'),
+                    L('1 of 3 behaviors evidenced', '1 de 3 conductas evidenciadas'),
+                    TestuPill.amber(L('Building', 'En desarrollo'))),
+                _MastRow(
+                    L('Communication & coordination', 'Comunicación y coordinación'),
+                    CL('1 of 5 behaviors evidenced · tied to Cybersecurity',
+                        '1 de 5 conductas evidenciadas · ligado a Ciberseguridad',
+                        '1 of 5 behaviors evidenced · tied to Radio Communication',
+                        '1 de 5 conductas evidenciadas · ligado a Comunicación por Radio'),
+                    TestuPill.red(L('At risk', 'En riesgo'))),
+              ],
+              note: L(
+                  'Behaviors are what ${client.name} expects from your role. Every benchmark answer records evidence toward them.',
+                  'Las conductas son lo que ${client.name} espera de tu rol. Cada respuesta de referencia registra evidencia hacia ellas.'),
+            ),
+            const SizedBox(height: 12),
+            const _CertCard(),
+          ],
         ],
       ),
     );
@@ -260,14 +289,13 @@ class _ReadinessCard extends StatelessWidget {
             L('$expert of ${live.length} topics at Expert',
                 '$expert de ${live.length} temas en Experto'),
             expert == live.length ? t.greenText : t.amber),
+        // No certificates line: the server has no certificate data yet.
         _CompLine(
             L('Retention', 'Retención'),
             forgotten == 0
                 ? L('Nothing forgotten so far', 'Nada olvidado por ahora')
                 : L('$forgotten topics at risk', '$forgotten temas en riesgo'),
-            forgotten == 0 ? t.greenText : t.amber),
-        _CompLine(L('Certificates', 'Certificados'),
-            L('Renewal in 12 days', 'Renovación en 12 días'), t.amber,
+            forgotten == 0 ? t.greenText : t.amber,
             last: true),
       ]);
     }
@@ -288,12 +316,14 @@ class _ReadinessCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          TestuEyebrow.h4(
-              CL('ROLE READINESS · OPERATIONS, SAFETY LEAD',
-                  'PREPARACIÓN DEL ROL · OPERACIONES',
-                  'ROLE READINESS · RAMP AGENT, SAFETY LEAD',
-                  'PREPARACIÓN DEL ROL · AGENTE DE RAMPA')),
-          const SizedBox(height: 12),
+          if (!testuLive) ...[
+            TestuEyebrow.h4(
+                CL('ROLE READINESS · OPERATIONS, SAFETY LEAD',
+                    'PREPARACIÓN DEL ROL · OPERACIONES',
+                    'ROLE READINESS · RAMP AGENT, SAFETY LEAD',
+                    'PREPARACIÓN DEL ROL · AGENTE DE RAMPA')),
+            const SizedBox(height: 12),
+          ],
           Row(
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,

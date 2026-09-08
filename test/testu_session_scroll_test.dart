@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:genai_labs/testu/testu_question_source.dart';
 import 'package:genai_labs/testu/testu_session.dart';
 import 'package:genai_labs/testu/testu_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -15,7 +16,11 @@ void main() {
     addTearDown(tester.view.reset);
 
     await tester.pumpWidget(
-        MaterialApp(theme: testuTheme(), home: const TestuSessionScreen()));
+        MaterialApp(
+            theme: testuTheme(),
+            // Explicitly the bundled demo: no server in tests, and a live
+            // build never falls back to it on its own.
+            home: TestuSessionScreen(source: LocalQuestionSource())));
 
     // boot → opener → framing typing → prompt → scroll animation
     for (var i = 0; i < 6; i++) {
