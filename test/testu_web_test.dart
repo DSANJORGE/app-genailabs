@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genai_labs/testu/testu_notifications.dart';
 import 'package:genai_labs/testu/testu_pdf.dart';
+import 'package:genai_labs/testu/testu_route.dart';
 import 'package:genai_labs/testu/testu_resources.dart';
 import 'package:genai_labs/testu/testu_schedule_sheet.dart';
 import 'package:genai_labs/testu/testu_shell.dart';
@@ -201,6 +202,36 @@ void main() {
       TestuShell.currentTab.value = 3;
       await pumpShell(tester, desktop);
       expect(TestuShell.currentTab.value, 0);
+    });
+
+    testWidgets('openLearnerRoute lands on the tab the address names',
+        (tester) async {
+      addTearDown(() => TestuShell.currentTab.value = 0);
+      await pumpShell(tester, desktop);
+      openLearnerRoute(const LearnerRoute(3));
+      await tester.pump();
+      expect(TestuShell.currentTab.value, 3);
+      expect(find.text('Your readiness'), findsOneWidget);
+    });
+
+    testWidgets('pushLearnerScreen stacks a screen over the shell and pops back',
+        (tester) async {
+      await pumpShell(tester, desktop);
+      final ctx = tester.element(find.byType(TestuShell));
+      final popped = pushLearnerScreen<void>(
+          ctx,
+          const LearnerRoute(1, topicId: 't1'),
+          const Scaffold(body: Text('topic t1')));
+      // Two pumps: the incoming route spends its first frame offstage.
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('topic t1'), findsOneWidget);
+      Navigator.of(ctx).pop();
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      await popped;
+      expect(find.text('topic t1'), findsNothing);
+      expect(find.byType(TestuShell), findsOneWidget);
     });
   });
 

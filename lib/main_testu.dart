@@ -9,6 +9,7 @@ import 'testu/testu_auth.dart';
 import 'testu/testu_lock.dart';
 import 'testu/testu_notifications.dart';
 import 'testu/testu_profile.dart';
+import 'testu/testu_route.dart';
 import 'testu/testu_shell.dart';
 import 'testu/testu_signin.dart';
 import 'testu/testu_splash.dart';
@@ -81,6 +82,14 @@ class _TestuAppState extends State<TestuApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    if (kIsWeb) {
+      // ponytail: :focus-visible by hand. On desktop web the engine focuses
+      // the first pressable whenever the canvas is clicked and would ring
+      // it; rings only after the keyboard is used (first Tab).
+      FocusManager.instance.highlightStrategy =
+          FocusHighlightStrategy.alwaysTouch;
+      HardwareKeyboard.instance.addHandler(_keyboardUsed);
+    }
     TestuAuth.onSessionEnded = () {
       clearTestuNotices();
       if (mounted) {
@@ -131,8 +140,32 @@ class _TestuAppState extends State<TestuApp> with WidgetsBindingObserver {
     }
   }
 
+  /// Browser Back/Forward: the engine pushes the restored entry here (spec
+  /// E2). This state is the first observer registered, ahead of
+  /// WidgetsApp's, whose own handler would `pushNamed` the address as a
+  /// route and, with no route table, fail. So on web the answer is always
+  /// true, handled or not; mobile keeps the default (spec: "Mobile ignores
+  /// the observer").
+  bool _keyboardUsed(KeyEvent e) {
+    if (e.logicalKey == LogicalKeyboardKey.tab) {
+      FocusManager.instance.highlightStrategy =
+          FocusHighlightStrategy.automatic;
+      HardwareKeyboard.instance.removeHandler(_keyboardUsed);
+    }
+    return false;
+  }
+
+  @override
+  Future<bool> didPushRouteInformation(RouteInformation info) async {
+    if (!kIsWeb) return false;
+    final r = LearnerRoute.fromUri(info.uri);
+    if (r != null && _signedIn && !_locked) openLearnerRoute(r, address: false);
+    return true;
+  }
+
   @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_keyboardUsed);
     WidgetsBinding.instance.removeObserver(this);
     stopTestuNoticePolling();
     super.dispose();

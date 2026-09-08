@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -8,6 +9,7 @@ import 'testu_i18n.dart';
 import 'testu_live.dart';
 import 'testu_notifications.dart';
 import 'testu_profile.dart';
+import 'testu_route.dart';
 import 'testu_schedule_sheet.dart';
 import 'testu_session.dart';
 import 'testu_theme.dart';
@@ -37,8 +39,56 @@ class TestuShell extends StatefulWidget {
   /// The tab on screen — the desktop rail (testu_web.dart) mirrors it.
   static final currentTab = ValueNotifier<int>(0);
 
+  /// A full address to open — a notification tap, a pasted link, browser
+  /// Back. The shell pops to its root, selects the tab and pushes the topic
+  /// or thread the route names. Set through [openLearnerRoute].
+  static final routeRequest = ValueNotifier<LearnerRoute?>(null);
+
   @override
   State<TestuShell> createState() => _TestuShellState();
+}
+
+/// The one door for "go to X" from anywhere: Part D's notification tap, the
+/// browser observer in main_testu.dart, a deep link on load. [address] is
+/// false when the browser already shows the address (Back/Forward), so the
+/// shell does not push it a second time.
+void openLearnerRoute(LearnerRoute r, {bool address = true}) {
+  if (!address) _here = r.toUri();
+  TestuShell.routeRequest.value = r;
+}
+
+/// The address the browser shows. Null until the shell writes the first
+/// one; on mobile nothing here runs.
+Uri? _here;
+
+/// Writes [r] into the browser's history (spec E2). ponytail: the engine's
+/// own history through the default hash strategy (`…/learn/#/temas/t1`),
+/// because the plugin serves the folder with eMe's file generator and no
+/// fallback, so a hash-free `/learn/temas/t1` would 404 on reload. No
+/// router package; the console (admin_shell.dart) does the same.
+void _address(LearnerRoute r, {bool replace = false}) {
+  if (!kIsWeb) return;
+  final uri = r.toUri();
+  if (uri == _here) return;
+  _here = uri;
+  SystemNavigator.routeInformationUpdated(uri: uri, replace: replace);
+}
+
+/// Pushes [screen] over the shell and, in the browser, gives it the address
+/// [r] while it is up; the tab's own address comes back when it pops.
+/// ponytail: the pop replaces the entry instead of stepping back one, so an
+/// in-app back leaves a duplicate entry (one dead Back press).
+/// history.back() needs dart:js_interop; add it when someone notices.
+Future<T?> pushLearnerScreen<T>(
+    BuildContext context, LearnerRoute r, Widget screen) async {
+  _address(r);
+  // No RouteSettings.name: WidgetsApp's Navigator announces every named
+  // top route to the engine as its own history entry, doubling ours.
+  final out = await Navigator.of(context).push<T>(MaterialPageRoute(
+    builder: (_) => screen,
+  ));
+  _address(LearnerRoute(TestuShell.currentTab.value), replace: true);
+  return out;
 }
 
 class _TestuShellState extends State<TestuShell> {
@@ -47,19 +97,33 @@ class _TestuShellState extends State<TestuShell> {
   @override
   void initState() {
     super.initState();
+    // A reload or a pasted link lands where its address says (spec E2), and
+    // the first entry gets that address so Back from a topic can read it.
+    final start = kIsWeb ? LearnerRoute.fromUri(Uri.base) : null;
+    _tab = start?.tab ?? 0;
+    // WidgetsApp's Navigator selects the engine's single-entry history in
+    // its initState (every address write becomes a replace and Back leaves
+    // the app). Switch to multi-entry here, after it, so each address is a
+    // real entry and Back arrives as pushRouteInformation.
+    if (kIsWeb) SystemNavigator.selectMultiEntryHistory();
+    _address(LearnerRoute(_tab), replace: true);
     // Deferred: setting this synchronously here would notify the rail's
     // ValueListenableBuilder (a sibling under TestuFrame, not an ancestor)
     // mid-build and crash with "setState called during build".
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) TestuShell.currentTab.value = _tab;
+      if (!mounted) return;
+      TestuShell.currentTab.value = _tab;
+      if (start?.topicId != null) _open(start!);
     });
     TestuShell.tabRequest.addListener(_onTabRequest);
+    TestuShell.routeRequest.addListener(_onRouteRequest);
     testuLang.addListener(_onLang);
   }
 
   @override
   void dispose() {
     TestuShell.tabRequest.removeListener(_onTabRequest);
+    TestuShell.routeRequest.removeListener(_onRouteRequest);
     testuLang.removeListener(_onLang);
     super.dispose();
   }
@@ -67,10 +131,11 @@ class _TestuShellState extends State<TestuShell> {
   // Language switch: remount the tabs so every (const) subtree re-reads L().
   void _onLang() => setState(() {});
 
-  void _select(int i) {
+  void _select(int i, {bool address = true}) {
     if (i != _tab) refreshTestuNotices();
     TestuShell.currentTab.value = i;
     setState(() => _tab = i);
+    if (address) _address(LearnerRoute(i));
   }
 
   void _onTabRequest() {
@@ -79,6 +144,48 @@ class _TestuShellState extends State<TestuShell> {
       TestuShell.tabRequest.value = null;
       _select(i);
     }
+  }
+
+  void _onRouteRequest() {
+    final r = TestuShell.routeRequest.value;
+    if (r == null) return;
+    TestuShell.routeRequest.value = null;
+    _open(r);
+  }
+
+  /// Pops to the shell, selects the tab, then pushes what the route names.
+  /// The tab is addressed only when nothing is pushed over it: the pushed
+  /// screen carries its own address.
+  Future<void> _open(LearnerRoute r) async {
+    // A notification tap pops this screen and asks in the same frame, so the
+    // request can land before the shell's first build.
+    if (!mounted) return;
+    Navigator.of(context).popUntil((x) => x.isFirst);
+    _select(r.tab, address: r.topicId == null);
+    if (r.topicId == null) return;
+    if (r.questionId != null) {
+      await pushLearnerScreen<void>(
+          context,
+          r,
+          TestuSessionScreen(
+              topicId: r.topicId,
+              questionId: r.questionId,
+              highlightMessageId: r.messageId));
+      return;
+    }
+    // Topic Home fills its own hero from the id (Part D's notification tap
+    // did the same); no pre-fetch, so the tap answers at once. ponytail: an
+    // id this learner cannot see falls to the first topic, as the screen's
+    // own load does.
+    await pushLearnerScreen<void>(
+        context,
+        r,
+        TestuTopicHomeScreen(
+          topicId: r.topicId,
+          // A review-tab comment: the topic opens on its review tab at it.
+          initialTab: r.messageId == null ? 0 : 3,
+          highlightMessageId: r.messageId,
+        ));
   }
 
   @override
@@ -509,17 +616,19 @@ class _ContinueHeroState extends State<_ContinueHero> {
         return TestuPressable(
           onTap: pending
               ? null
-              : () => Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => head == null
-                  ? const TestuTopicHomeScreen()
-                  : TestuTopicHomeScreen(
-                      topicId: head.id,
-                      title: head.title,
-                      img: head.img,
-                      pill: head.pill,
-                      pillColor: head.pillColor,
-                      pillBorder: head.pillBorder,
-                    ))),
+              : () => pushLearnerScreen<void>(
+                  context,
+                  LearnerRoute(1, topicId: head?.id),
+                  head == null
+                      ? const TestuTopicHomeScreen()
+                      : TestuTopicHomeScreen(
+                          topicId: head.id,
+                          title: head.title,
+                          img: head.img,
+                          pill: head.pill,
+                          pillColor: head.pillColor,
+                          pillBorder: head.pillBorder,
+                        )),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(16),
             child: Stack(

@@ -2,6 +2,7 @@ import 'package:eme_app_package/testing/fake_eme_http.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genai_labs/testu/testu_notifications.dart';
+import 'package:genai_labs/testu/testu_route.dart';
 import 'package:genai_labs/testu/testu_shell.dart';
 import 'package:genai_labs/testu/testu_theme.dart';
 
@@ -187,6 +188,8 @@ void main() {
 
   testWidgets('tapping a tutorreply row asks the shell for the IRIS tab',
       (tester) async {
+    // Since Part E the tap goes through openLearnerRoute, the one door: the
+    // shell reads the whole address, not just a tab index.
     testuNotices.value = [
       TestuNotice('IRIS answered you', 'body', 'Now', type: 'tutorreply')
     ];
@@ -194,8 +197,8 @@ void main() {
         theme: testuTheme(), home: const TestuNotificationsScreen()));
     await tester.tap(find.text('IRIS answered you'));
     await tester.pump();
-    expect(TestuShell.tabRequest.value, 2);
-    TestuShell.tabRequest.value = null;
+    expect(TestuShell.routeRequest.value, const LearnerRoute(2));
+    TestuShell.routeRequest.value = null;
   });
 
   // testuLive defaults to true (client == 'minsur', the default) even in a

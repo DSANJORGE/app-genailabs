@@ -90,11 +90,28 @@ double testuTopPad(BuildContext context) => testuWide(context) ? 26 : 14;
 double testuBottomPad(BuildContext context) => testuWide(context) ? 32 : 110;
 
 /// Press feedback per spec: opacity .75 + scale .985 + selectionClick haptic.
+/// In the browser (spec: minsur-pilot-readiness E1) it is also a button to
+/// the keyboard and the screen reader: hover dims it like a half-press,
+/// focus draws a 2px orange ring, Enter/Space press it. One widget, every
+/// button in the app inherits it. Same shape as the console's Pressable
+/// (admin_ui.dart).
 class TestuPressable extends StatefulWidget {
-  const TestuPressable({super.key, required this.child, this.onTap});
+  const TestuPressable({
+    super.key,
+    required this.child,
+    this.onTap,
+    this.semanticLabel,
+    this.radius = 12,
+  });
 
   final Widget child;
   final VoidCallback? onTap;
+
+  /// What a screen reader calls this. Null keeps the child's own text.
+  final String? semanticLabel;
+
+  /// Corner radius of the focus ring, matched to the child's own corners.
+  final double radius;
 
   @override
   State<TestuPressable> createState() => _TestuPressableState();
@@ -102,33 +119,70 @@ class TestuPressable extends StatefulWidget {
 
 class _TestuPressableState extends State<TestuPressable> {
   bool _down = false;
+  bool _hover = false;
+  bool _focus = false;
+
+  void _press() {
+    HapticFeedback.selectionClick();
+    widget.onTap!();
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Desktop: a hand cursor says "this presses"; haptics are silent there.
-    return MouseRegion(
-      cursor: widget.onTap == null
-          ? MouseCursor.defer
-          : SystemMouseCursors.click,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTapDown: (_) => setState(() => _down = true),
-        onTapCancel: () => setState(() => _down = false),
-        onTapUp: (_) => setState(() => _down = false),
-        onTap: widget.onTap == null
-            ? null
-            : () {
-                HapticFeedback.selectionClick();
-                widget.onTap!();
-              },
-        child: AnimatedScale(
-          scale: _down ? 0.985 : 1,
-          duration: const Duration(milliseconds: 90),
-          curve: TestuTokens.curve,
-          child: AnimatedOpacity(
-            opacity: _down ? 0.75 : 1,
+    final enabled = widget.onTap != null;
+    final t = TestuTokens.of(context);
+    return FocusableActionDetector(
+      enabled: enabled,
+      // Desktop: a hand cursor says "this presses"; haptics are silent there.
+      mouseCursor: enabled ? SystemMouseCursors.click : MouseCursor.defer,
+      onShowHoverHighlight: (v) => setState(() => _hover = v),
+      onShowFocusHighlight: (v) => setState(() => _focus = v),
+      actions: {
+        // Space everywhere; Enter is ActivateIntent on the platforms and
+        // ButtonActivateIntent in WidgetsApp's web shortcuts.
+        ActivateIntent:
+            CallbackAction<ActivateIntent>(onInvoke: (_) => _press()),
+        ButtonActivateIntent:
+            CallbackAction<ButtonActivateIntent>(onInvoke: (_) => _press()),
+      },
+      // One semantics node: the Semantics carries the name, the button flag
+      // and the tap; the GestureDetector is excluded so it cannot add a
+      // second tappable node underneath.
+      child: Semantics(
+        button: enabled,
+        label: widget.semanticLabel,
+        onTap: enabled ? _press : null,
+        // ponytail: only drop the child's own semantics (e.g. its Text)
+        // when we're substituting a label for it — otherwise the ~43
+        // existing callers that never pass semanticLabel lose their
+        // accessible name (it comes from the child text merging up).
+        excludeSemantics: widget.semanticLabel != null,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          excludeFromSemantics: true,
+          onTapDown: (_) => setState(() => _down = true),
+          onTapCancel: () => setState(() => _down = false),
+          onTapUp: (_) => setState(() => _down = false),
+          onTap: enabled ? _press : null,
+          child: AnimatedScale(
+            scale: _down ? 0.985 : 1,
             duration: const Duration(milliseconds: 90),
-            child: widget.child,
+            curve: TestuTokens.curve,
+            child: AnimatedOpacity(
+              // ponytail: hover rides the press channel (a light dim), not a
+              // fill overlay — the children own their corners and images.
+              opacity: _down ? 0.75 : (_hover ? 0.88 : 1),
+              duration: const Duration(milliseconds: 90),
+              child: Container(
+                foregroundDecoration: _focus
+                    ? BoxDecoration(
+                        border: Border.all(color: t.orange, width: 2),
+                        borderRadius: BorderRadius.circular(widget.radius),
+                      )
+                    : null,
+                child: widget.child,
+              ),
+            ),
           ),
         ),
       ),

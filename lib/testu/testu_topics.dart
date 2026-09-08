@@ -6,7 +6,9 @@ import 'testu_icons.dart';
 import 'testu_live.dart';
 import 'testu_pdf.dart';
 import 'testu_resources.dart';
+import 'testu_route.dart';
 import 'testu_session.dart';
+import 'testu_shell.dart';
 import 'testu_social.dart';
 import 'testu_theme.dart';
 import 'testu_widgets.dart';
@@ -322,15 +324,17 @@ Widget _topicsBody(BuildContext context, List<_Topic> topics,
                     // prototype. A live row opens one when its topic has
                     // tutorials.
                     onTap: topic.opens
-                        ? () => Navigator.of(context).push(MaterialPageRoute(
-                            builder: (_) => TestuTopicHomeScreen(
-                                  topicId: topic.id,
-                                  title: topic.title,
-                                  img: topic.img,
-                                  pill: topic.pill,
-                                  pillColor: topic.pillColor,
-                                  pillBorder: topic.pillBorder,
-                                )))
+                        ? () => pushLearnerScreen<void>(
+                            context,
+                            LearnerRoute(1, topicId: topic.id),
+                            TestuTopicHomeScreen(
+                              topicId: topic.id,
+                              title: topic.title,
+                              img: topic.img,
+                              pill: topic.pill,
+                              pillColor: topic.pillColor,
+                              pillBorder: topic.pillBorder,
+                            ))
                         : _nothing,
                   ),
               ],
