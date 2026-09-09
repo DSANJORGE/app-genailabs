@@ -9,10 +9,10 @@ class AdminSession {
   /// /site/mediadb/admin/.
   static final String mediaDBRoot =
       const String.fromEnvironment('TESTU_MEDIADB').isNotEmpty
-          ? const String.fromEnvironment('TESTU_MEDIADB')
-          : kIsWeb
-              ? '${Uri.base.origin}/site/mediadb'
-              : 'http://localhost:8080/site/mediadb';
+      ? const String.fromEnvironment('TESTU_MEDIADB')
+      : kIsWeb
+      ? '${Uri.base.origin}/site/mediadb'
+      : 'http://localhost:8080/site/mediadb';
 
   /// Fires when a 401/403 kills the session mid-use (eMe one-session-per-user
   /// rule). Task 8's shell must set this to drop back to the sign-in screen.
@@ -20,15 +20,18 @@ class AdminSession {
 
   static Future<void>? _ready;
   static Future<void> init() => _ready ??= _boot().catchError((e) {
-        // ponytail: a failed boot (e.g. server unreachable) shouldn't wedge
-        // every later init() call forever -- let the next call retry.
-        _ready = null;
-        throw e;
-      });
+    // ponytail: a failed boot (e.g. server unreachable) shouldn't wedge
+    // every later init() call forever -- let the next call retry.
+    _ready = null;
+    throw e;
+  });
 
   static Future<void> _boot() async {
     final ws = Workspace(
-        id: 'primary', name: 'GenAILabs', mediaDBRoot: mediaDBRoot);
+      id: 'primary',
+      name: 'GenAILabs',
+      mediaDBRoot: mediaDBRoot,
+    );
     await WorkspaceService.init(initialWorkspace: ws);
     // ponytail: WorkspaceService has no `select`; setActiveWorkspace is
     // the method that pins `activeWorkspace` (workspace_service.dart:158).
@@ -55,8 +58,8 @@ class AdminSession {
   /// teams (person.groovy). Signing the console out there would drop a
   /// manager to the login screen for clicking a name in their own team list,
   /// so Persona words that reply itself and the session survives it.
-  static bool signsOut(EmeHttpException e) => !(e.statusCode == 403 &&
-      e.uri.path.endsWith('analytics/person.json'));
+  static bool signsOut(EmeHttpException e) =>
+      !(e.statusCode == 403 && e.uri.path.endsWith('analytics/person.json'));
 
   static Future<bool> restore() async {
     await init();
@@ -71,8 +74,9 @@ class AdminSession {
   static Future<String> sendCode(String email) async {
     try {
       await init();
-      return (await AuthService.sendUserCode(email: email))['status']
-              ?.toString() ??
+      return (await AuthService.sendUserCode(
+            email: email,
+          ))['status']?.toString() ??
           'error';
     } catch (_) {
       return 'error';

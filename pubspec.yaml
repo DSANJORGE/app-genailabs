@@ -13,9 +13,7 @@ dependencies:
     sdk: flutter
 
   eme_app_package:
-    path: ../eme_app_package
-  openinsitute_core:
-    path: ../eme_app_package/packages/openinsitute_core
+    path: ../eme-app-package
   flutter_riverpod: ^2.6.1
   http: ^1.2.0
   dio: ^5.11.0
