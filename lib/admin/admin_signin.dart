@@ -130,12 +130,13 @@ class _AdminSigninState extends State<AdminSignin> {
     final t = TestuTokens.of(context);
     return Scaffold(
       backgroundColor: t.bg,
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 380),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
+      body: SelectionArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 380),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -224,8 +225,9 @@ class _AdminSigninState extends State<AdminSignin> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   static final _fieldStyle = TextStyle(
       fontFamily: 'Geist', fontSize: 15, color: TestuTokens.instance.ink);

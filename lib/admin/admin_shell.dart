@@ -282,17 +282,19 @@ class _AdminShellState extends State<AdminShell> {
       // someone asks -- this account state hasn't come up yet.
       return Scaffold(
         backgroundColor: t.bg,
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                L('Your account has no console access.', 'Tu cuenta no tiene acceso a la consola.'),
-                style: TextStyle(color: t.mut),
-              ),
-              const SizedBox(height: 12),
-              ConsoleAct(L('Sign out', 'Cerrar sesión'), onTap: widget.onSignOut),
-            ],
+        body: SelectionArea(
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  L('Your account has no console access.', 'Tu cuenta no tiene acceso a la consola.'),
+                  style: TextStyle(color: t.mut),
+                ),
+                const SizedBox(height: 12),
+                ConsoleAct(L('Sign out', 'Cerrar sesión'), onTap: widget.onSignOut),
+              ],
+            ),
           ),
         ),
       );
@@ -301,58 +303,60 @@ class _AdminShellState extends State<AdminShell> {
       backgroundColor: t.bg,
       // Cmd-/ on a Mac, Ctrl-/ everywhere else: the panel is a companion to
       // whatever is on screen, so it opens without leaving the keyboard.
-      body: CallbackShortcuts(
-        bindings: {
-          const SingleActivator(LogicalKeyboardKey.slash, meta: true):
-              _toggleIris,
-          const SingleActivator(LogicalKeyboardKey.slash, control: true):
-              _toggleIris,
-        },
-        // autofocus is what gives CallbackShortcuts a focus scope to live
-        // in; nothing else on the console asks for initial focus.
-        child: Focus(
-          autofocus: true,
-          child: ValueListenableBuilder<ConsoleRoute>(
-            valueListenable: _nav,
-            builder: (context, route, _) {
-              // A route the user may not open (a stale link, a revoked
-              // permission) shows their first section rather than an error.
-              final r = _canOpen(route) ? route : ConsoleRoute(_sections.first.id);
-              return AdminScaffold(
-                org: widget.me.organization,
-                me: widget.me,
-                sections: [for (final s in _sections) (s.id, s.label)],
-                nav: _nav,
-                title: _label(r.section),
-                contextBar: _withContextBar.contains(r.section)
-                    ? ContextBar(
-                        filters: _filters,
-                        topics: _topics,
-                        teams: _teams,
-                        // Mastery is cumulative and says so in its own
-                        // footnote; the period control would be a lever
-                        // wired to nothing.
-                        period: r.section != 'mastery',
-                      )
-                    : null,
-                titleAction:
-                    _withIris.contains(r.section) ? _irisToggle(t) : null,
-                endPanel: _iris && _withIris.contains(r.section)
-                    ? IrisPanel(
-                        api: widget.api,
-                        nav: _nav,
-                        filters: _filters,
-                        persona: widget.me.persona,
-                        screen: r.section,
-                        selectedUser: r.section == 'person' ? r.entityId : null,
-                        thread: _thread,
-                        onClose: () => setState(() => _iris = false),
-                      )
-                    : null,
-                onSignOut: widget.onSignOut,
-                body: _page(r),
-              );
-            },
+      body: SelectionArea(
+        child: CallbackShortcuts(
+          bindings: {
+            const SingleActivator(LogicalKeyboardKey.slash, meta: true):
+                _toggleIris,
+            const SingleActivator(LogicalKeyboardKey.slash, control: true):
+                _toggleIris,
+          },
+          // autofocus is what gives CallbackShortcuts a focus scope to live
+          // in; nothing else on the console asks for initial focus.
+          child: Focus(
+            autofocus: true,
+            child: ValueListenableBuilder<ConsoleRoute>(
+              valueListenable: _nav,
+              builder: (context, route, _) {
+                // A route the user may not open (a stale link, a revoked
+                // permission) shows their first section rather than an error.
+                final r = _canOpen(route) ? route : ConsoleRoute(_sections.first.id);
+                return AdminScaffold(
+                  org: widget.me.organization,
+                  me: widget.me,
+                  sections: [for (final s in _sections) (s.id, s.label)],
+                  nav: _nav,
+                  title: _label(r.section),
+                  contextBar: _withContextBar.contains(r.section)
+                      ? ContextBar(
+                          filters: _filters,
+                          topics: _topics,
+                          teams: _teams,
+                          // Mastery is cumulative and says so in its own
+                          // footnote; the period control would be a lever
+                          // wired to nothing.
+                          period: r.section != 'mastery',
+                        )
+                      : null,
+                  titleAction:
+                      _withIris.contains(r.section) ? _irisToggle(t) : null,
+                  endPanel: _iris && _withIris.contains(r.section)
+                      ? IrisPanel(
+                          api: widget.api,
+                          nav: _nav,
+                          filters: _filters,
+                          persona: widget.me.persona,
+                          screen: r.section,
+                          selectedUser: r.section == 'person' ? r.entityId : null,
+                          thread: _thread,
+                          onClose: () => setState(() => _iris = false),
+                        )
+                      : null,
+                  onSignOut: widget.onSignOut,
+                  body: _page(r),
+                );
+              },
+            ),
           ),
         ),
       ),
